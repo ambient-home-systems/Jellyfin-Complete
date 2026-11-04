@@ -28,7 +28,7 @@ You need Docker and a Jellyfin 10.10+ server the container can reach.
 # docker-compose.yml
 services:
   maverick-jellyfin-complete:
-    image: ghcr.io/ambient-home-systems/jellyfin-complete:latest
+    image: ghcr.io/ambient-home-systems/jellyfin-complete:main
     container_name: maverick-jellyfin-complete
     restart: unless-stopped
     ports:
@@ -48,8 +48,6 @@ docker compose up -d
 docker logs maverick-jellyfin-complete
 ```
 
-The published image arrives with the first release. Until then, build from source: clone this repository and run `docker compose up -d --build`, which uses the [docker-compose.yml](docker-compose.yml) in the repository.
-
 Then open `http://<host>:8097`:
 
 1. **Connect Jellyfin.** Enter its address and an API key (Jellyfin → Dashboard → API Keys), plus the **setup code** from the log. The code stops anyone else who can reach the page from connecting first.
@@ -59,20 +57,15 @@ Then open `http://<host>:8097`:
 
 ### Portainer
 
-1. **Build the image on the host.** You only need this until the first release publishes the image. Docker fetches the code itself, so you don't need a copy of the repository:
-   ```bash
-   docker build -t maverick-jellyfin-complete:local https://github.com/ambient-home-systems/Jellyfin-Complete.git#main
-   ```
-2. **Stacks → Add stack.** Name it `maverick-jellyfin-complete` and paste the compose file above into the **Web editor**. Change the `image:` line to `image: maverick-jellyfin-complete:local`, and set `TZ` to your timezone.
+1. **Stacks → Add stack.** Name it `maverick-jellyfin-complete`.
+2. **Web editor.** Paste the compose file above and set `TZ` to your timezone.
 3. **Deploy the stack.** The setup code is in **Containers → maverick-jellyfin-complete → Logs**.
 
-**To update,** run the build command again, then open the stack and choose **Update the stack**. Leave **Re-pull image and redeploy** off, because the image is on the host, not in a registry. Once the first release is out, switch to the `ghcr.io` image and turn that option on.
+**To update,** open the stack, choose **Update the stack**, and turn on **Re-pull image and redeploy**.
 
 #### Moving a `docker compose` install to Portainer
 
-If you started the app with `docker compose` from a copy of this repository:
-
-1. **Stop it.** In that folder, run `docker compose down`. This removes the container; your data stays in its volume.
+1. **Stop it.** In the folder with its `docker-compose.yml`, run `docker compose down`. This removes the container; your data stays in its volume.
 2. **Find the volume.** Run `docker volume ls --filter name=maverick-config`. The name starts with the folder's name, for example `jellyfin-complete_maverick-config`.
 3. **Keep your data, or start over.**
    - To keep your settings, keys and history: when you paste the stack, replace the `volumes:` section at its end with this, using your volume's name:
@@ -89,6 +82,7 @@ If you started the app with `docker compose` from a copy of this repository:
 
 | | |
 |---|---|
+| Image | `ghcr.io/ambient-home-systems/jellyfin-complete`, for amd64 and arm64. `main` is the newest code. Releases add `latest` and version tags such as `0.4.0`. |
 | Port | 8097 |
 | `/config` | Database, encryption key (`secret.key`) and logs. Back up the whole folder, and keep `secret.key` with the database: without it, saved API keys can't be read. |
 | `TZ` | Seeds the timezone setting on first start. After that, change it in Settings. |
@@ -143,7 +137,9 @@ npm run dev
 - `npx tsx scripts/dev-fake-jellyfin.ts` runs a fake Jellyfin with sample films. Start it with `FAKE_PORT=18096`, then point the app at it.
 - `.env.example` lists optional development settings. Copy it to `.env`, which is gitignored; never commit keys.
 
-CI runs on every push. Pushing a `vX.Y.Z` tag that matches `package.json` publishes the image and a GitHub release.
+- `docker build -t maverick-jellyfin-complete:local .` builds the image yourself. Use that name as the `image:` in your compose file.
+
+CI runs on every push. Each push to `main` also publishes the `main` image. Pushing a `vX.Y.Z` tag that matches `package.json` publishes `latest`, the version tags and a GitHub release.
 
 ## Licence and credits
 

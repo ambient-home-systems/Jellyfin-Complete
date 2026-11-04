@@ -18,7 +18,7 @@ Getting ready for other people's servers (Phase 4).
   - CI runs on every push.
   - Tagged releases publish a multi-arch (amd64, arm64) image to GitHub Container Registry.
   - The image's default timezone is UTC. `TZ` now only seeds the timezone setting on first start.
-- **Portainer without a copy of the repository.** Docker builds the image straight from GitHub. The README also covers moving a `docker compose` install into Portainer.
+- **A ready-made image of the newest code.** Every change to `main` publishes `ghcr.io/ambient-home-systems/jellyfin-complete:main` (amd64 and arm64), so nobody has to build the image. The compose file and the README's Portainer steps use it, and the README covers moving a `docker compose` install into Portainer.
 - **Fixed:**
   - Saving Settings → Libraries with every library ticked failed with an error.
   - `OfficialRating` and `ProductionYear` were requested as `Fields` values, which no Jellyfin version accepts.

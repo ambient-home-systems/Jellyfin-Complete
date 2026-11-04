@@ -1,17 +1,19 @@
-# Maverick Jellyfin Complete stack (Docker Compose or Portainer).
+# Maverick Jellyfin Complete stack, for Docker Compose or Portainer.
 #
-# From a clone of this repository:   docker compose up -d --build
-# In Portainer (Stacks → Add stack → Web editor): build the image once on the host with
-#   docker build -t maverick-jellyfin-complete:local https://github.com/ambient-home-systems/Jellyfin-Complete.git#main
-# then paste this file and delete the "build:" line. The README's Portainer section has the details.
+# Docker Compose:  docker compose up -d   (in the folder holding this file)
+# Portainer:       Stacks → Add stack → Web editor: paste this file, then Deploy the stack.
+#
+# The image is built and published by this repository. ":main" is the newest code; releases add ":latest" and
+# version tags such as ":0.4.0". To run your own build instead, run
+#   docker build -t maverick-jellyfin-complete:local .
+# in a copy of this repository and change the image line to maverick-jellyfin-complete:local.
 #
 # Jellyfin's address and API key are entered on the setup page at first launch, not here.
 # Dry run is on until you turn it off in Settings: nothing changes in Jellyfin before then.
 
 services:
-  maverick-collections:     # service name kept from the working name, so existing installs upgrade in place
-    build: .
-    image: maverick-jellyfin-complete:local
+  maverick-jellyfin-complete:
+    image: ghcr.io/ambient-home-systems/jellyfin-complete:main
     container_name: maverick-jellyfin-complete
     restart: unless-stopped
     ports:
