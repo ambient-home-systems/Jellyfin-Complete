@@ -22,6 +22,7 @@ Getting ready for other people's servers (Phase 4).
 - **Fixed:**
   - Saving Settings → Libraries with every library ticked failed with an error.
   - `OfficialRating` and `ProductionYear` were requested as `Fields` values, which no Jellyfin version accepts.
+  - Getting started showed a bare count beside each kind of collection ("Show franchises 27"), which read like titles found on your server. It now says what the number means: how many collections it can make, and that a franchise or universe collection needs at least 2 of its titles. The interface also no longer names Kometa where it isn't about Kometa.
 
 ## 0.3.0 — 3 Nov 2026 (not published)
 

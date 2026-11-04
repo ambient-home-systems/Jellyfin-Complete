@@ -11,7 +11,7 @@ export const Adoption: FC<{ items: AdoptionCandidate[]; csrf: string; error?: st
     </header>
     <div class="content">
       <p class="muted" style="max-width:72ch">
-        These box sets already exist in Jellyfin with the same name as one of your collections (or Kometa’s old name for it). The app never touches them unless you adopt them.
+        These box sets already exist in Jellyfin with the same name as one of your collections (or an older name for it). The app never touches them unless you adopt them.
         If Jellyfin-Auto-Collections manages one, remove its line from JAC’s config.yaml first, or JAC will keep rewriting it (ADR-009).
       </p>
       {error ? <p role="alert" style="color:var(--red)">{error}</p> : null}

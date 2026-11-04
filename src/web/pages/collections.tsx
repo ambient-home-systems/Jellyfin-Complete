@@ -55,7 +55,7 @@ export const CollectionsList: FC<{ rows: Row[]; tz: string; csrf: string }> = ({
         // A family with nothing turned on folds away, so 44 optional presets don't crowd the page.
         return on === 0 && fam !== 'custom' ? (
           <details class="family" aria-labelledby={id}>
-            <summary><h2 id={id}>{title}</h2><span class="faint">From Kometa’s defaults. Turn on the ones you want; nothing is created until then.</span></summary>
+            <summary><h2 id={id}>{title}</h2><span class="faint">Ready-made collections. Turn on the ones you want; nothing is created until then.</span></summary>
             <CollectionsTable rows={group} tz={tz} csrf={csrf} />
           </details>
         ) : (
@@ -90,7 +90,7 @@ export const CollectionEditor: FC<{
       <header class="top">
         <nav class="crumbs" aria-label="Breadcrumb"><a href="/collections">Collections</a><span aria-hidden="true">/</span><span>{def.presetKey ? 'Preset' : 'Custom'}</span></nav>
         <h1>{def.name}</h1>
-        {def.presetKey ? <span class="chip">Kometa preset · {FAMILY_LABEL[familyOf(def.presetKey)]}</span> : null}
+        {def.presetKey ? <span class="chip">Preset · {FAMILY_LABEL[familyOf(def.presetKey)]}</span> : null}
         {live ? <span class="chip solid">Live</span> : next[0]?.kind === 'opens' ? <span class="chip y">Opens {fmtDate(localMidnight(next[0].day, tz), tz)}</span> : null}
         <div class="actions">
           <a class="btn jump" href="#pv-h"><Icon name="eye" /> Live preview</a>
@@ -104,14 +104,14 @@ export const CollectionEditor: FC<{
             <Csrf token={csrf} />
             <section class="form-sec" aria-labelledby="basics-h">
               <div class="section-head"><h2 id="basics-h">Basics</h2></div>
-              <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" type="text" value={def.name} required maxlength={200} /><span class="hint">Kometa names it "&lt;Holiday&gt; Movies"; keep it identical to Plex for parity.</span></div>
+              <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" type="text" value={def.name} required maxlength={200} /><span class="hint">If you compare with Plex, keep this the same as the Plex collection’s name.</span></div>
               <div class="field"><label class="check"><input type="checkbox" name="enabled" value="1" checked={def.enabled} /> Enabled</label><span class="hint">Turning a collection off removes its box set on the next run, following the delete mode. Its films stay in your library.</span></div>
               <div class="field"><label for="f-sum">Overview</label><textarea id="f-sum" name="overview" rows={2}>{def.overview ?? ''}</textarea></div>
             </section>
 
             <section class="form-sec" aria-labelledby="sched-h">
               <div class="section-head"><h2 id="sched-h">Schedule</h2></div>
-              {w || !def.window ? <ScheduleFields from={w?.from} to={w?.to} /> : <p class="muted">Relative rule (from the Kometa preset)</p>}
+              {w || !def.window ? <ScheduleFields from={w?.from} to={w?.to} /> : <p class="muted">Relative rule (from the preset)</p>}
               {next.length ? (
                 <table class="mini-tt num" aria-label="Next changes for this collection">
                   {next.map((t) => (
@@ -121,7 +121,7 @@ export const CollectionEditor: FC<{
               ) : null}
               <div class="field"><span class="label">When the window is closed</span>
                 <div class="choice" role="radiogroup">
-                  <label><input type="radio" name="visibility" value="delete" checked={def.visibility === 'delete'} /><b>Delete the box set (Kometa’s way)</b><span>Recreated with the same poster, sort title and overview when the window opens.</span></label>
+                  <label><input type="radio" name="visibility" value="delete" checked={def.visibility === 'delete'} /><b>Delete the box set (default)</b><span>Recreated with the same poster, sort title and overview when the window opens.</span></label>
                   <label><input type="radio" name="visibility" value="tag_gate" checked={def.visibility === 'tag_gate'} /><b>Keep it, hidden with a blocked tag</b><span>The box set keeps its films, poster and ID between seasons and is shown again when the window opens. Adds the tag <code>maverick-collections:hidden</code> to every Jellyfin user’s blocked tags, including new users. Films stay visible.</span></label>
                 </div>
               </div>
@@ -214,7 +214,7 @@ export const CollectionEditor: FC<{
               </div>
             </section>
             <section class="panel" aria-labelledby="par-h">
-              <div class="section-head"><h2 id="par-h">Plex parity</h2><span class="aside">vs Kometa in Plex</span></div>
+              <div class="section-head"><h2 id="par-h">Plex parity</h2><span class="aside">vs Plex</span></div>
               <div hx-get={`/collections/${def.id}/parity`} hx-trigger="load" hx-swap="innerHTML">
                 <p class="muted">Comparing with Plex…</p>
               </div>
@@ -289,7 +289,7 @@ export const ParityPanel: FC<{ p: Parity; fetchedAt: number | null }> = ({ p, fe
       {same ? <p class="muted">Same titles in both. Parity.</p> : null}
       {list('In Plex, not in your Jellyfin library', p.plexOnlyNotInLibrary, 'Plex has these and Jellyfin doesn’t, or Jellyfin has them without matching IMDb/TMDb IDs.')}
       {list('In both libraries, not picked here', p.plexOnlyNotPlanned, 'Usually a source difference: an IMDb list or search returned it for Plex but not here, or a library isn’t selected in Settings. Pin it if you want it.')}
-      {list('Planned here, not in Plex', p.hereOnly, 'Often titles from a Jellyfin library Kometa doesn’t run on, or a list that changed since Kometa’s last run.')}
+      {list('Planned here, not in Plex', p.hereOnly, 'Often titles from a library Plex doesn’t have, or a list that changed since Plex’s collection was last built.')}
     </>
   );
 };

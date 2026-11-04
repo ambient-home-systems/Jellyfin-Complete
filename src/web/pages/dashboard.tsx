@@ -57,7 +57,7 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
               <div class="notice"><Dot state={m.server.level === 'unsupported' ? 'err' : 'warn'} label={m.server.level} /><b>Jellyfin {m.server.version}</b><p>{m.server.note}</p></div>
             ) : null}
             {m.hashError ? (
-              <div class="notice"><Dot state="err" label="Failing" /><b>IMDb query hashes</b><p>{m.hashError}. IMDb sources are served from their last good results until Kometa’s hash files catch up.</p></div>
+              <div class="notice"><Dot state="err" label="Failing" /><b>IMDb query hashes</b><p>{m.hashError}. IMDb sources are served from their last good results until the published hashes are updated.</p></div>
             ) : null}
             {m.failing.map((s) => (
               <div class="notice"><Dot state="err" label="Failing" /><b>{s.label}</b><p>{s.error} No previous result, so its collections make no removals or deletes until it recovers.</p></div>

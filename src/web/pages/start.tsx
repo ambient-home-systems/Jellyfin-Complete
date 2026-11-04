@@ -72,7 +72,7 @@ export const Start: FC<{ m: StartModel }> = ({ m }) => {
             <p class="muted">Ready-made collections. You can turn single ones on or off later under Collections, and make your own.</p>
             <div class="choice">
               {m.families.map((f) => (
-                <label><input type="checkbox" name="families" value={f.family} checked={f.on > 0} /><b>{FAMILY_LABEL[f.family]} <span class="faint num">{f.total}</span></b><span>{f.note}</span></label>
+                <label><input type="checkbox" name="families" value={f.family} checked={f.on > 0} /><b>{FAMILY_LABEL[f.family]}</b><span>{f.note}</span></label>
               ))}
             </div>
             <div><button class="btn primary" type="submit">Save</button></div>

@@ -93,7 +93,7 @@ export const SettingsPage: FC<{
             <form method="post" action="/settings/imdb">
               <Csrf token={csrf} />
               <div class="choice" role="radiogroup" aria-labelledby="imdb-h">
-                <label><input type="radio" name="imdbRoute" value="direct" checked={s.imdbRoute === 'direct'} /><b>IMDb GraphQL, directly (recommended)</b><span>Same query and settings as Kometa, sent from this server.</span></label>
+                <label><input type="radio" name="imdbRoute" value="direct" checked={s.imdbRoute === 'direct'} /><b>IMDb GraphQL, directly (recommended)</b><span>Sent from this server.</span></label>
                 <label><input type="radio" name="imdbRoute" value="kometa_service" checked={s.imdbRoute === 'kometa_service'} /><b>Kometa’s hosted IMDb service</b><span>Exact Kometa parity, on infrastructure the Kometa team runs for Kometa users. Use for parity checks only.</span></label>
                 <label><input type="radio" name="imdbRoute" value="snapshot" checked={s.imdbRoute === 'snapshot'} /><b>Daily snapshot</b><span>If IMDb refuses this server: a scheduled job elsewhere (for example GitHub Actions) runs the same queries and publishes a JSON file, and the app reads that. See docs/IMDB-SNAPSHOT.md.</span></label>
               </div>

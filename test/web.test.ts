@@ -103,6 +103,10 @@ describe('first-run guide (Phase 4)', () => {
     const page = await (await t.web.request('/start', { headers: { cookie } })).text();
     expect(page).toContain('Getting started');
     expect(page).toContain('Animated Classics');
+    // Each family says what its count means (collections it can make, not titles found) and its minimum.
+    expect(page).toContain('27 TV franchises (Star Trek, NCIS, One Chicago…), one collection each');
+    expect(page).toContain('at least 2 of its shows');
+    expect(page).not.toContain('Kometa');
     expect(await (await t.web.request('/', { headers: { cookie } })).text()).toContain('Finish setting up');
     // Libraries step returns to the guide; timezone is validated.
     const libRes = await post('/settings/libraries', { movieLibraryIds: ['lib-movies'], showLibraryIds: ['lib-shows'], next: '/start#st-2' });

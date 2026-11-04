@@ -47,7 +47,7 @@ export async function adoptionCandidates(app: AppContext): Promise<AdoptionCandi
     let why = '';
     if (orphan) { suggestion = 'delete'; why = 'Left over from an older Jellyfin-Auto-Collections config; nothing updates it'; }
     else if (exact) { suggestion = 'adopt'; why = jac ? 'Same name as this preset; remove it from JAC’s config first (ADR-009)' : 'Same name as this preset'; }
-    else { suggestion = 'delete'; why = 'Old Kometa name for this preset'; }
+    else { suggestion = 'delete'; why = 'An older name for this collection'; }
     out.push({ boxsetId: b.Id, name, jac, childCount: b.ChildCount ?? null, definitionId: def?.id ?? null, definitionName: def?.name ?? null, suggestion, why });
   }
   return out;

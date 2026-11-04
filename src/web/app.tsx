@@ -209,15 +209,16 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   web.get('/start', (c) => {
     const s = app.settings();
     const defs = loadDefinitions(app.db);
-    const NOTES: Record<PresetFamily, string> = {
-      seasonal: 'Kometa’s 19 holiday and awareness-month film collections. Each appears only during its dates.',
-      holiday_episodes: 'Christmas, Halloween and Thanksgiving episodes from your shows, on the same dates.',
-      universe: 'Kometa’s 17 film universes (Marvel, Star Wars, Middle Earth…), always on.',
-      show_franchise: 'Kometa’s 27 TV franchises (Star Trek, NCIS, One Chicago…), always on.',
+    // The count is how many collections the family can make, not how many titles were found in Jellyfin.
+    const NOTES: Record<PresetFamily, (n: number) => string> = {
+      seasonal: (n) => `${n} film collections for holidays and awareness months (Christmas, Halloween, Black History Month…). Each appears only during its dates.`,
+      holiday_episodes: (n) => `${n} collections of Christmas, Halloween and Thanksgiving episodes from your shows, on the same dates as the films.`,
+      universe: (n) => `${n} film universes (Marvel, Star Wars, Middle Earth…), one collection each. A universe’s collection is made only when you have at least 2 of its films, and stays all year.`,
+      show_franchise: (n) => `${n} TV franchises (Star Trek, NCIS, One Chicago…), one collection each. A franchise’s collection is made only when you have at least 2 of its shows, and stays all year.`,
     };
     const families = (['seasonal', 'holiday_episodes', 'universe', 'show_franchise'] as const).map((family) => {
       const mine = defs.filter((d) => familyOf(d.presetKey) === family);
-      return { family, on: mine.filter((d) => d.enabled).length, total: mine.length, note: NOTES[family] };
+      return { family, on: mine.filter((d) => d.enabled).length, total: mine.length, note: NOTES[family](mine.length) };
     });
     const hasRun = Boolean(app.db.select({ id: run.id }).from(run).limit(1).get());
     return page(c, 'Getting started', 'dashboard', <Start m={{ s, libraries: librariesModel(app), tmdbSet: Boolean(app.secrets.get('tmdb.apiKey')), families, hasRun, csrf: userOf(c).csrf }} />);
@@ -388,14 +389,14 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const def = loadDefinition(app.db, Number(c.req.param('id')));
     if (!def) return c.notFound();
     const plex = app.plex();
-    if (!plex) return c.html(<p class="muted">Connect Plex in Settings → Connections to compare this collection with the one Kometa builds there.</p>);
+    if (!plex) return c.html(<p class="muted">Connect Plex in Settings → Connections to compare this collection with the one in Plex.</p>);
     const plan = cachedMembers(def);
     if (!plan) return c.html(<p class="muted">No library index yet. Run once from the Dashboard.</p>);
     const s = app.settings();
     const ctx = { db: app.db, fetch: app.fetch, tmdb: app.tmdb(), plex, mdblistKey: null, imdbRoute: s.imdbRoute };
     const r = await resolveSource(ctx, { type: 'plex_collection', config: { name: def.name } }, { maxAgeMs: 10 * 60_000 });
     if (r.status === 'failed') return c.html(<p class="muted">Couldn’t read Plex: {r.error}</p>);
-    if (!(r.meta as { found?: boolean } | null)?.found) return c.html(<p class="muted">Plex has no collection called “{def.name}” right now. Kometa deletes seasonal collections outside their window, so compare while it’s open.</p>);
+    if (!(r.meta as { found?: boolean } | null)?.found) return c.html(<p class="muted">Plex has no collection called “{def.name}” right now. Seasonal collections in Plex usually exist only during their dates, so compare while it’s open.</p>);
     const want = def.target === 'movies' ? 'movie' : def.target === 'shows' ? 'series' : def.target === 'episodes' ? 'episode' : 'any';
     return c.html(<ParityPanel p={parity(r.items, new Set(plan.members.keys()), plan.index, want)} fetchedAt={r.fetchedAt} />);
   });
