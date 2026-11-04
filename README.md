@@ -59,10 +59,31 @@ Then open `http://<host>:8097`:
 
 ### Portainer
 
-Paste the compose file above into **Stacks → Add stack → Web editor**. If you build from source instead:
+1. **Build the image on the host.** You only need this until the first release publishes the image. Docker fetches the code itself, so you don't need a copy of the repository:
+   ```bash
+   docker build -t maverick-jellyfin-complete:local https://github.com/ambient-home-systems/Jellyfin-Complete.git#main
+   ```
+2. **Stacks → Add stack.** Name it `maverick-jellyfin-complete` and paste the compose file above into the **Web editor**. Change the `image:` line to `image: maverick-jellyfin-complete:local`, and set `TZ` to your timezone.
+3. **Deploy the stack.** The setup code is in **Containers → maverick-jellyfin-complete → Logs**.
 
-1. Run `docker build -t maverick-jellyfin-complete:local .` on the host.
-2. Use `image: maverick-jellyfin-complete:local` in the stack.
+**To update,** run the build command again, then open the stack and choose **Update the stack**. Leave **Re-pull image and redeploy** off, because the image is on the host, not in a registry. Once the first release is out, switch to the `ghcr.io` image and turn that option on.
+
+#### Moving a `docker compose` install to Portainer
+
+If you started the app with `docker compose` from a copy of this repository:
+
+1. **Stop it.** In that folder, run `docker compose down`. This removes the container; your data stays in its volume.
+2. **Find the volume.** Run `docker volume ls --filter name=maverick-config`. The name starts with the folder's name, for example `jellyfin-complete_maverick-config`.
+3. **Keep your data, or start over.**
+   - To keep your settings, keys and history: when you paste the stack, replace the `volumes:` section at its end with this, using your volume's name:
+     ```yaml
+     volumes:
+       maverick-config:
+         external: true
+         name: jellyfin-complete_maverick-config
+     ```
+   - To start over, run `docker volume rm` with the volume's name. You'll connect Jellyfin and go through Getting started again. Box sets the app made before are listed under **Collections → Existing box sets**, ready to adopt.
+4. **Set up the stack** with the Portainer steps above. Then delete the old folder.
 
 ### What the container uses
 
