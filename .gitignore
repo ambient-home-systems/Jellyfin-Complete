@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+node_modules/
+spikes/out/
+.impeccable/review/
+.impeccable/build/
+.impeccable/config.local.json
+.DS_Store
+.impeccable/questions/
+.impeccable/hook.cache.json
+dist/
+config/
+coverage/
+
+# Your private strings for scripts/privacy-check.mjs; never commit this.
+.privacy-denylist

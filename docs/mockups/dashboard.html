@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en" data-notes="on" data-width="desktop">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard · Maverick Collections</title>
+<meta name="description" content="Annotated Phase 0 mockup of the Maverick Collections dashboard: what needs review, what broke, and the next seasonal change.">
+<link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="mock.css">
+</head>
+<body>
+<header class="mockbar">
+  <strong>Maverick Collections · Phase 0 mockups</strong>
+  <nav aria-label="Mockup screens"><a href="index.html">Overview</a><a href="dashboard.html" aria-current="page">Dashboard</a><a href="collection-editor.html">Collection editor</a><a href="review.html">Review queue</a><a href="missing.html">Missing</a><a href="settings.html">Settings</a></nav>
+  <div class="tools">
+    <fieldset><legend>Theme</legend><input type="radio" name="mock-theme" id="m-theme-auto" value="auto" checked><label for="m-theme-auto">Auto</label><input type="radio" name="mock-theme" id="m-theme-light" value="light"><label for="m-theme-light">Light</label><input type="radio" name="mock-theme" id="m-theme-dark" value="dark"><label for="m-theme-dark">Dark</label></fieldset>
+    <fieldset><legend>Width</legend><input type="radio" name="mock-width" id="m-width-desktop" value="desktop" checked><label for="m-width-desktop">Desktop</label><input type="radio" name="mock-width" id="m-width-phone" value="phone"><label for="m-width-phone">Phone</label></fieldset>
+    <fieldset><legend>Notes</legend><input type="radio" name="mock-notes" id="m-notes-on" value="on" checked><label for="m-notes-on">On</label><input type="radio" name="mock-notes" id="m-notes-off" value="off"><label for="m-notes-off">Off</label></fieldset>
+  </div>
+</header>
+<div class="stage">
+  <div class="frame">
+    <div class="app">
+    <aside class="rail" aria-label="Main navigation">
+      <div class="brand">Maverick Collections<small>Jellyfin · jellyfin.local</small></div>
+      <nav><a href="dashboard.html" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-dashboard"/></svg><span class="lbl">Dashboard</span></a><a href="collection-editor.html"><svg class="i" aria-hidden="true"><use href="#i-collections"/></svg><span class="lbl">Collections</span></a><a href="review.html"><svg class="i" aria-hidden="true"><use href="#i-review"/></svg><span class="lbl">Review</span><span class="count num" aria-label="37 waiting">37</span></a><a href="missing.html" class="phone-hide"><svg class="i" aria-hidden="true"><use href="#i-missing"/></svg><span class="lbl">Missing</span><span class="tag">Phase 2</span></a><a href="#activity" class="phone-hide"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg><span class="lbl">Activity</span></a><a href="settings.html"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a></nav>
+      <div class="foot">
+        <div class="dry"><span class="dot warn"></span><b>Dry run on<span class="pin">6</span></b><span>Every action waits in Review</span></div>
+        <div class="who">Last run 02:30 · signed in as admin</div>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="top">
+        <h1>Dashboard</h1>
+        <div class="actions">
+          <span class="clock num">Mon 2 Nov 2026 · 21:40 ET</span>
+          <button class="btn primary" type="button"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg> Run now</button><span class="pin">7</span>
+        </div>
+      </header>
+
+      <div class="content">
+        <div class="answers">
+          <section class="panel needs" aria-labelledby="needs-h">
+            <div class="section-head"><h2 id="needs-h">Needs you</h2><span class="pin">1</span></div>
+            <p class="lead"><b class="num">37 proposals</b> wait in Review across 4 collections.</p>
+            <ul class="rows">
+              <li><a href="review.html">Christmas Movies</a><span class="faint">add · opens 1 Dec</span><span class="n num">14</span></li>
+              <li><a href="review.html">Thanksgiving Movies</a><span class="faint">9 add · 2 remove</span><span class="n num">11</span></li>
+              <li><a href="review.html">Veteran's Day Movies</a><span class="faint">add</span><span class="n num">6</span></li>
+              <li><a href="review.html">Christmas Episodes</a><span class="faint">title suggestions</span><span class="n num">6</span></li>
+            </ul>
+            <a class="btn" href="review.html">Open Review queue</a>
+          </section>
+
+          <section class="panel" aria-labelledby="svc-h">
+            <div class="section-head"><h2 id="svc-h">Service notices</h2><span class="pin">2</span><span class="aside">1 failing · 1 from cache · 5 OK</span></div>
+            <div class="notice">
+              <span class="dot err" role="img" aria-label="Failing"></span>
+              <b>Letterboxd · black-is-beautiful</b>
+              <p>Cloudflare challenge since Thu 29 Oct. Serving the last good result from 28 Oct. Nothing is removed while a source fails.</p>
+              <button class="btn sm act" type="button"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg> Retry</button>
+            </div>
+            <div class="notice">
+              <span class="dot warn" role="img" aria-label="Served from cache"></span>
+              <b>MDBList · christmas-extravaganza</b>
+              <p>HTTP 429 at 02:30. Served from cache, fetched 1 Nov 02:31 (1 day old).</p>
+              <button class="btn sm act" type="button"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg> Retry</button>
+            </div>
+            <div class="notice ok">
+              <span class="dot ok" role="img" aria-label="OK"></span>
+              <b>IMDb, TMDb, Jellyfin, Plex, Radarr, Sonarr</b>
+              <p>IMDb query hashes current (checked 02:30). Jellyfin 12.4 answered in 38 ms.</p>
+            </div>
+            <dl class="kv lastrun">
+              <dt>Last run</dt><dd class="num">Mon 2 Nov 02:30 · 3 min 12 s · <a href="#activity">41 actions planned</a>, 4 applied, 37 to Review</dd>
+              <dt>Next run</dt><dd class="num">Tue 3 Nov 00:00 window check · 02:30 nightly refresh</dd>
+            </dl>
+          </section>
+
+          <section class="next-panel" aria-labelledby="next-h">
+            <div class="section-head"><h2 id="next-h">Next change</h2><span class="pin">3</span><span class="aside">in 29 days</span></div>
+            <p class="dep"><span class="d">Tue 1 Dec</span><span class="t num">00:00</span></p>
+            <ul class="rows">
+              <li><span class="chg-open">opens</span><span>Christmas Movies</span><span class="n num">42 films</span></li>
+              <li><span class="chg-close">closes</span><span>Thanksgiving Movies</span><span class="n num">10</span></li>
+              <li><span class="chg-close">closes</span><span>Veteran's Day Movies</span><span class="n num">12</span></li>
+            </ul>
+            <p class="plan">Plan: create 1 box set, delete 2. 14 Christmas adds still need your review.</p>
+            <a class="btn on-yellow" href="review.html"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg> Preview the plan</a>
+          </section>
+        </div>
+
+        <section aria-labelledby="year-h" class="year-wrap">
+          <div class="section-head"><h2 id="year-h">2026 at a glance</h2><span class="pin">4</span><span class="aside">19 seasonal windows · flips at midnight, America/New_York</span></div>
+          <div class="hide-sm">
+            <div class="year" role="group" aria-label="Seasonal windows in 2026">
+          <div class="months" aria-hidden="true"><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span></div>
+          <div class="lanes"><a class="w short" href="collection-editor.html" style="left:0.000%;width:1.096%;top:6px" title="New Year&#x27;s Day Movies · 12/26–01/04" aria-label="New Year&#x27;s Day Movies · 12/26–01/04"></a><a class="w " href="collection-editor.html" style="left:8.493%;width:7.945%;top:6px" title="Black History Month Movies · 02/01–03/01" aria-label="Black History Month Movies · 02/01–03/01">Black History</a><a class="w " href="collection-editor.html" style="left:8.493%;width:7.671%;top:30px" title="Valentine&#x27;s Day Movies · 02/01–02/29" aria-label="Valentine&#x27;s Day Movies · 02/01–02/29">Valentine&#x27;s</a><a class="w " href="collection-editor.html" style="left:15.890%;width:8.767%;top:54px" title="Women&#x27;s History Month Movies · 02/28–03/31" aria-label="Women&#x27;s History Month Movies · 02/28–03/31">Women&#x27;s History</a><a class="w " href="collection-editor.html" style="left:16.164%;width:4.932%;top:30px" title="St. Patrick&#x27;s Day Movies · 03/01–03/18" aria-label="St. Patrick&#x27;s Day Movies · 03/01–03/18">St. Patrick&#x27;s</a><a class="w " href="collection-editor.html" style="left:21.370%;width:11.507%;top:6px" title="Easter Movies · 03/20–04/30" aria-label="Easter Movies · 03/20–04/30">Easter</a><a class="w " href="collection-editor.html" style="left:32.603%;width:8.767%;top:30px" title="Asian American &amp; Pacific Islander Heritage Month Movies · 04/30–05/31" aria-label="Asian American &amp; Pacific Islander Heritage Month Movies · 04/30–05/31">AAPI</a><a class="w short" href="collection-editor.html" style="left:33.973%;width:1.644%;top:6px" title="Mother&#x27;s Day Movies · 05/05–05/10" aria-label="Mother&#x27;s Day Movies · 05/05–05/10"></a><a class="w " href="collection-editor.html" style="left:37.534%;width:5.753%;top:6px" title="Memorial Day Movies · 05/18–06/07" aria-label="Memorial Day Movies · 05/18–06/07">Memorial</a><a class="w " href="collection-editor.html" style="left:41.096%;width:8.493%;top:54px" title="LGBTQ+ Pride Month Movies · 05/31–06/30" aria-label="LGBTQ+ Pride Month Movies · 05/31–06/30">Pride</a><a class="w short" href="collection-editor.html" style="left:45.205%;width:1.644%;top:6px" title="Father&#x27;s Day Movies · 06/15–06/20" aria-label="Father&#x27;s Day Movies · 06/15–06/20"></a><a class="w " href="collection-editor.html" style="left:47.397%;width:5.205%;top:6px" title="Independence Day Movies · 06/23–07/11" aria-label="Independence Day Movies · 06/23–07/11">Independence</a><a class="w short" href="collection-editor.html" style="left:66.575%;width:2.740%;top:6px" title="Labor Day Movies · 09/01–09/10" aria-label="Labor Day Movies · 09/01–09/10"></a><a class="w " href="collection-editor.html" style="left:70.411%;width:8.493%;top:6px" title="Latinx Heritage Month Movies · 09/15–10/15" aria-label="Latinx Heritage Month Movies · 09/15–10/15">Latinx</a><a class="w " href="collection-editor.html" style="left:74.795%;width:8.493%;top:30px" title="Halloween Movies · 10/01–10/31" aria-label="Halloween Movies · 10/01–10/31">Halloween</a><a class="w live" href="collection-editor.html" style="left:83.288%;width:8.219%;top:6px" title="Veteran&#x27;s Day Movies · 11/01–11/30 · live now" aria-label="Veteran&#x27;s Day Movies · 11/01–11/30 · live now">Veteran&#x27;s Day</a><a class="w live" href="collection-editor.html" style="left:83.288%;width:8.219%;top:30px" title="Thanksgiving Movies · 11/01–11/30 · live now" aria-label="Thanksgiving Movies · 11/01–11/30 · live now">Thanksgiving</a><a class="w next" href="collection-editor.html" style="left:91.507%;width:8.493%;top:6px" title="Christmas Movies · 12/01–12/31 · next to open" aria-label="Christmas Movies · 12/01–12/31 · next to open">Christmas</a><a class="w short" href="collection-editor.html" style="left:91.781%;width:0.822%;top:30px" title="Day of Persons with Disabilities Movies · 12/02–12/04" aria-label="Day of Persons with Disabilities Movies · 12/02–12/04"></a><a class="w short" href="collection-editor.html" style="left:98.356%;width:1.644%;top:30px" title="New Year&#x27;s Day Movies · 12/26–01/04" aria-label="New Year&#x27;s Day Movies · 12/26–01/04"></a><span class="today" style="left:83.699%"><b>Today · 2 Nov</b></span></div>
+        </div>
+            <div class="legend" aria-hidden="true"><span><i class="live"></i>Live now</span><span><i class="next"></i>Opens next</span><span><i></i>Scheduled</span><span><i class="short"></i>Under 10 days (name on hover)</span><span><b style="color:var(--red)">|</b>&nbsp;Today</span></div>
+          </div>
+          <ul class="rows year-phone show-sm" aria-label="Now and next">
+            <li><span class="dot live"></span><span>Live: Veteran's Day, Thanksgiving</span><span class="n num">until 30 Nov</span></li>
+            <li><span class="dot warn"></span><span>Next: Christmas</span><span class="n num">Tue 1 Dec</span></li>
+            <li><span class="dot ok"></span><span>Then: Disabilities</span><span class="n num">Wed 2 Dec</span></li>
+            <li><span class="dot ok"></span><span>Then: New Year's Day</span><span class="n num">Sat 26 Dec</span></li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="tt-h">
+          <div class="section-head">
+            <h2 id="tt-h">Upcoming changes</h2><span class="pin">5</span>
+            <span class="aside">
+              <span class="seg" role="radiogroup" aria-label="Range">
+                <input type="radio" name="rng" id="rng90" checked><label for="rng90">Next 120 days</label>
+                <input type="radio" name="rng" id="rngall"><label for="rngall">All year</label>
+              </span>
+            </span>
+          </div>
+          <table class="tt">
+            <thead><tr><th scope="col">Date</th><th scope="col">Change</th><th scope="col">Collection</th><th scope="col" class="hide-md drop-1">Library</th><th scope="col" class="hide-sm drop-2">Via</th><th scope="col" class="hide-sm">Remarks</th></tr></thead>
+            <tbody>
+              <tr class="band"><th colspan="6" scope="rowgroup">December 2026</th></tr>
+              <tr class="next"><td class="when">Tue 1 Dec<span class="t">00:00</span></td><td class="chg"><span class="chg-open">opens</span></td><td class="coll">Christmas Movies</td><td class="hide-md drop-1">Movies</td><td class="hide-sm drop-2">MDBList</td><td class="rmk hide-sm">42 films · 14 adds await review</td></tr>
+              <tr class="next"><td class="when">Tue 1 Dec<span class="t">00:00</span></td><td class="chg"><span class="chg-close">closes</span></td><td class="coll">Thanksgiving Movies</td><td class="hide-md drop-1">Movies</td><td class="hide-sm drop-2">IMDb keyword</td><td class="rmk hide-sm">Box set deleted; poster and sort title kept for next year</td></tr>
+              <tr class="next"><td class="when">Tue 1 Dec<span class="t">00:00</span></td><td class="chg"><span class="chg-close">closes</span></td><td class="coll">Veteran's Day Movies</td><td class="hide-md drop-1">Movies</td><td class="hide-sm drop-2">IMDb lists ×2</td><td class="rmk hide-sm"></td></tr>
+              <tr><td class="when">Tue 1 Dec<span class="t">00:00</span></td><td class="chg"><span class="chg-open">opens</span></td><td class="coll">Christmas Episodes</td><td class="hide-md drop-1">2 TV libraries</td><td class="hide-sm drop-2">IMDb episodes</td><td class="rmk hide-sm"><span class="chip">Phase 2</span> box set, 30 episodes</td></tr>
+              <tr><td class="when">Wed 2 Dec<span class="t">00:00</span></td><td class="chg"><span class="chg-open">opens</span></td><td class="coll">Day of Persons with Disabilities Movies</td><td class="hide-md drop-1">Movies</td><td class="hide-sm drop-2">IMDb keyword</td><td class="rmk hide-sm">3-day window</td></tr>
+              <tr><td class="when">Sat 5 Dec<span class="t">00:00</span></td><td class="chg"><span class="chg-close">closes</span></td><td class="coll">Day of Persons with Disabilities Movies</td><td class="hide-md drop-1">Movies</td><td class="hide-sm drop-2">IMDb keyword</td><td class="rmk hide-sm"></td></tr>
+              <tr><td class="when">Sat 26 Dec<span class="t">00:00</span></td><td class="chg"><span class="chg-open">opens</span></td><td class="coll">New Year's Day Movies</td><td class="hide-md drop-1">Movies</td><td class="hide-sm drop-2">IMDb list</td><td class="rmk hide-sm">Runs past New Year</td></tr>
+              <tr class="band"><th colspan="6" scope="rowgroup">January 2027</th></tr>
+              <tr><td class="when">Fri 1 Jan<span class="t">00:00</span></td><td class="chg"><span class="chg-close">closes</span></td><td class="coll">Christmas Movies</td><td class="hide-md drop-1">Movies</td><td class="hide-sm drop-2">MDBList</td><td class="rmk hide-sm"></td></tr>
+              <tr><td class="when">Tue 5 Jan<span class="t">00:00</span></td><td class="chg"><span class="chg-close">closes</span></td><td class="coll">New Year's Day Movies</td><td class="hide-md drop-1">Movies</td><td class="hide-sm drop-2">IMDb list</td><td class="rmk hide-sm"></td></tr>
+              <tr class="band"><th colspan="6" scope="rowgroup">February 2027</th></tr>
+              <tr><td class="when">Mon 1 Feb<span class="t">00:00</span></td><td class="chg"><span class="chg-open">opens</span></td><td class="coll">Valentine's Day Movies</td><td class="hide-md drop-1">Movies</td><td class="hide-sm drop-2">IMDb lists ×4</td><td class="rmk hide-sm">Top 500 of 634 by popularity, as Kometa does</td></tr>
+              <tr><td class="when">Mon 1 Feb<span class="t">00:00</span></td><td class="chg"><span class="chg-open">opens</span></td><td class="coll">Black History Month Movies</td><td class="hide-md drop-1">Movies</td><td class="hide-sm drop-2">IMDb list, Letterboxd</td><td class="rmk hide-sm"><span class="dot err" role="img" aria-label="Failing"></span> Letterboxd failing; built from IMDb plus its last good result</td></tr>
+              <tr><td class="when">Sun 28 Feb<span class="t">00:00</span></td><td class="chg"><span class="chg-open">opens</span></td><td class="coll">Women's History Month Movies</td><td class="hide-md drop-1">Movies</td><td class="hide-sm drop-2">IMDb keyword</td><td class="rmk hide-sm"></td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+    </main>
+    </div>
+  </div>
+
+  <aside class="notes" aria-label="Design notes">
+    <h2>Dashboard: design notes</h2>
+    <p>Direction: <b>Timetable</b>. Built to answer your three questions in order: what needs me, what broke, what's next. Owned counts (Christmas 42, Thanksgiving 10, Veteran's Day 12) come from the 2 Nov server spike; review counts and service states are illustrative.</p>
+    <ol>
+      <li><span class="pin">1</span><div><h3>Needs you</h3><p>Leads the page, as you asked. The count sits in a sentence, not a giant KPI tile, and the breakdown by collection links straight to a filtered Review queue.</p></div></li>
+      <li><span class="pin">2</span><div><h3>Service notices</h3><p>Failures are visible but do no harm. A red dot means failing, a yellow dot means served from cache, a hollow dot means OK. Every problem says what the app is doing about it, here "serving the last good result, removing nothing", and offers Retry.</p><p>All the healthy services share one line, so the problems stand out. The last run sits here too, because it is part of "what broke".</p></div></li>
+      <li><span class="pin">3</span><div><h3>Next change, on yellow</h3><p>This is the only yellow panel: the timetable's next departure. It gives the exact local time (windows flip at midnight, America/New_York), what opens and what closes, and how big the plan is. "Preview the plan" shows the computed actions before they happen.</p></div></li>
+      <li><span class="pin">4</span><div><h3>Year strip</h3><p>All 19 Kometa windows packed into three lanes. Black means live, yellow opens next, an outline means scheduled. The red today hand nods to the station clock's red disc.</p><p>New Year's wraps past 31 Dec, so it appears at both ends of the strip. Valentine's 02/29 is clamped to 28 Feb in non-leap years. Short windows such as Mother's Day and Disabilities show as slivers, with their name on hover and focus. On a phone the strip becomes a now-and-next list rather than shrinking to illegibility.</p></div></li>
+      <li><span class="pin">5</span><div><h3>Upcoming changes: the signature</h3><p>The schedule is set in a timetable's columns: Date, Change, Collection, Library, Via, Remarks. Month bands work like a timetable's hour groups. Changes due at the same minute are listed together, and the next departure is posted on yellow.</p><p>Remarks carry exceptions: pending reviews, Kometa's 500-title cap, a failing source. On narrow screens whole columns drop in priority order (Library first, then Via and Remarks) rather than squeezing.</p></div></li>
+      <li><span class="pin">6</span><div><h3>Rail and dry run</h3><p>A black rail, with yellow marking where you are. Dry run is always shown in the rail footer, because it changes what every Approve and Auto means. Missing carries a Phase 2 tag rather than disappearing.</p></div></li>
+      <li><span class="pin">7</span><div><h3>Run now</h3><p>The one ink primary button on the page. Progress streams into the button and the Activity log through HTMX polling; there is no modal. While a run is in progress the button reads "Running… 2/5 sources".</p></div></li>
+    </ol>
+  </aside>
+</div>
+<script src="mock.js"></script>
+</body>
+</html>

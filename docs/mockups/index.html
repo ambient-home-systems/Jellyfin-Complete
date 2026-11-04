@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en" data-notes="on" data-width="desktop">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maverick Mockups</title>
+<meta name="description" content="Phase 0 annotated mockups for Maverick Collections, a Kometa-style seasonal collections manager for Jellyfin, in the Timetable direction.">
+<link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="mock.css">
+</head>
+<body>
+<header class="mockbar">
+  <strong>Maverick Collections · Phase 0 mockups</strong>
+  <nav aria-label="Mockup screens"><a href="index.html" aria-current="page">Overview</a><a href="dashboard.html">Dashboard</a><a href="collection-editor.html">Collection editor</a><a href="review.html">Review queue</a><a href="missing.html">Missing</a><a href="settings.html">Settings</a></nav>
+  <div class="tools">
+    <fieldset><legend>Theme</legend><input type="radio" name="mock-theme" id="m-theme-auto" value="auto" checked><label for="m-theme-auto">Auto</label><input type="radio" name="mock-theme" id="m-theme-light" value="light"><label for="m-theme-light">Light</label><input type="radio" name="mock-theme" id="m-theme-dark" value="dark"><label for="m-theme-dark">Dark</label></fieldset>
+    <fieldset><legend>Width</legend><input type="radio" name="mock-width" id="m-width-desktop" value="desktop" checked><label for="m-width-desktop">Desktop</label><input type="radio" name="mock-width" id="m-width-phone" value="phone"><label for="m-width-phone">Phone</label></fieldset>
+    <fieldset><legend>Notes</legend><input type="radio" name="mock-notes" id="m-notes-on" value="on" checked><label for="m-notes-on">On</label><input type="radio" name="mock-notes" id="m-notes-off" value="off"><label for="m-notes-off">Off</label></fieldset>
+  </div>
+</header>
+<div class="stage">
+  <div class="frame">
+    <div class="overview">
+      <header>
+        <h1>Maverick Collections: Phase 0 mockups</h1>
+        <p class="muted">Five screens for approval before any application code is written. Direction: <b>Timetable</b>. Desktop first, usable on a phone, light and dark. Use the toggles above to switch theme, preview phone width, or hide the numbered design notes.</p>
+      </header>
+      <ol class="screens">
+        <li><a href="dashboard.html"><b>Dashboard</b><span>What needs you, what broke, what's next; the year strip and the upcoming-changes timetable.</span></a></li>
+        <li><a href="collection-editor.html"><b>Collection editor</b><span>Christmas Movies: schedule, sources with health, filters, pins, output and modes, with a live preview that explains every match.</span></a></li>
+        <li><a href="review.html"><b>Review queue</b><span>Proposals grouped by collection and action, bulk approve, snooze and dismiss, and the add cap as a running total.</span></a></li>
+        <li><a href="missing.html"><b>Missing<span class="chip">Phase 2</span></b><span>Owned versus missing per collection, Monitor in Radarr, and a send panel filled live from Radarr and Sonarr.</span></a></li>
+        <li><a href="settings.html"><b>Settings</b><span>Connections with masked keys, action modes and guardrails, IMDb route, and schedules beside Kometa and Auto-Collections.</span></a></li>
+      </ol>
+      <section class="why">
+        <h2>Why a timetable</h2>
+        <p>Seasonal collections are departures: each has a date, a time, a destination and remarks. The app's main job is to say what leaves next and what needs your sign-off before it does. The direction lends four things and nothing else: type, palette, density and one signature move. Layout, navigation and controls stay the standard ones you already know.</p>
+        <dl class="kv">
+          <dt>Palette</dt><dd>Four inks. Paper white (deep ink in dark mode), black ink, timetable yellow only for the next change and for selection, signal red only for failures and the today hand.</dd>
+          <dt>Type</dt><dd>Archivo, one family, with tabular figures. Narrow widths for dates and column heads, normal width for reading.</dd>
+          <dt>Signature</dt><dd>The upcoming-changes timetable (Date · Change · Collection · Library · Via · Remarks), with the next departure posted on yellow.</dd>
+          <dt>Ruled out</dt><dd>Holiday decoration and terminal or log-viewer styling, per your answers. Kometa's seasonal posters appear only as content.</dd>
+        </dl>
+        <h2>What's real and what's illustrative</h2>
+        <p>Preset names, windows, sources, list sizes and example titles come from Kometa v2.5.3 and live IMDb and MDBList queries on 2 Nov 2026. Owned counts, library names, Radarr and Sonarr options and versions come from the 2 Nov server spikes. Review counts and service states are still illustrative. Posters are placeholders apart from Kometa's seasonal images.</p>
+      </section>
+    </div>
+  </div>
+</div>
+<script src="mock.js"></script>
+</body>
+</html>

@@ -1,0 +1,663 @@
+{
+  "source": "Kometa-Team/Kometa v2.5.3 defaults/movie/seasonal.yml (identical in v2.5.4)",
+  "presets": [
+    {
+      "key": "years",
+      "keyName": "New Year's Day",
+      "name": "New Year's Day Movies",
+      "target": "movies",
+      "window": {
+        "from": "12/26",
+        "to": "01/04",
+        "kometa": "range(12/26-01/04)"
+      },
+      "sortTitle": "!00_New Year's Day Movies",
+      "summary": "A collection of New Year's Day movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/years.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🎊 New Year's Day Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "listAny": [
+            "ls066838460"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "valentine",
+      "keyName": "Valentine's Day",
+      "name": "Valentine's Day Movies",
+      "target": "movies",
+      "window": {
+        "from": "02/01",
+        "to": "02/29",
+        "kometa": "range(02/01-02/29)"
+      },
+      "sortTitle": "!00_Valentine's Day Movies",
+      "summary": "A collection of Valentine's Day movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/valentine.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "💘 Valentine's Day Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "listAny": [
+            "ls032692441",
+            "ls000094398",
+            "ls057783436",
+            "ls064427905"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "patrick",
+      "keyName": "St. Patrick's Day",
+      "name": "St. Patrick's Day Movies",
+      "target": "movies",
+      "window": {
+        "from": "03/01",
+        "to": "03/18",
+        "kometa": "range(03/01-03/18)"
+      },
+      "sortTitle": "!00_St. Patrick's Day Movies",
+      "summary": "A collection of St. Patrick's Day movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/patrick.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "☘ St. Patrick's Day Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "listAny": [
+            "ls067580975"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "easter",
+      "keyName": "Easter",
+      "name": "Easter Movies",
+      "target": "movies",
+      "window": {
+        "from": "03/20",
+        "to": "04/30",
+        "kometa": "range(03/20-04/30)"
+      },
+      "sortTitle": "!00_Easter Movies",
+      "summary": "A collection of Easter movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/easter.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🐰 Easter Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "listAny": [
+            "ls062665509",
+            "ls051733651"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "mother",
+      "keyName": "Mother's Day",
+      "name": "Mother's Day Movies",
+      "target": "movies",
+      "window": {
+        "from": "05/05",
+        "to": "05/10",
+        "kometa": "range(05/05-05/10)"
+      },
+      "sortTitle": "!00_Mother's Day Movies",
+      "summary": "A collection of Mother's Day movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/mother.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🤱 Mother's Day Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "keywordAny": [
+            "motherhood",
+            "pregnancy"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "memorial",
+      "keyName": "Memorial Day",
+      "name": "Memorial Day Movies",
+      "target": "movies",
+      "window": {
+        "from": "05/18",
+        "to": "06/07",
+        "kometa": "range(5/18-6/7)"
+      },
+      "sortTitle": "!00_Memorial Day Movies",
+      "summary": "A collection of Memorial Day movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/memorial.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🪖 Memorial Day Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "listAny": [
+            "ls526590990"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "father",
+      "keyName": "Father's Day",
+      "name": "Father's Day Movies",
+      "target": "movies",
+      "window": {
+        "from": "06/15",
+        "to": "06/20",
+        "kometa": "range(06/15-06/20)"
+      },
+      "sortTitle": "!00_Father's Day Movies",
+      "summary": "A collection of Father's Day movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/father.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "👨 Father's Day Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "keywordAny": [
+            "fatherhood"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "independence",
+      "keyName": "Independence Day",
+      "name": "Independence Day Movies",
+      "target": "movies",
+      "window": {
+        "from": "06/23",
+        "to": "07/11",
+        "kometa": "range(06/23-07/11)"
+      },
+      "sortTitle": "!00_Independence Day Movies",
+      "summary": "A collection of Independence Day movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/independence.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🎆 Independence Day Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "listAny": [
+            "ls561449172",
+            "ls541213215",
+            "ls068664510",
+            "ls080925875"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "labor",
+      "keyName": "Labor Day",
+      "name": "Labor Day Movies",
+      "target": "movies",
+      "window": {
+        "from": "09/01",
+        "to": "09/10",
+        "kometa": "range(09/01-09/10)"
+      },
+      "sortTitle": "!00_Labor Day Movies",
+      "summary": "A collection of Labor Day movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/labor.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "⚒ Labor Day Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "listAny": [
+            "ls002014923"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "halloween",
+      "keyName": "Halloween",
+      "name": "Halloween Movies",
+      "target": "movies",
+      "window": {
+        "from": "10/01",
+        "to": "10/31",
+        "kometa": "range(10/01-10/31)"
+      },
+      "sortTitle": "!00_Halloween Movies",
+      "summary": "A collection of Halloween movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/halloween.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🎃 Halloween Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "listAny": [
+            "ls546214737",
+            "ls023118929",
+            "ls000099714"
+          ]
+        },
+        {
+          "type": "tmdb_collection",
+          "ids": [
+            185103,
+            11716,
+            750822,
+            313086,
+            91361,
+            8581,
+            1733,
+            8091,
+            2980,
+            751156
+          ]
+        },
+        {
+          "type": "tmdb_movie",
+          "ids": [
+            23437
+          ]
+        }
+      ]
+    },
+    {
+      "key": "veteran",
+      "keyName": "Veteran's Day",
+      "name": "Veteran's Day Movies",
+      "target": "movies",
+      "window": {
+        "from": "11/01",
+        "to": "11/30",
+        "kometa": "range(11/01-11/30)"
+      },
+      "sortTitle": "!00_Veteran's Day Movies",
+      "summary": "A collection of Veteran's Day movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/veteran.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🎖 Veteran's Day Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "listAny": [
+            "ls526590990",
+            "ls565595526"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "thanksgiving",
+      "keyName": "Thanksgiving",
+      "name": "Thanksgiving Movies",
+      "target": "movies",
+      "window": {
+        "from": "11/01",
+        "to": "11/30",
+        "kometa": "range(11/01-11/30)"
+      },
+      "sortTitle": "!00_Thanksgiving Movies",
+      "summary": "A collection of Thanksgiving movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/thanksgiving.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🦃 Thanksgiving Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "keywordAny": [
+            "thanksgiving"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "christmas",
+      "keyName": "Christmas",
+      "name": "Christmas Movies",
+      "target": "movies",
+      "window": {
+        "from": "12/01",
+        "to": "12/31",
+        "kometa": "range(12/01-12/31)"
+      },
+      "sortTitle": "!00_Christmas Movies",
+      "summary": "A collection of Christmas movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/christmas.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🎅 Christmas Movies"
+      ],
+      "sources": [
+        {
+          "type": "mdblist_list",
+          "url": "https://mdblist.com/lists/k0meta/christmas-extravaganza"
+        }
+      ]
+    },
+    {
+      "key": "aapi",
+      "keyName": "Asian American & Pacific Islander Heritage Month",
+      "name": "Asian American & Pacific Islander Heritage Month Movies",
+      "target": "movies",
+      "window": {
+        "from": "04/30",
+        "to": "05/31",
+        "kometa": "range(04/30-05/31)"
+      },
+      "sortTitle": "!00_Asian American & Pacific Islander Heritage Month Movies",
+      "summary": "A collection of Asian American & Pacific Islander Heritage Month movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/aapi.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🌊🌺 Asian American Pacific Islander Movies"
+      ],
+      "sources": [
+        {
+          "type": "mdblist_list",
+          "url": "https://mdblist.com/lists/k0meta/asian-american-pacific-islander-heritage-month"
+        }
+      ]
+    },
+    {
+      "key": "disabilities",
+      "keyName": "Day of Persons with Disabilities",
+      "name": "Day of Persons with Disabilities Movies",
+      "target": "movies",
+      "window": {
+        "from": "12/02",
+        "to": "12/04",
+        "kometa": "range(12/02-12/04)"
+      },
+      "sortTitle": "!00_Day of Persons with Disabilities Movies",
+      "summary": "A collection of Day of Persons with Disabilities movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/disabilities.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "♿ Disability Month Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "keywordAny": [
+            "disability"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "black_history",
+      "keyName": "Black History Month",
+      "name": "Black History Month Movies",
+      "target": "movies",
+      "window": {
+        "from": "02/01",
+        "to": "03/01",
+        "kometa": "range(02/01-03/01)"
+      },
+      "sortTitle": "!00_Black History Month Movies",
+      "summary": "A collection of Black History Month movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/black_history.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "✊🏿 Black History Month Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "listAny": [
+            "ls023525790"
+          ]
+        },
+        {
+          "type": "letterboxd_list",
+          "url": "https://letterboxd.com/mardarrius/list/black-is-beautiful/"
+        }
+      ]
+    },
+    {
+      "key": "lgbtq",
+      "keyName": "LGBTQ+ Pride Month",
+      "name": "LGBTQ+ Pride Month Movies",
+      "target": "movies",
+      "window": {
+        "from": "05/31",
+        "to": "06/30",
+        "kometa": "range(05/31-06/30)"
+      },
+      "sortTitle": "!00_LGBTQ+ Pride Month Movies",
+      "summary": "A collection of LGBTQ+ Pride Month movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/lgbtq.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🏳️‍🌈 LGBTQ Month Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "popularity.asc",
+          "listAny": [
+            "ls080580859"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "latinx",
+      "keyName": "Latinx Heritage Month",
+      "name": "Latinx Heritage Month Movies",
+      "target": "movies",
+      "window": {
+        "from": "09/15",
+        "to": "10/15",
+        "kometa": "range(09/15-10/15)"
+      },
+      "sortTitle": "!00_Latinx Heritage Month Movies",
+      "summary": "A collection of Latinx Heritage Month movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/latinx.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🪅 National Hispanic Heritage Movies"
+      ],
+      "sources": [
+        {
+          "type": "mdblist_list",
+          "url": "https://mdblist.com/lists/k0meta/latinx-heritage-month"
+        }
+      ]
+    },
+    {
+      "key": "women",
+      "keyName": "Women's History Month",
+      "name": "Women's History Month Movies",
+      "target": "movies",
+      "window": {
+        "from": "02/28",
+        "to": "03/31",
+        "kometa": "range(02/28-03/31)"
+      },
+      "sortTitle": "!00_Women's History Month Movies",
+      "summary": "A collection of Women's History Month movies that may relate to the season.",
+      "poster": "https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/women.jpg",
+      "deleteNotScheduled": true,
+      "syncMode": "sync",
+      "sortBy": "title.asc",
+      "cacheBuilders": 1,
+      "visibleHome": true,
+      "visibleShared": true,
+      "deleteCollectionsNamed": [
+        "🚺 Women's History Month Movies"
+      ],
+      "sources": [
+        {
+          "type": "imdb_search",
+          "limit": 500,
+          "sortBy": "rating.desc",
+          "keywordAny": [
+            "women in film",
+            "women's rights",
+            "women's suffrage",
+            "womens rights",
+            "womens suffrage"
+          ],
+          "titleTypes": [
+            "movie"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+# Example GitHub Actions workflow for the IMDb snapshot route (docs/IMDB-SNAPSHOT.md).
+# It does nothing where it is. To use it, copy it to .github/workflows/imdb-snapshot.yml in a repository you own
+# (a private one is best), alongside a copy of this app's source.
+name: IMDb snapshot
+
+on:
+  schedule:
+    - cron: '17 6 * * *' # daily, 06:17 UTC; the app treats a snapshot older than 3 days as failed
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # queries.json is optional: download it from Settings → IMDb and commit it to add your own collections.
+      - run: npm run imdb:snapshot -- --queries queries.json --out imdb-snapshot.json
+      - name: Publish to the imdb-snapshot branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan imdb-snapshot
+          git rm -r -q --cached .
+          git add imdb-snapshot.json
+          git commit -q -m "IMDb snapshot $(date -u +%F)"
+          git push -q -f origin imdb-snapshot

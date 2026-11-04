@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en" data-notes="on" data-width="desktop">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review Queue · Maverick Collections</title>
+<meta name="description" content="Annotated Phase 0 mockup of the Review queue: proposals grouped by collection and action, with provenance, bulk approve, snooze and dismiss.">
+<link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="mock.css">
+</head>
+<body>
+<header class="mockbar">
+  <strong>Maverick Collections · Phase 0 mockups</strong>
+  <nav aria-label="Mockup screens"><a href="index.html">Overview</a><a href="dashboard.html">Dashboard</a><a href="collection-editor.html">Collection editor</a><a href="review.html" aria-current="page">Review queue</a><a href="missing.html">Missing</a><a href="settings.html">Settings</a></nav>
+  <div class="tools">
+    <fieldset><legend>Theme</legend><input type="radio" name="mock-theme" id="m-theme-auto" value="auto" checked><label for="m-theme-auto">Auto</label><input type="radio" name="mock-theme" id="m-theme-light" value="light"><label for="m-theme-light">Light</label><input type="radio" name="mock-theme" id="m-theme-dark" value="dark"><label for="m-theme-dark">Dark</label></fieldset>
+    <fieldset><legend>Width</legend><input type="radio" name="mock-width" id="m-width-desktop" value="desktop" checked><label for="m-width-desktop">Desktop</label><input type="radio" name="mock-width" id="m-width-phone" value="phone"><label for="m-width-phone">Phone</label></fieldset>
+    <fieldset><legend>Notes</legend><input type="radio" name="mock-notes" id="m-notes-on" value="on" checked><label for="m-notes-on">On</label><input type="radio" name="mock-notes" id="m-notes-off" value="off"><label for="m-notes-off">Off</label></fieldset>
+  </div>
+</header>
+<div class="stage">
+  <div class="frame">
+    <div class="app">
+    <aside class="rail" aria-label="Main navigation">
+      <div class="brand">Maverick Collections<small>Jellyfin · jellyfin.local</small></div>
+      <nav><a href="dashboard.html"><svg class="i" aria-hidden="true"><use href="#i-dashboard"/></svg><span class="lbl">Dashboard</span></a><a href="collection-editor.html"><svg class="i" aria-hidden="true"><use href="#i-collections"/></svg><span class="lbl">Collections</span></a><a href="review.html" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-review"/></svg><span class="lbl">Review</span><span class="count num" aria-label="37 waiting">37</span></a><a href="missing.html" class="phone-hide"><svg class="i" aria-hidden="true"><use href="#i-missing"/></svg><span class="lbl">Missing</span><span class="tag">Phase 2</span></a><a href="#activity" class="phone-hide"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg><span class="lbl">Activity</span></a><a href="settings.html"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a></nav>
+      <div class="foot">
+        <div class="dry"><span class="dot warn"></span><b>Dry run on</b><span>Every action waits in Review</span></div>
+        <div class="who">Last run 02:30 · signed in as admin</div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="banner" role="status"><svg class="i" aria-hidden="true"><use href="#i-info"/></svg><span><b>Dry run is on.</b> Every action waits here, including ones set to Auto. Approving applies it now.</span><a class="btn sm" href="settings.html">Dry run settings</a><span class="pin">1</span></div>
+      <header class="top">
+        <h1>Review</h1>
+        <div class="tabs" role="tablist" aria-label="Queue">
+          <a role="tab" aria-selected="true" href="#pending">Pending <span class="n num">37</span></a>
+          <a role="tab" aria-selected="false" href="#snoozed">Snoozed <span class="n num">5</span></a>
+          <a role="tab" aria-selected="false" href="#dismissed">Dismissed <span class="n num">23</span></a>
+        </div>
+        <div class="actions"><span class="meter" title="Radarr and Sonarr adds this run"><span class="muted">Radarr + Sonarr adds this run</span><span class="bar"><i style="width:10%"></i></span><b class="num">1 / 10</b></span><span class="pin">2</span></div>
+      </header>
+
+      <div class="content">
+        <div class="toolbar" role="search">
+          <div class="field"><label for="r-col">Collection</label><select id="r-col"><option>All collections (4)</option><option>Christmas Movies</option><option>Thanksgiving Movies</option><option>Veteran's Day Movies</option><option>Christmas Episodes</option></select></div>
+          <div class="field"><label for="r-act">Action</label><select id="r-act"><option>All actions</option><option>Add items</option><option>Remove items</option><option>Create or delete box set</option><option>Update metadata</option><option>Add to Radarr</option><option>Add to Sonarr</option></select></div>
+          <div class="field hide-sm"><label for="r-lib">Library</label><select id="r-lib"><option>All libraries</option><option>Movies</option><option>Animated Classics</option><option>Shows</option><option>Kids Shows</option></select></div>
+          <div class="field grow"><label for="r-q">Search</label><input id="r-q" type="search" placeholder="Title, IMDb or TMDb ID"></div>
+        </div>
+
+        <div>
+          <div class="bulk" role="region" aria-label="Bulk actions">
+            <b class="num">14 selected</b><span class="pin">3</span>
+            <button class="btn sm primary" type="button"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg> Approve 14</button>
+            <label class="sr" for="snz">Snooze for</label>
+            <select id="snz"><option>Snooze until window opens</option><option>Snooze 7 days</option><option>Snooze 30 days</option></select>
+            <button class="btn sm" type="button"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg> Snooze</button>
+            <span class="isolate"><button class="btn sm danger" type="button"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg> Dismiss 14</button></span>
+          </div>
+          <table class="tt">
+            <thead><tr><th class="cb" scope="col"><input type="checkbox" aria-label="Select all 37"></th><th scope="col" class="pst"><span class="sr">Poster</span></th><th scope="col">Title</th><th scope="col">Action</th><th scope="col" class="hide-sm">Why</th><th scope="col" class="r"><span class="sr">Decide</span></th></tr></thead>
+            <tbody>
+              <tr class="grp"><th colspan="6" scope="rowgroup">Christmas Movies<span class="dep">· opens Tue 1 Dec 00:00</span><span class="muted">adds apply when it opens</span><span class="sub num">14</span></th></tr>
+              <tr class="sub"><th colspan="6"><input type="checkbox" checked aria-label="Select all 13 Add items"> &nbsp;Add items · 13</th></tr>
+              <tr class="sel"><td class="cb"><input type="checkbox" checked aria-label="Select Hot Frosty"></td><td class="pst"><span class="poster type" aria-hidden="true">Hot Frosty</span></td><td><b>Hot Frosty</b> <span class="muted num">2024</span><br><span class="faint">Movies · added to library 30 Oct</span></td><td><span class="act-add"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add</span></td><td class="hide-sm"><span class="chip">MDBList #20000</span> <span class="chip">IMDb tt32359447</span></td><td><div class="act"><button class="btn sm" type="button" aria-label="Approve"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></button><button class="btn sm ghost" type="button" aria-label="Snooze"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg></button><button class="btn sm ghost" type="button" aria-label="Dismiss"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div></td></tr>
+              <tr class="sel"><td class="cb"><input type="checkbox" checked aria-label="Select That Christmas"></td><td class="pst"><span class="poster type" aria-hidden="true">That Christmas</span></td><td><b>That Christmas</b> <span class="muted num">2024</span><br><span class="faint">Movies · added 29 Oct</span></td><td><span class="act-add"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add</span></td><td class="hide-sm"><span class="chip">MDBList #15000</span> <span class="chip">IMDb tt14855468</span></td><td><div class="act"><button class="btn sm" type="button" aria-label="Approve"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></button><button class="btn sm ghost" type="button" aria-label="Snooze"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg></button><button class="btn sm ghost" type="button" aria-label="Dismiss"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div></td></tr>
+              <tr class="sel"><td class="cb"><input type="checkbox" checked aria-label="Select Spirited"></td><td class="pst"><span class="poster type" aria-hidden="true">Spirited</span></td><td><b>Spirited</b> <span class="muted num">2022</span><br><span class="faint">Movies · no IMDb ID in Jellyfin</span></td><td><span class="act-add"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add</span></td><td class="hide-sm"><span class="chip">MDBList #56000</span> <span class="chip">TMDb 632856 via /find</span></td><td><div class="act"><button class="btn sm" type="button" aria-label="Approve"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></button><button class="btn sm ghost" type="button" aria-label="Snooze"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg></button><button class="btn sm ghost" type="button" aria-label="Dismiss"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div></td></tr>
+              <tr><td colspan="6" class="faint" style="padding-left:48px">10 more adds · <a href="#more">show all</a></td></tr>
+              <tr class="sub"><th colspan="6"><input type="checkbox" aria-label="Select Add to Radarr"> &nbsp;Add to Radarr · 1 <span class="chip">Phase 2</span></th></tr>
+              <tr><td class="cb"><input type="checkbox" aria-label="Select The Holdovers"></td><td class="pst"><span class="poster type" aria-hidden="true">The Holdovers</span></td><td><b>The Holdovers</b> <span class="muted num">2023</span><br><span class="faint">Not in Jellyfin · released · not in Radarr · not excluded</span></td><td><span class="act-arr"><svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg>Radarr</span></td><td class="hide-sm"><span class="chip">IMDb keyword christmas</span> <span class="chip">HD-1080p · /movies</span></td><td><div class="act"><button class="btn sm" type="button" aria-label="Approve"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></button><button class="btn sm ghost" type="button" aria-label="Snooze"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg></button><button class="btn sm ghost" type="button" aria-label="Dismiss"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div></td></tr>
+
+              <tr class="grp"><th colspan="6" scope="rowgroup">Thanksgiving Movies<span class="dep">· live, closes Tue 1 Dec 00:00</span><span class="sub num">11</span></th></tr>
+              <tr class="sub"><th colspan="6"><input type="checkbox" aria-label="Select Remove items"> &nbsp;Remove items · 2</th></tr>
+              <tr><td class="cb"><input type="checkbox" aria-label="Select Krisha"></td><td class="pst"><span class="poster type" aria-hidden="true">Krisha</span></td><td><b>Krisha</b> <span class="muted num">2015</span><br><span class="faint">In the box set since 1 Nov</span></td><td><span class="act-rem"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg>Remove</span></td><td class="hide-sm">Fell out of the IMDb keyword top 500 (now #512). <span class="chip">source healthy</span></td><td><div class="act"><button class="btn sm" type="button" aria-label="Approve"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></button><button class="btn sm ghost" type="button" aria-label="Snooze"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg></button><button class="btn sm ghost" type="button" aria-label="Dismiss"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div></td></tr>
+              <tr><td colspan="6" class="faint" style="padding-left:48px">1 more removal, 9 adds · <a href="#more">show all</a></td></tr>
+
+              <tr class="grp"><th colspan="6" scope="rowgroup">Christmas Episodes<span class="dep">· opens Tue 1 Dec 00:00</span> <span class="chip">Phase 2</span><span class="muted">title suggestions · Shows, Kids Shows</span><span class="sub num">6</span></th></tr>
+              <tr><td class="cb"><input type="checkbox" aria-label="Select The Simpsons S01E01"></td><td class="pst"><span class="poster type" aria-hidden="true">The Simpsons</span></td><td><b>The Simpsons</b> · S01E01<br><span class="faint">Simpsons Roasting on an Open Fire</span></td><td><span class="act-add"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add</span></td><td class="hide-sm"><span class="chip">IMDb episode keyword</span> <span class="chip">IMDb tt0348034</span></td><td><div class="act"><button class="btn sm" type="button" aria-label="Approve"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></button><button class="btn sm ghost" type="button" aria-label="Snooze"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg></button><button class="btn sm ghost" type="button" aria-label="Dismiss"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div></td></tr>
+              <tr><td class="cb"><input type="checkbox" aria-label="Select Community S02E11"></td><td class="pst"><span class="poster type" aria-hidden="true">Community</span></td><td><b>Community</b> · S02E11<br><span class="faint">Abed's Uncontrollable Christmas</span></td><td><span class="act-add"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add</span></td><td class="hide-sm"><span class="chip">title match "Christmas"</span> <span class="chip">TVDB series + S/E</span></td><td><div class="act"><button class="btn sm" type="button" aria-label="Approve"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></button><button class="btn sm ghost" type="button" aria-label="Snooze"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg></button><button class="btn sm ghost" type="button" aria-label="Dismiss"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div></td></tr>
+              <tr><td colspan="6" class="faint" style="padding-left:48px">4 more · <a href="#more">show all</a> · Veteran's Day Movies (6) below</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+    </div>
+  </div>
+
+  <aside class="notes" aria-label="Design notes">
+    <h2>Review queue: design notes</h2>
+    <p>Built for a weekly batch: filter, select a group, approve. One row per proposal. Example titles are real list entries; whether you own them is illustrative.</p>
+    <ol>
+      <li><span class="pin">1</span><div><h3>Dry-run banner</h3><p>This is the one screen where dry run changes the meaning of a button, so it says so plainly in a yellow banner at the top. Approving still applies the change right away; dry run only stops Auto.</p></div></li>
+      <li><span class="pin">2</span><div><h3>Add cap, as a running total</h3><p>The Radarr and Sonarr guardrail reads "1 / 10" with a bar, like a tape side that must not overflow. When it fills, further adds stay queued here rather than failing, and the bar turns red, because a full cap is something to look at.</p></div></li>
+      <li><span class="pin">3</span><div><h3>Groups, bulk and safe dismissal</h3><p>Proposals are grouped by collection, then by action type, each with a group checkbox. The bulk bar sticks to the top of the list.</p><p>Approve is the primary action. Selected rows turn yellow, the timetable's selection colour; red is kept for failures. Snooze takes a duration, including "until the window opens". Dismiss sits apart, and both snoozes and dismissals can be undone from their tabs.</p><p>Each row explains itself: the source and rank, how it was matched, and for removals why it left, with "source healthy" because a failed source never proposes a removal. Radarr rows list the guardrail checks they passed.</p></div></li>
+    </ol>
+  </aside>
+</div>
+<script src="mock.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+# Maverick Jellyfin Complete stack (Docker Compose or Portainer).
+#
+# From a clone of this repository:   docker compose up -d --build
+# In Portainer (Stacks → Add stack → Web editor): build the image once on the host with
+#   docker build -t maverick-jellyfin-complete:local .
+# then paste this file and delete the "build:" line.
+#
+# Jellyfin's address and API key are entered on the setup page at first launch, not here.
+# Dry run is on until you turn it off in Settings: nothing changes in Jellyfin before then.
+
+services:
+  maverick-collections:     # service name kept from the working name, so existing installs upgrade in place
+    build: .
+    image: maverick-jellyfin-complete:local
+    container_name: maverick-jellyfin-complete
+    restart: unless-stopped
+    ports:
+      - "8097:8097"          # change the left side if 8097 is taken on the host
+    environment:
+      TZ: America/New_York   # your timezone; seeds the app's setting on first start (then change it in Settings)
+      LOG_LEVEL: info
+      # TRUST_PROXY: "1"     # only behind a reverse proxy that adds HTTPS; see docs/REVERSE-PROXY.md
+      # SETUP_CODE: ""       # choose the first-run setup code instead of reading it from the log
+    volumes:
+      - maverick-config:/config   # database, encrypted keys (secret.key), logs
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  maverick-config:

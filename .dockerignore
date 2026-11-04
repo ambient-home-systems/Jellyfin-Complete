@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+node_modules
+dist
+config
+coverage
+spikes
+test
+docs
+spec
+.impeccable
+*.log

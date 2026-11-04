@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en" data-notes="on" data-width="desktop">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collection Editor · Maverick Collections</title>
+<meta name="description" content="Annotated Phase 0 mockup of the collection editor: definition, schedule, sources, filters and a live preview of matched items with provenance.">
+<link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="mock.css">
+</head>
+<body>
+<header class="mockbar">
+  <strong>Maverick Collections · Phase 0 mockups</strong>
+  <nav aria-label="Mockup screens"><a href="index.html">Overview</a><a href="dashboard.html">Dashboard</a><a href="collection-editor.html" aria-current="page">Collection editor</a><a href="review.html">Review queue</a><a href="missing.html">Missing</a><a href="settings.html">Settings</a></nav>
+  <div class="tools">
+    <fieldset><legend>Theme</legend><input type="radio" name="mock-theme" id="m-theme-auto" value="auto" checked><label for="m-theme-auto">Auto</label><input type="radio" name="mock-theme" id="m-theme-light" value="light"><label for="m-theme-light">Light</label><input type="radio" name="mock-theme" id="m-theme-dark" value="dark"><label for="m-theme-dark">Dark</label></fieldset>
+    <fieldset><legend>Width</legend><input type="radio" name="mock-width" id="m-width-desktop" value="desktop" checked><label for="m-width-desktop">Desktop</label><input type="radio" name="mock-width" id="m-width-phone" value="phone"><label for="m-width-phone">Phone</label></fieldset>
+    <fieldset><legend>Notes</legend><input type="radio" name="mock-notes" id="m-notes-on" value="on" checked><label for="m-notes-on">On</label><input type="radio" name="mock-notes" id="m-notes-off" value="off"><label for="m-notes-off">Off</label></fieldset>
+  </div>
+</header>
+<div class="stage">
+  <div class="frame">
+    <div class="app">
+    <aside class="rail" aria-label="Main navigation">
+      <div class="brand">Maverick Collections<small>Jellyfin · jellyfin.local</small></div>
+      <nav><a href="dashboard.html"><svg class="i" aria-hidden="true"><use href="#i-dashboard"/></svg><span class="lbl">Dashboard</span></a><a href="collection-editor.html" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-collections"/></svg><span class="lbl">Collections</span></a><a href="review.html"><svg class="i" aria-hidden="true"><use href="#i-review"/></svg><span class="lbl">Review</span><span class="count num" aria-label="37 waiting">37</span></a><a href="missing.html" class="phone-hide"><svg class="i" aria-hidden="true"><use href="#i-missing"/></svg><span class="lbl">Missing</span><span class="tag">Phase 2</span></a><a href="#activity" class="phone-hide"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg><span class="lbl">Activity</span></a><a href="settings.html"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a></nav>
+      <div class="foot">
+        <div class="dry"><span class="dot warn"></span><b>Dry run on</b><span>Every action waits in Review</span></div>
+        <div class="who">Last run 02:30 · signed in as admin</div>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="top">
+        <nav class="crumbs" aria-label="Breadcrumb"><a href="#collections">Collections</a><span aria-hidden="true">/</span><span>Seasonal</span></nav>
+        <h1>Christmas Movies</h1>
+        <span class="chip">Kometa preset · christmas</span>
+        <span class="chip y">Opens Tue 1 Dec · 00:00</span>
+        <div class="actions">
+          <a class="btn jump" href="#pv-h"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg> Live preview · 42</a>
+          <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg> Preview plan</button>
+          <button class="btn primary" type="button">Save changes</button><span class="pin">1</span>
+          <span class="isolate"><button class="btn danger" type="button"><svg class="i" aria-hidden="true"><use href="#i-trash"/></svg> Delete definition</button></span>
+        </div>
+      </header>
+
+      <div class="content">
+        <div class="editor">
+          <form class="form" aria-label="Collection definition" onsubmit="return false">
+            <section class="form-sec" aria-labelledby="basics-h">
+              <div class="section-head"><h2 id="basics-h">Basics</h2></div>
+              <div class="field"><label for="f-name">Name</label><input id="f-name" type="text" value="Christmas Movies"><span class="hint">Kometa names it "&lt;Holiday&gt; Movies"; kept identical to Plex.</span></div>
+                <div class="field"><span class="label" id="tgt-l">Target</span>
+                  <span class="seg" role="radiogroup" aria-labelledby="tgt-l">
+                    <input type="radio" name="tgt" id="tgt-m" checked><label for="tgt-m"><svg class="i" aria-hidden="true"><use href="#i-film"/></svg>&nbsp;Movies</label>
+                    <input type="radio" name="tgt" id="tgt-s"><label for="tgt-s"><svg class="i" aria-hidden="true"><use href="#i-tv"/></svg>&nbsp;Shows</label>
+                    <input type="radio" name="tgt" id="tgt-b"><label for="tgt-b">Both</label>
+                    <input type="radio" name="tgt" id="tgt-e"><label for="tgt-e">Episodes</label>
+                  </span>
+                  <span class="hint">Libraries: Movies and Animated Classics. Shows and Both add Shows and Kids Shows.</span>
+                </div>
+              <div class="field"><label for="f-sum">Overview</label><textarea id="f-sum" rows="2">A collection of Christmas movies that may relate to the season.</textarea></div>
+            </section>
+
+            <section class="form-sec" aria-labelledby="sched-h">
+              <div class="section-head"><h2 id="sched-h">Schedule</h2><span class="pin">2</span></div>
+              <div class="field"><span class="label" id="wt-l">Window</span>
+                <span class="seg" role="radiogroup" aria-labelledby="wt-l"><input type="radio" name="wt" id="wt-f" checked><label for="wt-f">Fixed dates</label><input type="radio" name="wt" id="wt-r"><label for="wt-r">Relative rule</label></span>
+              </div>
+              <div class="grid2">
+                <div class="field"><label for="f-from">From (MM/DD)</label><input id="f-from" type="text" value="12/01" class="num"></div>
+                <div class="field"><label for="f-to">To, inclusive (MM/DD)</label><input id="f-to" type="text" value="12/31" class="num"></div>
+              </div>
+              <table class="mini-tt num" aria-label="Next departures for this collection">
+                <tr><td>Tue 1 Dec 2026</td><td>00:00</td><td><span class="chg-open">opens</span></td><td>create box set, add 42</td></tr>
+                <tr><td>Fri 1 Jan 2027</td><td>00:00</td><td><span class="chg-close">closes</span></td><td>delete box set; keep poster, sort title, overview</td></tr>
+                <tr><td>Wed 1 Dec 2027</td><td>00:00</td><td><span class="chg-open">opens</span></td><td>recreate from saved metadata</td></tr>
+              </table>
+              <div class="field"><span class="label">When the window is closed</span>
+                <div class="choice" role="radiogroup">
+                  <label><input type="radio" name="vis" checked><b>Delete the box set (Kometa's way)</b><span>Recreated with the same poster, sort title and overview when the window opens.</span></label>
+                  <label><input type="radio" name="vis"><b>Hide with a blocked tag</b><span>Hides the box set from your account (your only user) and leaves its films visible. Membership, poster and the box set itself stay between seasons.</span></label>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-sec" aria-labelledby="src-h">
+              <div class="section-head"><h2 id="src-h">Sources</h2><span class="pin">3</span><span class="aside">Merged · last good result kept on failure</span></div>
+              <table class="tt">
+                <thead><tr><th scope="col">Source</th><th scope="col" class="r">On list</th><th scope="col" class="r">Owned</th><th scope="col" class="hide-sm">Status</th><th scope="col"><span class="sr">Actions</span></th></tr></thead>
+                <tbody>
+                  <tr><td class="srcname"><b>MDBList</b><span class="path" title="k0meta/christmas-extravaganza · Kometa preset, adds to collection">k0meta/christmas-extravaganza</span></td><td class="r num">641</td><td class="r num">42</td><td class="hide-sm nowrap"><span class="dot warn" role="img" aria-label="From cache"></span> Cached 1 d</td><td><button class="btn sm ghost" type="button" aria-label="Source options"><svg class="i" aria-hidden="true"><use href="#i-down"/></svg></button></td></tr>
+                  <tr><td class="srcname"><b>IMDb keyword <span class="chip">suggests</span></b><span class="path" title="Each new match becomes a Review proposal">christmas · movies only</span></td><td class="r num">500</td><td class="r num">+23</td><td class="hide-sm nowrap"><span class="dot ok" role="img" aria-label="OK"></span> OK 02:30</td><td><button class="btn sm ghost" type="button" aria-label="Source options"><svg class="i" aria-hidden="true"><use href="#i-down"/></svg></button></td></tr>
+                </tbody>
+              </table>
+              <div class="toolbar">
+                <div class="field"><label for="f-add">Add a source</label>
+                  <select id="f-add"><option>Jellyfin tag, genre or studio</option><option>TMDb collection</option><option>TMDb keyword</option><option>TMDb IDs</option><option>TMDb list</option><option>MDBList list</option><option>Letterboxd list</option><option>IMDb list</option><option>IMDb search</option><option disabled>Plex collection (Phase 2)</option></select>
+                </div>
+                <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg> Add source</button>
+              </div>
+            </section>
+
+            <section class="form-sec" aria-labelledby="filt-h">
+              <div class="section-head"><h2 id="filt-h">Filters, pins and excludes</h2></div>
+              <div class="grid3">
+                <div class="field"><label for="f-rating">Content rating ceiling</label><select id="f-rating"><option>No limit</option><option>G</option><option>PG</option><option>PG-13</option><option>R</option></select></div>
+                <div class="field"><label for="f-y1">Years from</label><input id="f-y1" type="number" placeholder="Any" class="num"></div>
+                <div class="field"><label for="f-y2">Years to</label><input id="f-y2" type="number" placeholder="Any" class="num"></div>
+              </div>
+              <div class="grid2">
+                <div class="field"><label for="f-gin">Genres to include</label><div class="tokens"><input id="f-gin" type="text" placeholder="Any genre"></div></div>
+                <div class="field"><label for="f-gex">Genres to exclude</label><div class="tokens"><span class="chip">Horror <button type="button" aria-label="Remove Horror"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></span><input id="f-gex" type="text"></div></div>
+              </div>
+              <div class="grid2">
+                <div class="field"><span class="label">Pinned (always in)</span><div class="tokens"><span class="chip solid"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg> Die Hard (1988)</span><input type="text" aria-label="Pin a title" placeholder="Search library"></div></div>
+                <div class="field"><span class="label">Excluded (never in)</span><div class="tokens"><span class="chip"><svg class="i" aria-hidden="true"><use href="#i-ban"/></svg> Gremlins (1984)</span><input type="text" aria-label="Exclude a title" placeholder="Search library"></div></div>
+              </div>
+            </section>
+
+            <section class="form-sec" aria-labelledby="out-h">
+              <div class="section-head"><h2 id="out-h">Output in Jellyfin</h2></div>
+              <div class="grid3">
+                <div class="field"><label for="f-min">Minimum items</label><input id="f-min" type="number" value="1" class="num"><span class="hint">Below this, the box set is not created (or is deleted through Review).</span></div>
+                <div class="field"><span class="label" id="sm-l">Sync mode</span><span class="seg" role="radiogroup" aria-labelledby="sm-l"><input type="radio" name="sm" id="sm-s" checked><label for="sm-s">Sync</label><input type="radio" name="sm" id="sm-a"><label for="sm-a">Append</label></span><span class="hint">Sync removes items that leave every source.</span></div>
+                <div class="field"><label for="f-sort">Order inside</label><select id="f-sort"><option>Title A–Z</option><option>Release date</option><option>Date added</option></select></div>
+              </div>
+              <div class="grid2">
+                <div class="field"><label for="f-st">Sort title</label><input id="f-st" type="text" value="!00_Christmas Movies"><span class="hint">Kometa's prefix sorts seasonal sets first. Jellyfin 12.4 stores it as !0000000000_christmas movies, which still sorts first.</span></div>
+                <div class="field"><span class="label">Poster</span>
+                  <div style="display:flex;gap:var(--s3);align-items:center">
+                    <img class="poster lg" src="https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/christmas.jpg" alt="Kometa default Christmas poster (loaded from Kometa’s Default-Images repository, not bundled)">
+                    <div class="choice" style="flex:1"><label style="padding:6px 8px"><input type="radio" name="pos" checked><b>Kometa default image</b><span>Matches Plex</span></label><label style="padding:6px 8px"><input type="radio" name="pos"><b>Upload my own</b></label></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-sec" aria-labelledby="modes-h">
+              <div class="section-head"><h2 id="modes-h">Action modes for this collection</h2><span class="pin">4</span></div>
+              <p class="muted">Underlined means inherited from Settings. Dry run is on, so everything goes to Review for now.</p>
+              <table class="modes">
+                <thead><tr><th scope="col">Action</th><th scope="col">Mode</th></tr></thead>
+                <tbody>
+                  <tr><td>Create and delete box set</td><td><span class="seg inherit"><input type="radio" name="m1" id="m1o"><label for="m1o">Off</label><input type="radio" name="m1" id="m1r"><label for="m1r">Review</label><input type="radio" name="m1" id="m1a" checked><label for="m1a">Auto</label></span></td></tr>
+                  <tr><td>Add items</td><td><span class="seg"><input type="radio" name="m2" id="m2o"><label for="m2o">Off</label><input type="radio" name="m2" id="m2r" checked><label for="m2r">Review</label><input type="radio" name="m2" id="m2a"><label for="m2a">Auto</label></span> <span class="chip">override</span></td></tr>
+                  <tr><td>Remove items</td><td><span class="seg inherit"><input type="radio" name="m3" id="m3o"><label for="m3o">Off</label><input type="radio" name="m3" id="m3r" checked><label for="m3r">Review</label><input type="radio" name="m3" id="m3a"><label for="m3a">Auto</label></span></td></tr>
+                  <tr><td>Update metadata</td><td><span class="seg inherit"><input type="radio" name="m4" id="m4o"><label for="m4o">Off</label><input type="radio" name="m4" id="m4r"><label for="m4r">Review</label><input type="radio" name="m4" id="m4a" checked><label for="m4a">Auto</label></span></td></tr>
+                  <tr><td>Add missing film to Radarr <span class="chip">Phase 2</span></td><td><span class="seg inherit"><input type="radio" name="m5" id="m5o" checked><label for="m5o">Off</label><input type="radio" name="m5" id="m5r"><label for="m5r">Review</label><input type="radio" name="m5" id="m5a"><label for="m5a">Auto</label></span></td></tr>
+                </tbody>
+              </table>
+              <details class="more"><summary><svg class="i" aria-hidden="true"><use href="#i-down"/></svg> Radarr options for this collection</summary><p class="muted" style="margin-top:8px">Using Settings defaults: HD-1080p, /movies, tag maverick.</p></details>
+            </section>
+          </form>
+
+          <aside class="preview" aria-labelledby="pv-h">
+            <section class="panel">
+              <div class="section-head"><h2 id="pv-h">Live preview</h2><span class="pin">5</span><span class="aside num">42 matched · computed 21:38</span></div>
+              <div class="tabs" role="tablist">
+                <button role="tab" aria-selected="true" type="button">Matched <span class="n num">42</span></button>
+                <button role="tab" aria-selected="false" type="button">Would add <span class="n num">14</span></button>
+                <button role="tab" aria-selected="false" type="button">Would remove <span class="n num">0</span></button>
+                <button role="tab" aria-selected="false" type="button" class="hide-sm">Excluded <span class="n num">1</span></button>
+              </div>
+              <input type="search" aria-label="Filter matched items" placeholder="Filter 42 films by title">
+              <div role="tabpanel">
+                <div class="item"><span class="poster type" aria-hidden="true">Arthur Christmas</span><div><div class="t">Arthur Christmas<span class="y num">2011</span></div><div class="why"><span class="chip">MDBList #297</span><span class="chip">IMDb tt1430607</span></div></div><div class="side"><button class="btn sm ghost" type="button" aria-label="Pin"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg></button><button class="btn sm ghost" type="button" aria-label="Exclude"><svg class="i" aria-hidden="true"><use href="#i-ban"/></svg></button></div></div>
+                <div class="item"><span class="poster type" aria-hidden="true">A Christmas Story</span><div><div class="t">A Christmas Story<span class="y num">1983</span></div><div class="why"><span class="chip">MDBList #571</span><span class="chip">IMDb tt0085334</span></div></div><div class="side"><button class="btn sm ghost" type="button" aria-label="Pin"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg></button><button class="btn sm ghost" type="button" aria-label="Exclude"><svg class="i" aria-hidden="true"><use href="#i-ban"/></svg></button></div></div>
+                <div class="item"><span class="poster type" aria-hidden="true">Die Hard</span><div><div class="t">Die Hard<span class="y num">1988</span></div><div class="why"><span class="chip solid"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg> Pinned by you</span><span class="chip">not on any source</span></div></div><div class="side"><button class="btn sm ghost" type="button" aria-label="Unpin"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div></div>
+                <div class="item"><span class="poster type" aria-hidden="true">Elf</span><div><div class="t">Elf<span class="y num">2003</span></div><div class="why"><span class="chip">MDBList #396</span><span class="chip">IMDb keyword</span><span class="chip">IMDb tt0319343</span></div></div><div class="side"><button class="btn sm ghost" type="button" aria-label="Pin"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg></button><button class="btn sm ghost" type="button" aria-label="Exclude"><svg class="i" aria-hidden="true"><use href="#i-ban"/></svg></button></div></div>
+                <div class="item"><span class="poster type" aria-hidden="true">Home Alone</span><div><div class="t">Home Alone<span class="y num">1990</span></div><div class="why"><span class="chip">MDBList #528</span><span class="chip">IMDb tt0099785</span></div></div><div class="side"><button class="btn sm ghost" type="button" aria-label="Pin"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg></button><button class="btn sm ghost" type="button" aria-label="Exclude"><svg class="i" aria-hidden="true"><use href="#i-ban"/></svg></button></div></div>
+                <div class="item"><span class="poster type" aria-hidden="true">It's a Wonderful Life</span><div><div class="t">It's a Wonderful Life<span class="y num">1946</span></div><div class="why"><span class="chip">MDBList #626</span><span class="chip">TMDb 1585 via /find</span></div></div><div class="side"><button class="btn sm ghost" type="button" aria-label="Pin"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg></button><button class="btn sm ghost" type="button" aria-label="Exclude"><svg class="i" aria-hidden="true"><use href="#i-ban"/></svg></button></div></div>
+                <div class="item"><span class="poster type" aria-hidden="true">Klaus</span><div><div class="t">Klaus<span class="y num">2019</span></div><div class="why"><span class="chip">MDBList #129</span><span class="chip">IMDb tt4729430</span></div></div><div class="side"><button class="btn sm ghost" type="button" aria-label="Pin"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg></button><button class="btn sm ghost" type="button" aria-label="Exclude"><svg class="i" aria-hidden="true"><use href="#i-ban"/></svg></button></div></div>
+                <div class="item"><span class="poster type" aria-hidden="true">The Muppet Christmas Carol</span><div><div class="t">The Muppet Christmas Carol<span class="y num">1992</span></div><div class="why"><span class="chip">MDBList #514</span><span class="chip">IMDb tt0104940</span></div></div><div class="side"><button class="btn sm ghost" type="button" aria-label="Pin"><svg class="i" aria-hidden="true"><use href="#i-pin"/></svg></button><button class="btn sm ghost" type="button" aria-label="Exclude"><svg class="i" aria-hidden="true"><use href="#i-ban"/></svg></button></div></div>
+                <p class="listfoot">Showing 8 of 42, sorted by sort title. Rank numbers are the source's own order.</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </main>
+    </div>
+  </div>
+
+  <aside class="notes" aria-label="Design notes">
+    <h2>Collection editor: design notes</h2>
+    <p>One definition per page. You edit on the left and see on the right what that definition matches right now, and why. Titles come from the real MDBList list; the counts (641 listed, 42 owned) are from the 2 Nov server spike.</p>
+    <ol>
+      <li><span class="pin">1</span><div><h3>Header actions</h3><p>Save is the only primary button. "Delete definition" sits apart behind a rule and empty space, outlined in ink like any other button and turning red only on hover or focus, so it can't be hit while reaching for Save.</p><p>Deleting a definition proposes deleting the box set through Review; it never deletes on the spot.</p></div></li>
+      <li><span class="pin">2</span><div><h3>Schedule as a timetable</h3><p>Instead of a date picker you can't check, the window shows its next three departures, saying exactly what will happen at each. "Relative rule" switches to nth weekday or Easter offset, plus lead and lag days.</p><p>Hiding with a blocked tag was verified on your Jellyfin 12.4 (2 Nov), so it is offered beside Kometa's delete-and-recreate.</p></div></li>
+      <li><span class="pin">3</span><div><h3>Sources with health</h3><p>Each source shows its list size, owned matches and health on one line, with its full path and role on hover and in its options menu. A source can be set to add directly (the Kometa preset) or to suggest only (labelled "suggests"): wider IMDb keyword matches become Review proposals rather than members. This answers the brief's "suggestions" requirement.</p></div></li>
+      <li><span class="pin">4</span><div><h3>Per-collection modes</h3><p>The same Off / Review / Auto control as Settings. An underlined segment means "inherited", and an override is labelled. A plain line under the heading reminds you that dry run currently forces everything to Review.</p></div></li>
+      <li><span class="pin">5</span><div><h3>Live preview with provenance</h3><p>Tabs split what the box set would hold now from the diff (add, remove, excluded). Every row explains itself: the source and its rank, and how it was matched (IMDb ID against ProviderIds, or TMDb via <code>/find</code>). Pinned items say so.</p><p>Pin and Exclude act inline, without a modal. On narrower screens the preview drops below the form, and a "Live preview · 42" button in the header jumps to it. Posters are typographic placeholders here; the app loads them from Jellyfin.</p></div></li>
+    </ol>
+  </aside>
+</div>
+<script src="mock.js"></script>
+</body>
+</html>

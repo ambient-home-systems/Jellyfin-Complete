@@ -1,0 +1,29 @@
+# Notices and credits
+
+Maverick Jellyfin Complete is MIT-licensed (see `LICENSE`). It builds on work from these projects.
+
+## Kometa
+
+<https://github.com/Kometa-Team/Kometa>, MIT License, Copyright (c) 2026 meisnate12.
+
+- **Preset definitions.** The seasonal, show franchise and universe presets (`src/presets/`) are ported from Kometa v2.5.3:
+  - `defaults/movie/seasonal.yml`
+  - `defaults/show/franchise.yml`
+  - `defaults/both/universe.yml`
+
+  Copies of those files are kept under `test/fixtures/kometa-v2.5.3/` for the golden tests, with Kometa's MIT licence applying to them.
+- **IMDb query mapping.** The IMDb GraphQL variable mapping (`src/imdb/`) follows Kometa's `modules/imdb.py` (v2.5.3).
+- **Hash files, read at runtime.** The IMDb persisted-query hashes are read from <https://github.com/Kometa-Team/IMDb-Hash> while the app runs, not bundled.
+- **Default posters, read at runtime.** Kometa's default collection posters are fetched from <https://github.com/Kometa-Team/Default-Images> while the app runs. They are not redistributed with this software. That repository has no licence file; the posters remain the work of their authors.
+- **Hosted IMDb service.** Kometa's hosted IMDb service (`utilities.kometa.wiki`) is an **opt-in** setting, off by default, intended only for parity checks.
+
+## Data services
+
+- **TMDb.** This product uses the TMDB API but is not endorsed or certified by TMDB.
+- **No affiliation.** IMDb, MDBList, Letterboxd, Plex, Radarr, Sonarr and Jellyfin are used as data sources or targets. None of them is affiliated with this project or endorses it. [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md) describes how each is used.
+
+## Other
+
+- **Archivo** typeface: SIL Open Font License 1.1, Copyright 2020 The Archivo Project Authors. See `docs/mockups/fonts/OFL.txt`.
+- **htmx** (BSD Zero Clause License), bundled from the `htmx.org` npm package.
+- **Lucide** icon paths (ISC License) are used in the UI icon sprite.

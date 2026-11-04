@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en" data-notes="on" data-width="desktop">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Missing · Maverick Collections</title>
+<meta name="description" content="Annotated Phase 2 mockup of the Missing screen: owned versus missing titles per collection, with send-to-Radarr and send-to-Sonarr options.">
+<link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="mock.css">
+</head>
+<body>
+<header class="mockbar">
+  <strong>Maverick Collections · Phase 0 mockups</strong>
+  <nav aria-label="Mockup screens"><a href="index.html">Overview</a><a href="dashboard.html">Dashboard</a><a href="collection-editor.html">Collection editor</a><a href="review.html">Review queue</a><a href="missing.html" aria-current="page">Missing</a><a href="settings.html">Settings</a></nav>
+  <div class="tools">
+    <fieldset><legend>Theme</legend><input type="radio" name="mock-theme" id="m-theme-auto" value="auto" checked><label for="m-theme-auto">Auto</label><input type="radio" name="mock-theme" id="m-theme-light" value="light"><label for="m-theme-light">Light</label><input type="radio" name="mock-theme" id="m-theme-dark" value="dark"><label for="m-theme-dark">Dark</label></fieldset>
+    <fieldset><legend>Width</legend><input type="radio" name="mock-width" id="m-width-desktop" value="desktop" checked><label for="m-width-desktop">Desktop</label><input type="radio" name="mock-width" id="m-width-phone" value="phone"><label for="m-width-phone">Phone</label></fieldset>
+    <fieldset><legend>Notes</legend><input type="radio" name="mock-notes" id="m-notes-on" value="on" checked><label for="m-notes-on">On</label><input type="radio" name="mock-notes" id="m-notes-off" value="off"><label for="m-notes-off">Off</label></fieldset>
+  </div>
+</header>
+<div class="stage">
+  <div class="frame">
+    <div class="app">
+    <aside class="rail" aria-label="Main navigation">
+      <div class="brand">Maverick Collections<small>Jellyfin · jellyfin.local</small></div>
+      <nav><a href="dashboard.html"><svg class="i" aria-hidden="true"><use href="#i-dashboard"/></svg><span class="lbl">Dashboard</span></a><a href="collection-editor.html"><svg class="i" aria-hidden="true"><use href="#i-collections"/></svg><span class="lbl">Collections</span></a><a href="review.html"><svg class="i" aria-hidden="true"><use href="#i-review"/></svg><span class="lbl">Review</span><span class="count num" aria-label="37 waiting">37</span></a><a href="missing.html" class="phone-hide" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-missing"/></svg><span class="lbl">Missing</span><span class="tag">Phase 2</span></a><a href="#activity" class="phone-hide"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg><span class="lbl">Activity</span></a><a href="settings.html"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a></nav>
+      <div class="foot">
+        <div class="dry"><span class="dot warn"></span><b>Dry run on</b><span>Every action waits in Review</span></div>
+        <div class="who">Last run 02:30 · signed in as admin</div>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="top">
+        <h1>Missing</h1><span class="chip">Phase 2</span>
+        <div class="tabs" role="tablist" aria-label="Media type">
+          <a role="tab" aria-selected="true" href="#movies"><svg class="i" aria-hidden="true"><use href="#i-film"/></svg> Movies <span class="n num">17</span></a>
+          <a role="tab" aria-selected="false" href="#shows"><svg class="i" aria-hidden="true"><use href="#i-tv"/></svg> Shows <span class="n num">9</span></a>
+        </div><span class="pin">1</span>
+        <div class="actions"><span class="meter"><span class="muted">Adds this run</span><span class="bar"><i style="width:10%"></i></span><b class="num">1 / 10</b></span></div>
+      </header>
+
+      <div class="content">
+        <div class="split">
+          <section aria-labelledby="ms-h">
+            <div class="toolbar" style="margin-bottom:var(--s4)">
+              <div class="field grow"><label for="m-col">Collection</label><select id="m-col"><option>Halloween Movies · 10 TMDb collections</option><option>Christmas Movies</option><option>Marvel Cinematic Universe</option></select></div>
+              <div class="field"><label for="m-show">Show</label><select id="m-show"><option>Missing and released</option><option>Missing, including unreleased</option><option>Everything</option></select></div>
+            </div>
+            <div class="summary-line" style="margin-bottom:var(--s4)"><span><b class="num">5</b>owned</span><span><b class="num">41</b>missing from its TMDb collections</span><span><b class="num">2</b>excluded in Radarr</span><span><b class="num">1</b>unreleased</span></div>
+
+            <div class="callout" style="margin-bottom:var(--s5)">
+              <b>Halloween Collection (TMDb 91361)</b><span class="pin">2</span>
+              <p>You own 8 of 13. Monitoring the collection in Radarr lets Radarr add the missing films itself, including future ones, once they are released.</p>
+              <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg> Monitor in Radarr</button>
+            </div>
+
+            <h2 id="ms-h" class="sr">Missing films</h2>
+            <table class="tt">
+              <thead><tr><th class="cb" scope="col"><input type="checkbox" aria-label="Select all"></th><th class="pst" scope="col"><span class="sr">Poster</span></th><th scope="col">Title</th><th scope="col" class="hide-lg">From</th><th scope="col" class="hide-md">Radarr</th><th scope="col" class="r"><span class="sr">Send</span></th></tr></thead>
+              <tbody>
+                <tr class="band"><th colspan="6" scope="rowgroup">Halloween Collection · 5 missing</th></tr>
+                <tr class="sel"><td class="cb"><input type="checkbox" checked aria-label="Select Halloween III"></td><td class="pst"><span class="poster type" aria-hidden="true">Halloween III</span></td><td><b>Halloween III: Season of the Witch</b> <span class="muted num">1982</span><br><span class="faint">Released · TMDb 10676</span></td><td class="hide-lg"><span class="chip">TMDb collection</span></td><td class="hide-md">Not in Radarr</td><td class="r"><button class="btn sm" type="button"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg> Radarr</button></td></tr>
+                <tr><td class="cb"><input type="checkbox" aria-label="Select Halloween: Resurrection"></td><td class="pst"><span class="poster type" aria-hidden="true">Halloween: Resurrection</span></td><td><b>Halloween: Resurrection</b> <span class="muted num">2002</span><br><span class="faint">Released · TMDb 11442</span></td><td class="hide-lg"><span class="chip">TMDb collection</span></td><td class="hide-md"><span class="chip"><svg class="i" aria-hidden="true"><use href="#i-ban"/></svg> Excluded</span></td><td class="r"><button class="btn sm" type="button" disabled title="On Radarr's exclusion list"><svg class="i" aria-hidden="true"><use href="#i-ban"/></svg> Excluded</button></td></tr>
+                <tr><td class="cb"><input type="checkbox" aria-label="Select Halloween Kills"></td><td class="pst"><span class="poster type" aria-hidden="true">Halloween Kills</span></td><td><b>Halloween Kills</b> <span class="muted num">2021</span><br><span class="faint">Released · TMDb 610253</span></td><td class="hide-lg"><span class="chip">TMDb collection</span></td><td class="hide-md">Monitored, no file</td><td class="r"><button class="btn sm" type="button" disabled title="Already in Radarr">In Radarr</button></td></tr>
+                <tr class="band"><th colspan="6" scope="rowgroup">IMDb lists · 451 missing · most popular first</th></tr>
+                <tr><td class="cb"><input type="checkbox" aria-label="Select Trick 'r Treat"></td><td class="pst"><span class="poster type" aria-hidden="true">Trick 'r Treat</span></td><td><b>Trick 'r Treat</b> <span class="muted num">2007</span><br><span class="faint">Released · IMDb tt0862856</span></td><td class="hide-lg"><span class="chip">IMDb ls023118929</span></td><td class="hide-md">Not in Radarr</td><td class="r"><button class="btn sm" type="button"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg> Radarr</button></td></tr>
+                <tr><td class="cb"><input type="checkbox" aria-label="Select Hocus Pocus 2"></td><td class="pst"><span class="poster type" aria-hidden="true">Hocus Pocus 2</span></td><td><b>Hocus Pocus 2</b> <span class="muted num">2022</span><br><span class="faint">Released · TMDb collection 751156</span></td><td class="hide-lg"><span class="chip">TMDb collection</span> <span class="chip">IMDb ls546214737</span></td><td class="hide-md">Not in Radarr</td><td class="r"><button class="btn sm" type="button"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg> Radarr</button></td></tr>
+                <tr><td colspan="6" class="faint" style="padding-left:48px">10 more · <a href="#more">show all</a></td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <aside class="drawer" aria-labelledby="send-h">
+            <h2 id="send-h">Send 1 film to Radarr</h2><span class="pin">3</span>
+            <p class="muted" style="font-size:var(--fs-sm)">Options are read live from Radarr 6.4 at radarr.local:7878. Defaults come from Settings and this collection's overrides.</p>
+            <div class="field"><label for="d-qp">Quality profile</label><select id="d-qp"><option>HD-1080p</option><option>HD - 720p/1080p</option><option>Ultra-HD</option><option>Any</option></select></div>
+            <div class="field"><label for="d-rf">Root folder</label><select id="d-rf"><option>/movies · 2.0 TB free</option><option>/data/films · 2.0 TB free</option></select></div>
+            <div class="field"><label for="d-ma">Minimum availability</label><select id="d-ma"><option>Released</option><option>In cinemas</option><option>Announced</option></select></div>
+            <div class="field"><label for="d-tg">Tags</label><div class="tokens"><span class="chip">maverick</span><span class="chip">seasonal</span><input id="d-tg" type="text"></div></div>
+            <div class="grid2">
+              <label class="check"><input type="checkbox" checked> Monitored</label>
+              <label class="check"><input type="checkbox" checked> Search on add</label>
+            </div>
+            <dl class="kv"><dt>Checks</dt><dd>Released · not in Radarr · not excluded</dd><dt>Cap</dt><dd class="num">Uses 1 of 9 remaining this run</dd></dl>
+            <div style="display:flex;gap:var(--s2)"><button class="btn primary" type="button"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg> Send to Radarr</button><button class="btn ghost" type="button">Send to Review instead</button></div>
+            <details class="more"><summary><svg class="i" aria-hidden="true"><use href="#i-down"/></svg> Shows use Sonarr's options</summary><p class="muted" style="margin-top:8px;font-size:var(--fs-sm)">On the Shows tab this panel offers quality profile, root folder, series type (standard, anime, daily), season folders, monitor (all, future, missing, existing, first season, last season, pilot, none), search on add and tags. Shows are added by TVDB ID.</p></details>
+          </aside>
+        </div>
+      </div>
+    </main>
+    </div>
+  </div>
+
+  <aside class="notes" aria-label="Design notes">
+    <h2>Missing: design notes (Phase 2)</h2>
+    <p>What you own and what you're missing, per collection, with sending to Radarr or Sonarr one step away. Titles and IDs are real TMDb and IMDb entries; owned counts are illustrative.</p>
+    <ol>
+      <li><span class="pin">1</span><div><h3>Movies and Shows tabs</h3><p>Two tabs with counts, as the brief asks. For TV, "missing" means series missing from a list, universe or franchise. Missing episodes stay Sonarr's job. The add cap is shown here as well, since this screen spends it.</p></div></li>
+      <li><span class="pin">2</span><div><h3>Monitor the TMDb collection</h3><p>For TMDb franchise collections, a callout offers to hand the whole collection to Radarr (<code>/api/v3/collection</code>). Radarr then adds members as they are released. The copy says that plainly, because Radarr skips announced and unreleased members.</p></div></li>
+      <li><span class="pin">3</span><div><h3>Send panel, not a modal</h3><p>The options sit in a side panel next to the selection, with every dropdown filled live from Radarr: quality profile, root folder with free space, minimum availability, tags, monitored and search on add.</p><p>The guardrail checks and the cap are shown before you commit. "Send to Review instead" queues the add with these options. Excluded and already-present titles are disabled in the list, with the reason given.</p></div></li>
+    </ol>
+  </aside>
+</div>
+<script src="mock.js"></script>
+</body>
+</html>

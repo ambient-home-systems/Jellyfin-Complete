@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en" data-notes="on" data-width="desktop">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings · Maverick Collections</title>
+<meta name="description" content="Annotated Phase 0 mockup of Settings: connections, action modes and guardrails, IMDb route, Radarr and Sonarr defaults, and schedules.">
+<link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="mock.css">
+</head>
+<body>
+<header class="mockbar">
+  <strong>Maverick Collections · Phase 0 mockups</strong>
+  <nav aria-label="Mockup screens"><a href="index.html">Overview</a><a href="dashboard.html">Dashboard</a><a href="collection-editor.html">Collection editor</a><a href="review.html">Review queue</a><a href="missing.html">Missing</a><a href="settings.html" aria-current="page">Settings</a></nav>
+  <div class="tools">
+    <fieldset><legend>Theme</legend><input type="radio" name="mock-theme" id="m-theme-auto" value="auto" checked><label for="m-theme-auto">Auto</label><input type="radio" name="mock-theme" id="m-theme-light" value="light"><label for="m-theme-light">Light</label><input type="radio" name="mock-theme" id="m-theme-dark" value="dark"><label for="m-theme-dark">Dark</label></fieldset>
+    <fieldset><legend>Width</legend><input type="radio" name="mock-width" id="m-width-desktop" value="desktop" checked><label for="m-width-desktop">Desktop</label><input type="radio" name="mock-width" id="m-width-phone" value="phone"><label for="m-width-phone">Phone</label></fieldset>
+    <fieldset><legend>Notes</legend><input type="radio" name="mock-notes" id="m-notes-on" value="on" checked><label for="m-notes-on">On</label><input type="radio" name="mock-notes" id="m-notes-off" value="off"><label for="m-notes-off">Off</label></fieldset>
+  </div>
+</header>
+<div class="stage">
+  <div class="frame">
+    <div class="app">
+    <aside class="rail" aria-label="Main navigation">
+      <div class="brand">Maverick Collections<small>Jellyfin · jellyfin.local</small></div>
+      <nav><a href="dashboard.html"><svg class="i" aria-hidden="true"><use href="#i-dashboard"/></svg><span class="lbl">Dashboard</span></a><a href="collection-editor.html"><svg class="i" aria-hidden="true"><use href="#i-collections"/></svg><span class="lbl">Collections</span></a><a href="review.html"><svg class="i" aria-hidden="true"><use href="#i-review"/></svg><span class="lbl">Review</span><span class="count num" aria-label="37 waiting">37</span></a><a href="missing.html" class="phone-hide"><svg class="i" aria-hidden="true"><use href="#i-missing"/></svg><span class="lbl">Missing</span><span class="tag">Phase 2</span></a><a href="#activity" class="phone-hide"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg><span class="lbl">Activity</span></a><a href="settings.html" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a></nav>
+      <div class="foot">
+        <div class="dry"><span class="dot warn"></span><b>Dry run on</b><span>Every action waits in Review</span></div>
+        <div class="who">Last run 02:30 · signed in as admin</div>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="top">
+        <h1>Settings</h1>
+        <div class="actions"><span class="muted" style="font-size:var(--fs-sm)">Saved 21:12</span><button class="btn primary" type="button">Save changes</button></div>
+      </header>
+      <div class="content">
+        <div class="settings">
+          <nav class="subnav" aria-label="Settings sections">
+            <a href="#conn" aria-current="true">Connections</a>
+            <a href="#modes">Action modes</a>
+            <a href="#imdb">IMDb route</a>
+            <a href="#arr">Radarr &amp; Sonarr</a>
+            <a href="#sched">Schedules</a>
+            <a href="#presets">Presets</a>
+            <a href="#backup">Backup <span class="faint">· Phase 2</span></a>
+          </nav>
+
+          <div>
+            <section class="form-sec" id="conn" aria-labelledby="conn-h">
+              <div class="section-head"><h2 id="conn-h">Connections</h2><span class="pin">1</span><span class="aside">Keys are encrypted at rest and never shown again</span></div>
+              <div class="conn"><span class="nm">Jellyfin</span><input class="url" type="url" value="http://jellyfin.local:8096" aria-label="Jellyfin URL"><input type="password" value="••••••••••••3f9a" aria-label="Jellyfin API key" readonly><button class="btn sm" type="button">Replace</button><span class="st"><span class="dot ok"></span><b>12.4</b> · 4 libraries in scope</span></div>
+              <div class="conn"><span class="nm">TMDb</span><span class="note">api.themoviedb.org</span><input type="password" value="••••••••••••a1c0" aria-label="TMDb key" readonly><button class="btn sm" type="button">Replace</button><span class="st"><span class="dot ok"></span><b>OK</b> · 38 req/10s</span></div>
+              <div class="conn"><span class="nm">MDBList</span><span class="note">Optional: public lists work without a key</span><input type="text" placeholder="No key" aria-label="MDBList key"><button class="btn sm" type="button">Add key</button><span class="st"><span class="dot warn"></span>429 at 02:30</span></div>
+              <div class="conn"><span class="nm">Plex</span><input class="url" type="url" value="http://plex.local:32400" aria-label="Plex URL"><input type="password" value="••••••••••••Zq7P" aria-label="Plex token" readonly><button class="btn sm" type="button">Replace</button><span class="st"><span class="dot ok"></span><b>OK</b> · for parity</span></div>
+              <div class="conn"><span class="nm">Radarr</span><input class="url" type="url" value="http://radarr.local:7878" aria-label="Radarr URL"><input type="password" value="••••••••••••77be" aria-label="Radarr key" readonly><button class="btn sm" type="button">Replace</button><span class="st"><span class="btn sm loading" aria-busy="true">Testing</span></span></div>
+              <div class="conn"><span class="nm">Sonarr</span><input class="url" type="url" value="http://sonarr.local:8989" aria-label="Sonarr URL" aria-invalid="true"><input type="password" value="••••••••••••0d21" aria-label="Sonarr key" readonly><button class="btn sm" type="button">Replace</button><span class="st" style="color:var(--red)"><span class="dot err"></span>401: key rejected</span></div>
+              <div><button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg> Test all connections</button></div>
+            </section>
+
+            <section class="form-sec" id="modes" aria-labelledby="modes-h">
+              <div class="section-head"><h2 id="modes-h">Action modes and guardrails</h2><span class="pin">2</span></div>
+              <label class="check" style="font-weight:600"><input type="checkbox" checked> Dry run: send every action to Review, whatever its mode</label>
+              <table class="modes">
+                <thead><tr><th scope="col">Action</th><th scope="col">Default mode</th><th scope="col" class="hide-sm">Overridden by</th></tr></thead>
+                <tbody>
+                  <tr><td>Create and delete box set</td><td><span class="seg"><input type="radio" name="g1" id="g1o"><label for="g1o">Off</label><input type="radio" name="g1" id="g1r"><label for="g1r">Review</label><input type="radio" name="g1" id="g1a" checked><label for="g1a">Auto</label></span></td><td class="hide-sm faint">—</td></tr>
+                  <tr><td>Add items</td><td><span class="seg"><input type="radio" name="g2" id="g2o"><label for="g2o">Off</label><input type="radio" name="g2" id="g2r"><label for="g2r">Review</label><input type="radio" name="g2" id="g2a" checked><label for="g2a">Auto</label></span></td><td class="hide-sm">Christmas Movies → Review</td></tr>
+                  <tr><td>Remove items</td><td><span class="seg"><input type="radio" name="g3" id="g3o"><label for="g3o">Off</label><input type="radio" name="g3" id="g3r" checked><label for="g3r">Review</label><input type="radio" name="g3" id="g3a"><label for="g3a">Auto</label></span></td><td class="hide-sm faint">—</td></tr>
+                  <tr><td>Update metadata</td><td><span class="seg"><input type="radio" name="g4" id="g4o"><label for="g4o">Off</label><input type="radio" name="g4" id="g4r"><label for="g4r">Review</label><input type="radio" name="g4" id="g4a" checked><label for="g4a">Auto</label></span></td><td class="hide-sm faint">—</td></tr>
+                  <tr><td>Add film to Radarr</td><td><span class="seg"><input type="radio" name="g5" id="g5o"><label for="g5o">Off</label><input type="radio" name="g5" id="g5r" checked><label for="g5r">Review</label><input type="radio" name="g5" id="g5a"><label for="g5a">Auto</label></span></td><td class="hide-sm faint">—</td></tr>
+                  <tr><td>Monitor TMDb collection in Radarr</td><td><span class="seg"><input type="radio" name="g6" id="g6o"><label for="g6o">Off</label><input type="radio" name="g6" id="g6r" checked><label for="g6r">Review</label><input type="radio" name="g6" id="g6a"><label for="g6a">Auto</label></span></td><td class="hide-sm faint">—</td></tr>
+                  <tr><td>Add series to Sonarr</td><td><span class="seg"><input type="radio" name="g7" id="g7o"><label for="g7o">Off</label><input type="radio" name="g7" id="g7r" checked><label for="g7r">Review</label><input type="radio" name="g7" id="g7a"><label for="g7a">Auto</label></span></td><td class="hide-sm">Kids Shows → Off</td></tr>
+                </tbody>
+              </table>
+              <div class="grid3">
+                <div class="field"><label for="cap">Radarr + Sonarr adds per run</label><input id="cap" type="number" value="10" class="num"><span class="hint">Past the cap, adds go to Review.</span></div>
+                <div class="field"><span class="label">Before any add</span><label class="check"><input type="checkbox" checked> Released titles only</label><label class="check"><input type="checkbox" checked disabled> Skip if already in Radarr or Sonarr</label><label class="check"><input type="checkbox" checked disabled> Skip if on an exclusion list</label></div>
+                <div class="field"><label for="snooze">Default snooze</label><select id="snooze"><option>Until the window opens</option><option>7 days</option><option>30 days</option></select></div>
+              </div>
+            </section>
+
+            <section class="form-sec" id="imdb" aria-labelledby="imdb-h">
+              <div class="section-head"><h2 id="imdb-h">IMDb search route</h2><span class="pin">3</span><span class="aside"><span class="dot ok"></span> Query hashes dc98c1b8…, 290bcac5… · checked 02:30</span></div>
+              <div class="choice" role="radiogroup" aria-labelledby="imdb-h">
+                <label><input type="radio" name="imdb" checked><b>IMDb GraphQL, directly (recommended)</b><span>Same query and settings as Kometa. Tested 2 Nov: identical 500 results for the Thanksgiving search.</span></label>
+                <label><input type="radio" name="imdb"><b>Kometa's hosted IMDb service</b><span>Exact Kometa parity, on infrastructure the Kometa team runs for Kometa users.</span></label>
+                <label><input type="radio" name="imdb"><b>Private daily snapshot</b><span>A GitHub Actions job in your private repo runs the same resolver and the app reads its output. Use this if IMDb starts refusing your server.</span></label>
+                <label><input type="radio" name="imdb"><b>TMDb keywords only</b><span>No IMDb at all. Results differ from Plex.</span></label>
+              </div>
+            </section>
+
+
+            <section class="form-sec" id="arr" aria-labelledby="arr-h">
+              <div class="section-head"><h2 id="arr-h">Radarr and Sonarr defaults</h2><span class="pin">4</span><span class="aside">Read live from Radarr 6.4 and Sonarr 4.0 · collections can override</span></div>
+              <div class="grid2">
+                <div class="field"><span class="label">Radarr</span>
+                  <div class="grid2">
+                    <div class="field"><label for="ra-qp">Quality profile</label><select id="ra-qp"><option>HD-1080p</option><option>HD - 720p/1080p</option><option>Ultra-HD</option><option>Any</option></select></div>
+                    <div class="field"><label for="ra-rf">Root folder</label><select id="ra-rf"><option>/movies · 2.0 TB free</option><option>/data/films · 2.0 TB free</option></select></div>
+                    <div class="field"><label for="ra-ma">Minimum availability</label><select id="ra-ma"><option>Released</option><option>In cinemas</option><option>Announced</option></select></div>
+                    <div class="field"><label for="ra-mo">Monitor</label><select id="ra-mo"><option>Movie only</option><option>Movie and its collection</option><option>None</option></select></div>
+                    <div class="field"><label for="ra-tg">Tags</label><div class="tokens"><span class="chip">maverick</span><input id="ra-tg" type="text"></div></div>
+                  </div>
+                  <div class="checks"><label class="check"><input type="checkbox" checked> Search on add</label></div>
+                </div>
+                <div class="field"><span class="label">Sonarr</span>
+                  <div class="grid2">
+                    <div class="field"><label for="so-qp">Quality profile</label><select id="so-qp"><option>HD-1080p</option><option>HD - 720p/1080p</option><option>Any</option></select></div>
+                    <div class="field"><label for="so-rf">Root folder</label><select id="so-rf"><option>/data/tv · 2.0 TB free</option></select></div>
+                    <div class="field"><label for="so-st">Series type</label><select id="so-st"><option>Standard</option><option>Anime</option><option>Daily</option></select></div>
+                    <div class="field"><label for="so-mo">Monitor</label><select id="so-mo"><option>All episodes</option><option>Future episodes</option><option>Missing episodes</option><option>Existing episodes</option><option>First season</option><option>Last season</option><option>Pilot only</option><option>None</option></select></div>
+                    <div class="field"><label for="so-tg">Tags</label><div class="tokens"><span class="chip">maverick</span><input id="so-tg" type="text"></div></div>
+                  </div>
+                  <div class="checks"><label class="check"><input type="checkbox" checked> Season folders</label><label class="check"><input type="checkbox"> Search on add</label></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-sec" id="sched" aria-labelledby="sched-h">
+              <div class="section-head"><h2 id="sched-h">Schedules</h2><span class="pin">5</span><span class="aside">America/New_York</span></div>
+              <div class="day" aria-hidden="true">
+                <span class="job y l1" style="left:0.2%"><span>00:00 window check · next</span></span>
+                <span class="job l2" style="left:10.42%"><span>02:30 nightly refresh</span></span>
+                <span class="job theirs l3" style="left:16.67%"><span>04:00 Jellyfin-Auto-Collections</span></span>
+                <span class="job theirs l4" style="left:20.83%"><span>05:00 Kometa (Plex)</span></span>
+                <div class="axis"><span>00</span><span>03</span><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span><span>21</span></div>
+              </div>
+              <table class="tt">
+                <thead><tr><th scope="col">Job</th><th scope="col">When</th><th scope="col" class="hide-sm">Cron</th><th scope="col">Next</th></tr></thead>
+                <tbody>
+                  <tr><td><b>Window check</b><br><span class="faint">Open and close windows; also runs at startup</span></td><td>Daily 00:00</td><td class="hide-sm"><code>0 0 * * *</code></td><td class="num">Tue 3 Nov 00:00</td></tr>
+                  <tr><td><b>Nightly refresh</b><br><span class="faint">Sources, library index, plan</span></td><td>Daily 02:30</td><td class="hide-sm"><code>30 2 * * *</code></td><td class="num">Tue 3 Nov 02:30</td></tr>
+                  <tr><td><b>TMDb cache</b><br><span class="faint">Re-fetch entries older than 30 days</span></td><td>Sundays 03:10</td><td class="hide-sm"><code>10 3 * * 0</code></td><td class="num">Sun 8 Nov 03:10</td></tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="form-sec" id="presets" aria-labelledby="pre-h">
+              <div class="section-head"><h2 id="pre-h">Presets</h2><span class="pin">6</span><span class="aside">Kometa v2.5.3 · defaults/movie/seasonal.yml</span></div>
+              <table class="tt">
+                <thead><tr><th scope="col" class="cb"><span class="sr">Enabled</span></th><th scope="col">Collection</th><th scope="col">Window</th><th scope="col" class="hide-sm">Sources</th><th scope="col" class="r">Owned</th><th scope="col" class="hide-md">Changed from Kometa</th></tr></thead>
+                <tbody>
+                  <tr><td class="cb"><input type="checkbox" checked aria-label="New Year's Day Movies enabled"></td><td>New Year's Day Movies</td><td class="num nowrap">12/26–01/04</td><td class="hide-sm">IMDb list</td><td class="r num">1</td><td class="hide-md faint">—</td></tr>
+                  <tr><td class="cb"><input type="checkbox" checked aria-label="Valentine's Day Movies enabled"></td><td>Valentine's Day Movies</td><td class="num nowrap">02/01–02/29</td><td class="hide-sm">IMDb lists ×4</td><td class="r num">14</td><td class="hide-md faint">—</td></tr>
+                  <tr><td class="cb"><input type="checkbox" checked aria-label="Halloween Movies enabled"></td><td>Halloween Movies</td><td class="num nowrap">10/01–10/31</td><td class="hide-sm">IMDb lists ×3, TMDb ×11</td><td class="r num">8</td><td class="hide-md faint">—</td></tr>
+                  <tr><td class="cb"><input type="checkbox" checked aria-label="Thanksgiving Movies enabled"></td><td>Thanksgiving Movies</td><td class="num nowrap">11/01–11/30</td><td class="hide-sm">IMDb keyword</td><td class="r num">10</td><td class="hide-md faint">—</td></tr>
+                  <tr><td class="cb"><input type="checkbox" checked aria-label="Christmas Movies enabled"></td><td>Christmas Movies</td><td class="num nowrap">12/01–12/31</td><td class="hide-sm">MDBList</td><td class="r num">42</td><td class="hide-md">Add items: Review</td></tr>
+                  <tr><td class="cb"><input type="checkbox" aria-label="Day of Persons with Disabilities Movies enabled"></td><td class="faint">Day of Persons with Disabilities Movies</td><td class="num faint nowrap">12/02–12/04</td><td class="hide-sm faint">IMDb keyword</td><td class="r num faint">10</td><td class="hide-md faint">Disabled</td></tr>
+                  <tr><td colspan="6" class="faint">13 more seasonal presets · show franchise (27) and universe (17) packs below</td></tr>
+                </tbody>
+              </table>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+    </div>
+  </div>
+
+  <aside class="notes" aria-label="Design notes">
+    <h2>Settings: design notes</h2>
+    <p>One long page with a section index, because a weekly session usually changes one thing. Every control is a standard form element.</p>
+    <ol>
+      <li><span class="pin">1</span><div><h3>Connections</h3><p>Each service gets one row: URL, masked key with Replace (never Reveal), and live status. The status shows each state it can be in: OK with version, rate-limited, testing (with a spinner), and an error that names the cause (401, key rejected) and turns the field red. MDBList states that its key is optional.</p></div></li>
+      <li><span class="pin">2</span><div><h3>Modes and guardrails</h3><p>Dry run comes first, because it overrides everything below it. The defaults table shows which collections override each action, so you can see where an override hides.</p><p>Guardrails are plain inputs. The two that must never be off (already present, exclusion list) are checked and locked, which shows they exist without letting you turn them off.</p></div></li>
+      <li><span class="pin">3</span><div><h3>IMDb route</h3><p>The four routes from the brief as radio cards, each with a one-line trade-off. The recommendation cites the 2 Nov spike result. Hash health sits in the heading line. A <code>PERSISTED_QUERY_NOT_FOUND</code> error turns it red and raises a Dashboard notice.</p></div></li>
+      <li><span class="pin">4</span><div><h3>Radarr and Sonarr defaults</h3><p>Two columns with the same fields the Missing panel uses, every list read live from each app. Collections can override them, for example a kids' collection with its own root folder.</p></div></li>
+      <li><span class="pin">5</span><div><h3>Schedules beside the neighbours</h3><p>A 24-hour strip draws each job as a tick at its start time, with no duration implied. It puts this app's jobs (solid) next to Jellyfin-Auto-Collections at 04:00 and Kometa at 05:00 (dashed), so collisions are visible before you edit a time. Only the next job is on yellow. Cron is shown but secondary, and every job lists its next run.</p></div></li>
+      <li><span class="pin">6</span><div><h3>Presets</h3><p>All 19 Kometa seasonal presets (plus the show franchise and universe packs), each with an on/off switch, its window, its sources and how many films you own (real counts from the 2 Nov server spike). The last column records every place you've changed something from Kometa's version, so parity drift is never hidden.</p></div></li>
+    </ol>
+  </aside>
+</div>
+<script src="mock.js"></script>
+</body>
+</html>
