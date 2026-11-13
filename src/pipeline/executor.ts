@@ -4,8 +4,9 @@ import { and, eq, inArray, isNull, lte, or } from 'drizzle-orm';
 import type { DB } from '../db/index.js';
 import { action, managedCollection, membership, definition } from '../db/schema.js';
 import type { JellyfinClient } from '../clients/jellyfin/index.js';
-import { HttpError, type FetchLike, request } from '../clients/http.js';
+import type { FetchLike } from '../clients/http.js';
 import { MANAGED_TAG, GATE_TAG } from './planner.js';
+import { recheckCreated, secureArtwork, type IdentityCtx } from './boxset-identity.js';
 import { log } from '../log.js';
 
 type ActionRow = typeof action.$inferSelect;
@@ -15,6 +16,9 @@ export type ExecStats = { applied: number; failed: number; waiting: number; supe
 
 export async function executeDue(db: DB, jf: JellyfinClient, f: FetchLike, now = Date.now(), onlyIds?: number[]): Promise<ExecStats> {
   const stats: ExecStats = { applied: 0, failed: 0, waiting: 0, superseded: 0 };
+  const x: IdentityCtx = { db, jf, fetch: f };
+  /** Box sets created this pass, checked again once Jellyfin has had time to attach anything (ADR-040). */
+  const created: { def: typeof definition.$inferSelect; boxsetId: string }[] = [];
   const due = db.select().from(action)
     .where(and(eq(action.status, 'approved'), or(isNull(action.applyAt), lte(action.applyAt, now)), onlyIds?.length ? inArray(action.id, onlyIds) : undefined))
     .all()
@@ -70,9 +74,12 @@ export async function executeDue(db: DB, jf: JellyfinClient, f: FetchLike, now =
       for (const a of of('collection.create')) {
         if (await liveId()) { mark(a, 'superseded'); continue; }
         if (adds.length < def.minItems) { stats.waiting++; continue; }
+        // Created locked, then its provider IDs and artwork set to the app's own straight away (ADR-040).
         const id = await jf.createCollection(def.name);
-        const values = { jfBoxsetId: id, origin: 'created' as const, state: 'live' as const, updatedAt: Date.now() };
+        const values = { jfBoxsetId: id, origin: 'created' as const, state: 'live' as const, artwork: null, updatedAt: Date.now() };
         db.insert(managedCollection).values({ definitionId: defId, ...values }).onConflictDoUpdate({ target: managedCollection.definitionId, set: values }).run();
+        await secureArtwork(x, def, id);
+        created.push({ def, boxsetId: id });
         mark(a, 'applied', { before: null, after: { id, name: def.name } });
       }
 
@@ -95,23 +102,15 @@ export async function executeDue(db: DB, jf: JellyfinClient, f: FetchLike, now =
           ...dto,
           Name: p.name ?? dto.Name,
           ForcedSortName: p.forcedSortName ?? saved?.sortTitle ?? dto.ForcedSortName,
-          Overview: p.overview ?? saved?.overview ?? dto.Overview,
+          // Never keep an overview the app didn't write: Jellyfin's own can come from the wrong TMDb collection (ADR-040).
+          Overview: p.overview ?? saved?.overview ?? '',
           Tags: [...new Set([...(dto.Tags ?? []), MANAGED_TAG])],
           LockedFields: [...new Set([...(dto.LockedFields ?? []), ...((p.lockedFields ?? []) as never[])])],
           DisplayOrder: p.displayOrder ?? dto.DisplayOrder,
         }));
-        let poster: string | null = null;
-        const posterUrl = p.posterUrl ?? saved?.posterUrl ?? null;
-        if (p.uploadPoster && posterUrl) {
-          try {
-            const res = await request(f, posterUrl, { retries: 1 });
-            if (!res.ok) throw new HttpError(res.status, posterUrl, '');
-            await jf.uploadPrimaryImage(id, new Uint8Array(await res.arrayBuffer()), res.headers.get('content-type')?.startsWith('image/') ? res.headers.get('content-type')! : 'image/jpeg');
-            poster = posterUrl;
-          } catch (e) {
-            log.warn(`Poster upload for ${def.name} failed: ${(e as Error).message}`);
-          }
-        }
+        // Provider IDs and every image: the app's poster or none, nothing else (ADR-040).
+        const artwork = await secureArtwork(x, def, id, { restoreText: false }); // its name and overview were just written
+        const poster = artwork.some((d) => d.includes('poster')) ? (def.poster.kind === 'url' ? def.poster.url : null) : null;
         mark(a, 'applied', {
           before: { Name: before.Name, ForcedSortName: before.ForcedSortName, Overview: before.Overview, Tags: before.Tags, LockedFields: before.LockedFields },
           after: { Name: after.Name, ForcedSortName: after.ForcedSortName, SortName: after.SortName, Overview: after.Overview, Tags: after.Tags, LockedFields: after.LockedFields, poster },
@@ -157,5 +156,6 @@ export async function executeDue(db: DB, jf: JellyfinClient, f: FetchLike, now =
       }
     }
   }
+  await recheckCreated(x, created);
   return stats;
 }

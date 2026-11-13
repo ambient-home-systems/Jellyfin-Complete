@@ -1,7 +1,7 @@
 // View models: everything the pages need, computed from the database (no Jellyfin calls on page load).
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
-import { action, run, sourceResult, imdbHash, managedCollection, membership, definition, library } from '../db/schema.js';
+import { action, run, sourceResult, imdbHash, managedCollection, membership, definition, library, integrityEvent } from '../db/schema.js';
 import type { WindowDef } from '../db/schema.js';
 import { loadDefinitions, type LoadedDefinition } from '../domain/definitions.js';
 import { localDay, transitions, localMidnight, occurrence, fromDayNumber, dayNumber } from '../domain/windows.js';
@@ -151,6 +151,9 @@ export function dashboardModel(app: AppContext, now = Date.now()) {
     configured: Boolean(app.jellyfin()), dryRun: s.dryRun,
     waitingForAdoption: defs.filter((d) => d.enabled && summary?.defs[String(d.id)]?.waitingForAdoption).length,
     server: s.server.version ? { version: s.server.version, ...versionSupport(s.server.version) } : null,
+    // ADR-040: box set repairs this week, and libraries where Jellyfin makes its own (unlocked) box sets.
+    integrity: app.db.select().from(integrityEvent).where(gte(integrityEvent.at, now - 7 * 86_400_000)).orderBy(desc(integrityEvent.at)).limit(50).all(),
+    autoCollections: app.db.select().from(library).all().filter((l) => l.autoCollections).map((l) => l.name),
   };
 }
 

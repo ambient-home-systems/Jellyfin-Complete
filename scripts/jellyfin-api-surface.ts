@@ -34,7 +34,7 @@ const props = (name: string) => Object.keys(spec.components.schemas[name]?.prope
 const out = {
   version: spec.info.version,
   paths,
-  schemas: { BaseItemDto: props('BaseItemDto'), UserPolicy: props('UserPolicy') },
+  schemas: { BaseItemDto: props('BaseItemDto'), UserPolicy: props('UserPolicy'), VirtualFolderInfo: props('VirtualFolderInfo'), LibraryOptions: props('LibraryOptions') },
   enums: Object.fromEntries(Object.keys(ENUM_VALUES).map((e) => [e, spec.components.schemas[e]?.enum ?? []])),
 };
 process.stdout.write(`${JSON.stringify(out, null, 1)}\n`);

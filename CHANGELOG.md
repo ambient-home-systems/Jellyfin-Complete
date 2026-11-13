@@ -2,6 +2,17 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.12.0 — 13 Nov 2026
+
+**Safety fix: box sets could show another collection's artwork.** Jellyfin fills in an unlocked box set by searching TMDb for its name, and can pick the wrong collection; on one server, "Inside Out" showed an adult collection's poster and "9-1-1" an erotic film's backdrop. Box sets this app created were unlocked, and adopted ones kept whatever Jellyfin had attached. Now:
+
+- **Box sets are created locked,** so Jellyfin's name search never runs. Their titles aren't locked.
+- **The app sets each managed box set's TMDb link itself** (a film series' own; none for anything else), **and all its images:** its own poster or none, and no backdrop, logo, thumb, banner or art. It no longer keeps Jellyfin's overview when a collection has none.
+- **Adopting replaces the box set** with a fresh locked one holding the same titles, with this app's name, overview and artwork. The adoption screen says when a film series set's TMDb link doesn't match its series. Adopting can't be undone.
+- **Every run checks every managed box set**, whatever the dry-run setting: TMDb link, lock, images, name and overview. Anything else changed is put back straight away and shown on the Dashboard. A box set found unlocked is replaced by a fresh locked one, because locking it in place would lock every title in it.
+- **The Dashboard warns** while a Jellyfin library has "Automatically add to collection" on.
+- **What changes on update:** the first run replaces every managed box set's poster with the app's own and removes backdrops, logos and other images it doesn't supply, including ones you added by hand. Posters you set on your own collections are removed too, since the app has none for them.
+
 ## 0.11.0 — 13 Nov 2026
 
 - **Poster overlays.** Kometa's badges on your posters, off until you choose them in Settings → Poster overlays:

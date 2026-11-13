@@ -23,8 +23,9 @@ export async function syncLibraries(db: DB, jf: JellyfinClient, at = Date.now())
   const folders = await jf.virtualFolders();
   for (const f of folders) {
     if (!f.ItemId || !f.Name) continue;
-    db.insert(library).values({ id: f.ItemId, name: f.Name, collectionType: f.CollectionType ?? null, seenAt: at })
-      .onConflictDoUpdate({ target: library.id, set: { name: f.Name, collectionType: f.CollectionType ?? null, seenAt: at } }).run();
+    const autoCollections = f.LibraryOptions?.AutomaticallyAddToCollection ?? null;
+    db.insert(library).values({ id: f.ItemId, name: f.Name, collectionType: f.CollectionType ?? null, autoCollections, seenAt: at })
+      .onConflictDoUpdate({ target: library.id, set: { name: f.Name, collectionType: f.CollectionType ?? null, autoCollections, seenAt: at } }).run();
   }
   return folders;
 }

@@ -57,6 +57,13 @@
       "when": 1794601301051,
       "tag": "0007_overlays",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794603893140,
+      "tag": "0008_artwork_integrity",
+      "breakpoints": true
     }
   ]
 }

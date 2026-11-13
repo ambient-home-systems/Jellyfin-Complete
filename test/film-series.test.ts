@@ -128,9 +128,14 @@ describe('Film series', () => {
     // Its titles are counted straight away, as Jellyfin has them.
     const members = (defId: number) => (app.db.$client.prepare('select count(*) n from membership where definition_id = ?').get(defId) as { n: number }).n;
     expect(members(toy.id)).toBe(2);
-    // The next run proposes only what the adopted set still needs: Toy Story 3, and dropping "Collection" from its name.
+    // Adopting replaced Jellyfin's set with a fresh locked one with the same titles and the app's own name (ADR-040).
+    expect(fake.items.has('bs-toy')).toBe(false);
+    const fresh = fake.boxSets().find((b) => b.Name === 'Toy Story')!;
+    expect(fresh).toMatchObject({ LockData: true, ProviderIds: { Tmdb: '10194' } });
+    expect(fresh.children!.sort()).toEqual(['m-ts1', 'm-ts2']);
+    // The next run proposes only what the adopted set still needs: Toy Story 3.
     await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + 3_600_000 });
-    expect(open(toy.id).map((a) => a.type === 'collection.add_items' ? a.item!.name : a.type).sort()).toEqual(['Toy Story 3', 'collection.update_metadata']);
+    expect(open(toy.id).map((a) => a.type === 'collection.add_items' ? a.item!.name : a.type).sort()).toEqual(['Toy Story 3']);
     expect(open(toy.id).some((a) => a.type === 'collection.create')).toBe(false);
   });
 

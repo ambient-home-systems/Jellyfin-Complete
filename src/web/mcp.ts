@@ -262,11 +262,11 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('list_existing_box_sets', {
     title: 'Existing box sets',
-    description: 'Box sets already in Jellyfin that this app doesn\'t manage but that match a collection that\'s on, by name or an older name: each with a suggestion (adopt, delete or leave) and why. Adopting keeps the box set and lets the app manage it.',
+    description: 'Box sets already in Jellyfin that this app doesn\'t manage but that match a collection that\'s on, by name or an older name: each with a suggestion (adopt, delete or leave) and why, and for film series whether Jellyfin\'s TMDb link checks out. Adopting replaces the box set with a fresh locked one holding the same titles, with the app\'s own artwork.',
     annotations: { ...read, openWorldHint: true },
   }, async () => {
     try {
-      return ok((await adoptionCandidates(app)).map((b) => ({ boxSetId: b.boxsetId, name: b.name, titles: b.childCount, fromJellyfinAutoCollections: b.jac, collectionId: b.definitionId, collection: b.definitionName, suggestion: b.suggestion, why: b.why })));
+      return ok((await adoptionCandidates(app, { verify: true })).map((b) => ({ boxSetId: b.boxsetId, name: b.name, titles: b.childCount, fromJellyfinAutoCollections: b.jac, collectionId: b.definitionId, collection: b.definitionName, suggestion: b.suggestion, why: b.why, tmdbLink: b.tmdbLink, tmdbLinkVerified: b.verified })));
     } catch (e) {
       return fail(`Couldn’t read box sets from Jellyfin: ${(e as Error).message}`);
     }
@@ -560,12 +560,12 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('adopt_box_set', {
     title: 'Adopt an existing box set',
-    description: 'Take over a box set already in Jellyfin (from list_existing_box_sets) for a collection: the app manages it from now on, keeping its id and poster. Its titles then sync through Review.',
+    description: 'Take over a box set already in Jellyfin (from list_existing_box_sets) for a collection. It is replaced by a fresh locked box set with the same titles and the app\'s own name, overview, TMDb link and artwork (nothing Jellyfin attached to it is kept), and the old one is deleted; its titles stay in the library. Its titles then sync through Review.',
     inputSchema: { boxSetId: z.string(), collectionId: z.number().int().positive() },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   }, async (a) => attempt(`box set ${a.boxSetId} adopted for collection ${a.collectionId}`, async () => {
-    await adopt(app, a.collectionId, a.boxSetId, by);
-    return 'Adopted. The next run syncs its titles through Review.';
+    const id = await adopt(app, a.collectionId, a.boxSetId, by);
+    return `Adopted: replaced by a fresh locked box set (${id}) with the same titles and the app's artwork. The next run syncs its titles through Review.`;
   }));
 
   server.registerTool('adopt_suggested_box_sets', {

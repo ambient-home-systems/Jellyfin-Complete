@@ -771,7 +771,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   // ── adoption ──
   web.get('/adoption', async (c) => {
     try {
-      return page(c, 'Existing box sets', 'collections', <Adoption items={await adoptionCandidates(app)} csrf={userOf(c).csrf} />);
+      return page(c, 'Existing box sets', 'collections', <Adoption items={await adoptionCandidates(app, { verify: true })} csrf={userOf(c).csrf} />);
     } catch (e) {
       return page(c, 'Existing box sets', 'collections', <Adoption items={[]} csrf={userOf(c).csrf} error={`Couldn’t read box sets from Jellyfin: ${(e as Error).message}`} />);
     }

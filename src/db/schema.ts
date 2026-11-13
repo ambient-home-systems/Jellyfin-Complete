@@ -28,6 +28,8 @@ export const library = sqliteTable('library', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   collectionType: text('collection_type'),
+  /** Jellyfin's "Automatically add to collection" for this library, which makes unlocked, name-identified box sets (ADR-040). */
+  autoCollections: integer('auto_collections', { mode: 'boolean' }),
   seenAt: integer('seen_at').notNull(),
 });
 
@@ -215,7 +217,28 @@ export const managedCollection = sqliteTable('managed_collection', {
   /** live: visible box set · hidden: kept but gated by the blocked tag (ADR-010) · absent: no box set. */
   state: text('state').$type<'live' | 'hidden' | 'absent'>().notNull(),
   savedMeta: json<SavedMeta | null>('saved_meta'),
+  /** What the app last wrote for the box set's identity and artwork, checked every run (ADR-040). */
+  artwork: json<ArtworkState | null>('artwork'),
   updatedAt: integer('updated_at').notNull(),
+});
+
+/** A managed box set's expected identity: its provider IDs, and the tag of the poster the app uploaded (null: no poster). */
+export type ArtworkState = {
+  providerIds: Record<string, string>; posterUrl: string | null; primaryTag: string | null; at: number;
+  /** The name and overview the app last wrote; anything else changing them is undone (a re-identification renames and re-describes). */
+  name?: string | null; overview?: string | null;
+};
+
+/** Integrity repairs on managed box sets (ADR-040), shown on the Dashboard. */
+export const integrityEvent = sqliteTable('integrity_event', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  at: integer('at').notNull(),
+  definitionId: integer('definition_id').notNull(),
+  name: text('name').notNull(),
+  /** What was wrong and what was done, in words. */
+  what: text('what').notNull(),
+  /** False when the repair failed. */
+  ok: integer('ok', { mode: 'boolean' }).notNull(),
 });
 
 export type Provenance = { sources: { key: string; label: string; rank: number }[]; match: string; pinned?: boolean };

@@ -28,10 +28,12 @@ describe('JellyfinClient against the 12.4 fake', () => {
     expect(fake.items.has('m1')).toBe(true);
   });
 
-  it('echoes LockData unchanged so a box set update never locks its films (ADR-019)', async () => {
+  it('creates box sets locked without locking their films, and never changes the lock afterwards (ADR-019, ADR-040)', async () => {
     const id = await jf.createCollection('Christmas Movies', ['m1']);
-    await jf.updateItem(id, (dto) => ({ ...dto, LockData: true, ForcedSortName: '!00_Christmas Movies', LockedFields: ['Name', 'Overview', 'Tags'] }));
-    expect(fake.items.get(id)?.LockData).toBe(false);
+    expect(fake.items.get(id)?.LockData).toBe(true); // Jellyfin doesn't identify a locked new box set by name
+    expect(fake.items.get('m1')?.LockData).toBe(false);
+    await jf.updateItem(id, (dto) => ({ ...dto, LockData: false, ForcedSortName: '!00_Christmas Movies', LockedFields: ['Name', 'Overview', 'Tags'] }));
+    expect(fake.items.get(id)?.LockData).toBe(true); // echoed: a lock change would spread to every film in it
     expect(fake.items.get('m1')?.LockData).toBe(false);
     expect(fake.items.get(id)?.LockedFields).toEqual(['Name', 'Overview', 'Tags']);
     expect(fake.items.get(id)?.SortName).toBe('!0000000000_christmas movies');

@@ -171,8 +171,13 @@ export class JellyfinClient {
     return { before, after: (await this.getItem(id)) ?? body };
   }
 
+  /**
+   * Always created locked (ADR-040): Jellyfin identifies an unlocked new box set by a TMDb name search within seconds
+   * and attaches whatever it finds (provider ID, poster, backdrop, logo, overview), which can be the wrong collection.
+   * Locking at creation doesn't lock the titles added to it; changing LockData later would (it propagates).
+   */
   async createCollection(name: string, ids: string[] = []): Promise<string> {
-    const res = await this.send('POST', '/Collections', { name, ids: ids.join(',') || undefined, isLocked: false });
+    const res = await this.send('POST', '/Collections', { name, ids: ids.join(',') || undefined, isLocked: true });
     const json = (await res.json()) as { Id?: string };
     if (!json.Id) throw new Error('Jellyfin did not return an Id for the new collection');
     return json.Id;
@@ -194,6 +199,14 @@ export class JellyfinClient {
   async collectionChildren(collectionId: string): Promise<BaseItemDto[]> {
     return this.allItems({ ParentId: collectionId, userId: await this.userId(), Recursive: false, Fields: 'ProviderIds' });
   }
+
+  /** Delete one image; for backdrops, by index (a box set can have several). */
+  async deleteImage(id: string, type: string, index?: number): Promise<void> {
+    await this.send('DELETE', `/Items/${id}/Images/${type}`, index === undefined ? undefined : { imageIndex: index });
+  }
+
+  // There is deliberately no metadata refresh here: a full refresh with replaceAllMetadata makes Jellyfin repeat its
+  // name search on a box set (ADR-040). test/artwork-safety.test.ts checks the app never calls /Items/{id}/Refresh.
 
   /** An item's poster as stored, or null if it has none. */
   async downloadPrimaryImage(id: string): Promise<{ bytes: Uint8Array; contentType: string } | null> {

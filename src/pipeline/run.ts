@@ -22,6 +22,7 @@ import { syncHomeRows } from '../homescreen/index.js';
 import { syncFilmSeries } from './film-series.js';
 import { refreshWatchProviders, type ProviderKind } from '../sources/watch-providers.js';
 import { overlayCount, syncOverlays } from '../overlays/sync.js';
+import { checkIntegrity, identityCtx } from './boxset-identity.js';
 import { adoptionCandidates } from './adoption.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
 import { missingTitles } from '../domain/missing.js';
@@ -150,6 +151,15 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
         try { found.set(id, await tmdb.find(id)); } catch (e) { log.warn(`TMDb /find ${id} failed: ${(e as Error).message}`); break; }
       }
       stats.tmdbFind = found.size;
+    }
+
+    // Box set integrity (ADR-040): provider IDs, lock and images are the app's own; differences are repaired now.
+    step('Checking managed box sets’ artwork and TMDb links');
+    try {
+      const ig = await checkIntegrity(identityCtx(app), defs, now);
+      Object.assign(stats, { boxSetsChecked: ig.checked, boxSetsRepaired: ig.repaired, boxSetRepairsFailed: ig.failed });
+    } catch (e) {
+      log.error(`Box set integrity check failed: ${(e as Error).message}`);
     }
 
     step('Reading managed collections from Jellyfin');

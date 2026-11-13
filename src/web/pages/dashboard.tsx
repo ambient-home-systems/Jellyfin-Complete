@@ -56,6 +56,18 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
             {m.server && m.server.level !== 'verified' ? (
               <div class="notice"><Dot state={m.server.level === 'unsupported' ? 'err' : 'warn'} label={m.server.level} /><b>Jellyfin {m.server.version}</b><p>{m.server.note}</p></div>
             ) : null}
+            {m.autoCollections.length ? (
+              <div class="notice"><Dot state="err" label="Risk" /><b>Jellyfin makes its own box sets in {m.autoCollections.join(', ')}</b><p>“Automatically add to collection” is on there. Jellyfin creates those box sets unlocked and finds their artwork with a TMDb name search, which can pick the wrong collection and show another collection’s poster and backdrop. Turn it off in Jellyfin: Dashboard → Libraries, open the library’s menu → Manage library, and untick “Automatically add to collection”.</p></div>
+            ) : null}
+            {m.integrity.filter((e) => !e.ok).map((e) => (
+              <div class="notice"><Dot state="err" label="Repair failed" /><b>{e.name}: box set check failed</b><p>{e.what} The next run tries again. ({fmtAgo(e.at, m.now)})</p></div>
+            ))}
+            {m.integrity.some((e) => e.ok) ? (
+              <div class="notice"><Dot state="warn" label="Repaired" /><b>{plural(new Set(m.integrity.filter((e) => e.ok).map((e) => e.definitionId)).size, 'box set')} repaired this week</b>
+                <p>Something other than this app changed their TMDb link, lock or artwork; each was put back as soon as it was found.</p>
+                <ul class="plain-list">{m.integrity.filter((e) => e.ok).slice(0, 10).map((e) => <li><b>{e.name}</b> <span class="faint">{fmtAgo(e.at, m.now)}</span><br />{e.what}</li>)}</ul>
+              </div>
+            ) : null}
             {m.waitingForAdoption ? (
               <div class="notice"><Dot state="warn" label="Waiting" /><b>{m.waitingForAdoption} {m.waitingForAdoption === 1 ? 'collection has' : 'collections have'} a box set to adopt</b><p>Jellyfin already has a matching box set, so nothing new is created until you adopt it (or delete it) on <a href="/adoption">Existing box sets</a>.</p></div>
             ) : null}

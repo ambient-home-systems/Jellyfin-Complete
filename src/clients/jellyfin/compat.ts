@@ -15,6 +15,7 @@ export const JELLYFIN_CALLS: { method: 'get' | 'post' | 'delete'; path: string; 
   { method: 'post', path: '/Items/{itemId}' },
   { method: 'delete', path: '/Items/{itemId}' },
   { method: 'get', path: '/Items/{itemId}/Images/{imageType}' },
+  { method: 'delete', path: '/Items/{itemId}/Images/{imageType}', query: ['imageIndex'] },
   { method: 'post', path: '/Items/{itemId}/Images/{imageType}' },
   { method: 'post', path: '/Collections', query: ['name', 'ids', 'isLocked'] },
   { method: 'post', path: '/Collections/{collectionId}/Items', query: ['ids'] },
@@ -27,14 +28,19 @@ export const JELLYFIN_CALLS: { method: 'get' | 'post' | 'delete'; path: string; 
 /** BaseItemDto properties the app reads or writes back (POST /Items/{id} sends the whole DTO; ADR-019). */
 export const ITEM_PROPERTIES = [
   'Id', 'Name', 'ForcedSortName', 'SortName', 'Overview', 'Tags', 'LockData', 'LockedFields', 'ProviderIds', 'ImageTags',
-  'ChildCount', 'DisplayOrder', 'SeriesId', 'ParentIndexNumber', 'IndexNumber', 'ProductionYear', 'OfficialRating', 'Genres', 'Studios', 'DateCreated', 'PremiereDate', 'Status', 'Type',
+  'ChildCount', 'DisplayOrder', 'SeriesId', 'ParentIndexNumber', 'IndexNumber', 'ProductionYear', 'OfficialRating', 'Genres', 'Studios', 'DateCreated', 'PremiereDate', 'Status', 'Type', 'BackdropImageTags',
 ];
 export const POLICY_PROPERTIES = ['IsAdministrator', 'BlockedTags'];
+/** Library settings the app reads (ADR-040): "Automatically add to collection" makes unlocked box sets Jellyfin identifies by name. */
+export const LIBRARY_PROPERTIES: Record<'VirtualFolderInfo' | 'LibraryOptions', string[]> = {
+  VirtualFolderInfo: ['ItemId', 'Name', 'CollectionType', 'LibraryOptions'],
+  LibraryOptions: ['AutomaticallyAddToCollection'],
+};
 export const ENUM_VALUES: Record<string, string[]> = {
   ItemFields: ['ProviderIds', 'Genres', 'Tags', 'Studios', 'SortName', 'DateCreated', 'ParentId'],
   MetadataField: ['Name', 'Overview', 'Tags'],
   BaseItemKind: ['Movie', 'Series', 'Episode', 'BoxSet'],
-  ImageType: ['Primary'],
+  ImageType: ['Primary', 'Art', 'Backdrop', 'Banner', 'Logo', 'Thumb', 'Disc', 'Box', 'BoxRear', 'Menu'],
 };
 
 /** Versions whose published API spec has the whole surface above (the compatibility test keeps this honest). */

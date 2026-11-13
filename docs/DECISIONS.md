@@ -296,7 +296,7 @@ Each entry is a short ADR: context, options, recommendation, consequences.
 ### ADR-019 Jellyfin write rules: Accepted
 - **Rules.**
   - GET, then modify, then POST the **full** DTO.
-  - Echo back `LockData` unchanged. **Never set it on a box set**, because it propagates to every linked item.
+  - Echo back `LockData` unchanged. **Never change it on an existing box set**, because a change propagates to every linked item. (ADR-040: box sets are now *created* locked, which doesn't lock their titles.)
   - Lock with `LockedFields: [Name, Overview, Tags]`.
   - Re-assert `ForcedSortName` every run, since it can't be locked. 12.4 normalises it (`!00_X` becomes `!0000000000_x`), and `!` still sorts first.
   - Set `DisplayOrder` from the sort setting.
@@ -616,6 +616,44 @@ Each entry is a short ADR: context, options, recommendation, consequences.
 - **Consequences.**
   - `/config` must be backed up with `overlays/originals`: those files are the only copies of the original posters until the overlays come off.
   - Kometa's other overlays (resolution, audio, ratings, streaming logos…) can be added on the same machinery.
+
+### ADR-040 Box set identity and artwork: Decided (13 Nov)
+- **Context: an incident on your server.** Seven managed box sets showed another TMDb collection's artwork. Two were harmful on a children's server: "Inside Out" had an adult collection's nude poster and backdrop, and "9-1-1" an erotic "9½ Weeks" backdrop. Your experiments established:
+  - Jellyfin identifies any **unlocked** box set by name within about 2 seconds of creation. It searches TMDb collections and attaches the match: provider ID, poster, logo, thumb, backdrop and overview, and renames the set "X Collection". A full refresh with `replaceAllMetadata` repeats the search; a rename or a default refresh doesn't.
+  - The search is ambiguous and isn't checked against the set's titles.
+  - `isLocked=true` at creation prevents it.
+- **How the app let it through:**
+  - It created box sets with `isLocked=false` (9-1-1).
+  - It adopted Jellyfin's own unlocked "X Collection" sets "keeping their IDs and posters", without checking the TMDb link.
+  - It rewrote the name and overview, which hid the problem, but managed only the poster, so backdrops, logos and thumbs stayed. Where a collection had no overview of its own, it kept Jellyfin's.
+- **Decision.**
+  - **Create locked:** `POST /Collections?isLocked=true`, everywhere, including undo. That doesn't lock the titles in it.
+  - **The app owns each managed box set's identity:**
+    - provider IDs: `{Tmdb: <series>}` for a film series, `{}` for everything else
+    - images: its poster (the TMDb collection's for a film series, Kometa's for presets) or none, and no backdrop, logo, thumb, banner or art. A poster it can't fetch isn't replaced by one it can't vouch for: the existing one is removed and the next run tries again.
+    - overview: cleared when the collection has none of its own, never kept from Jellyfin
+    - It records what it wrote: provider IDs, poster tag, name and overview.
+  - **Re-check after creating:** a few seconds after creating (or adopting) box sets, the app reads them again and repairs anything Jellyfin attached.
+  - **Never change `LockData` on an existing box set.** Jellyfin copies a lock change to every title in the set. So a managed box set found unlocked isn't locked in place; it's replaced by a fresh locked one with the same titles, and the old one deleted.
+  - **Adoption replaces the set, never trusts it:**
+    - Adopting builds a fresh locked box set with the same titles and the app's own name, overview, provider IDs and artwork, and deletes the old one. Nothing Jellyfin attached carries over.
+    - The adoption screen still checks a film series set's TMDb link against the series and every title's `TmdbCollection`, and says when it doesn't match.
+    - Adopting can't be undone, since the old set is gone.
+  - **Integrity check every run,** dry run or not, because it only puts back what the app already applied:
+    - provider IDs as expected
+    - locked
+    - images as the app last wrote them
+    - name and overview as the app last wrote them
+    - Differences are repaired at once, logged, and shown on the Dashboard for a week. Repairs that fail show as errors.
+    - The first check of a set (nothing recorded yet) replaces its poster with the app's own without reporting it; anything else it removes is reported as "First check".
+  - **No metadata refresh, ever:** the client has no refresh call, and the tests check none is sent.
+  - **Dashboard warning** while any Jellyfin library has "Automatically add to collection" on (it creates unlocked, name-identified sets). The app now reads `LibraryOptions`, which is checked against all four API specs.
+  - **Regression tests** (`test/artwork-safety.test.ts`) use the incident's names and wrong matches: Inside Out, 9-1-1, Twister, Night at the Museum, Home Alone, The Chronicles of Narnia, Teenage Mutant Ninja Turtles. The fake Jellyfin reproduces the name search. After creating, after adopting, and after outside changes, they assert every managed set's TMDb link, poster, other images, overview and lock, and that its titles stay unlocked.
+- **Consequences.**
+  - Box set IDs change on adoption and when an unlocked managed set is repaired.
+  - Collections with no poster of their own (your custom ones) lose any poster set in Jellyfin.
+  - Hand-made backdrops and logos on managed sets are removed, since the app doesn't supply them.
+  - Locking existing box sets yourself through Jellyfin (metadata editor or API) likely locked their titles too; that's worth checking.
 
 ---
 

@@ -64,6 +64,21 @@ export class FakeJellyfin {
   imageData = new Map<string, { bytes: Uint8Array; type: string }>();
   /** Every image upload, in order. */
   uploads: { id: string; type: string; bytes: Uint8Array }[] = [];
+  /** Backdrops by item, in index order (a box set can have several). */
+  backdrops = new Map<string, Uint8Array[]>();
+  /**
+   * Jellyfin's box set identification (ADR-040), as measured on a real server: within seconds of creating an unlocked
+   * box set (or a full refresh with replaceAllMetadata), it searches TMDb collections by the set's name and attaches the
+   * match: provider ID, poster, backdrop, logo, thumb and overview, and renames it "<name> Collection". Keyed by the
+   * name searched (lower case, without " Collection").
+   */
+  tmdbNameSearch = new Map<string, { tmdb: string; name: string; overview: string }>();
+  /** Delay before identification runs (it's asynchronous in Jellyfin). */
+  identifyDelayMs = 5;
+  /** Worst case: identify even locked box sets (to prove the app's own checks catch it). */
+  identifyLocked = false;
+  /** Every POST /Items/{id}/Refresh, which the app must never send. */
+  refreshCalls: string[] = [];
   calls: { method: string; path: string }[] = [];
   private seq = 1;
   tokens = new Map<string, string>(); // token -> userId
@@ -97,7 +112,29 @@ export class FakeJellyfin {
       const d = this.imageData.get(`${item.Id}/${type}`);
       return d ? createHash('sha1').update(d.bytes).digest('hex').slice(0, 16) : 'tag';
     };
-    return { ...rest, ChildCount: children?.length, ImageTags: images ? Object.fromEntries(Object.keys(images).map((k) => [k, tag(k)])) : {} };
+    const backdrops = (this.backdrops.get(item.Id) ?? []).map((b) => createHash('sha1').update(b).digest('hex').slice(0, 16));
+    return { ...rest, ChildCount: children?.length, ImageTags: images ? Object.fromEntries(Object.keys(images).map((k) => [k, tag(k)])) : {}, BackdropImageTags: backdrops };
+  }
+
+  /** Attach what a TMDb name search finds, as Jellyfin does to an unlocked box set. */
+  identify(id: string): void {
+    const box = this.items.get(id);
+    if (!box || box.Type !== 'BoxSet' || (box.LockData && !this.identifyLocked)) return;
+    const key = (box.Name ?? '').toLowerCase().replace(/ collection$/, '');
+    const hit = this.tmdbNameSearch.get(key);
+    if (!hit) return;
+    const bytes = (what: string) => new TextEncoder().encode(`tmdb-${hit.tmdb}-${what}`);
+    box.ProviderIds = { ...(box.ProviderIds ?? {}), Tmdb: hit.tmdb };
+    box.Overview = hit.overview;
+    if (!/ collection$/i.test(box.Name ?? '')) box.Name = `${box.Name} Collection`;
+    for (const type of ['Primary', 'Logo', 'Thumb']) this.setImage(id, bytes(type.toLowerCase()), type);
+    this.backdrops.set(id, [bytes('backdrop-0'), bytes('backdrop-1')]);
+  }
+
+  /** The bytes of an item's image, or undefined. */
+  image(id: string, type = 'Primary'): string | undefined {
+    const d = this.imageData.get(`${id}/${type}`);
+    return d ? new TextDecoder().decode(d.bytes) : undefined;
   }
 
   /** Give an item a poster (as if Jellyfin had fetched one). */
@@ -209,6 +246,7 @@ export class FakeJellyfin {
       item.Genres = body.Genres ?? [];
       item.LockedFields = body.LockedFields ?? [];
       item.DisplayOrder = body.DisplayOrder ?? item.DisplayOrder ?? null;
+      if (body.ProviderIds) item.ProviderIds = { ...body.ProviderIds }; // the metadata editor's External IDs
       const newLock = body.LockData ?? false;
       if (newLock !== item.LockData && item.Type === 'BoxSet') {
         for (const id of item.children ?? []) {
@@ -225,9 +263,33 @@ export class FakeJellyfin {
       const q = new URL(c.req.url).searchParams;
       const name = q.get('name');
       if (!name) return c.text('name required', 400);
-      const box = this.add({ Name: name, Type: 'BoxSet', ParentId: 'lib-collections', children: [] });
+      // isLocked sets the new box set's lock without touching its titles (only a later lock change propagates).
+      const box = this.add({ Name: name, Type: 'BoxSet', ParentId: 'lib-collections', children: [], LockData: q.get('isLocked') === 'true' });
       box.children = (q.get('ids') ?? '').split(',').filter((id) => this.items.has(id));
+      setTimeout(() => this.identify(box.Id), this.identifyDelayMs);
       return c.json({ Id: box.Id });
+    });
+    app.post('/Items/:id/Refresh', (c) => {
+      const q = new URL(c.req.url).searchParams;
+      this.refreshCalls.push(`${c.req.param('id')}?${q}`);
+      if (q.get('replaceAllMetadata') === 'true') this.identify(c.req.param('id'));
+      return c.body(null, 204);
+    });
+    app.delete('/Items/:id/Images/:type', (c) => {
+      const item = this.items.get(c.req.param('id'));
+      if (!item) return c.text('Not found', 404);
+      const type = c.req.param('type');
+      if (type === 'Backdrop') {
+        const list = this.backdrops.get(item.Id) ?? [];
+        const index = Number(new URL(c.req.url).searchParams.get('imageIndex') ?? 0);
+        if (!list[index]) return c.text('Not found', 404);
+        list.splice(index, 1);
+        return c.body(null, 204);
+      }
+      if (!item.images?.[type]) return c.text('Not found', 404);
+      delete item.images[type];
+      this.imageData.delete(`${item.Id}/${type}`);
+      return c.body(null, 204);
     });
     app.post('/Collections/:id/Items', (c) => {
       const box = this.items.get(c.req.param('id'));

@@ -186,7 +186,7 @@ export function plan(input: PlanInput): { actions: PlannedAction[]; plans: Defin
           }
           const want = desiredMeta(def);
           const m = live.meta;
-          const drift = m.name !== want.name || (m.forcedSortName ?? null) !== want.forcedSortName || (m.overview ?? null) !== want.overview
+          const drift = m.name !== want.name || (m.forcedSortName ?? null) !== want.forcedSortName || (m.overview || null) !== (want.overview || null)
             || !m.tags.includes(MANAGED_TAG) || LOCKED_FIELDS.some((f) => !m.lockedFields.includes(f)) || (!m.hasPoster && want.posterUrl);
           if (drift) {
             actions.push({ type: 'collection.update_metadata', definitionId: def.id, fingerprint: driftFingerprint(def), applyAt: null, reason: 'Metadata differs from the definition', payload: { ...metaPayload, uploadPoster: !m.hasPoster } });

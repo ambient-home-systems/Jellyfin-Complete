@@ -1,10 +1,10 @@
 // Undo an applied change (ARCHITECTURE §3 step 7). The inverse runs through Jellyfin immediately, is recorded as its
 // own applied action, and the original proposal is remembered as dismissed so the next run doesn't simply redo it.
 // Dismissals are per fingerprint, so a seasonal create or delete comes back next season as usual.
+import { identityCtx, secureArtwork } from './boxset-identity.js';
 import { and, eq } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
 import { action, decision, definition, managedCollection, membership, type ActionType, type SavedMeta } from '../db/schema.js';
-import { request } from '../clients/http.js';
 import { MANAGED_TAG, GATE_TAG, driftFingerprint } from './planner.js';
 import { log } from '../log.js';
 
@@ -77,21 +77,21 @@ export async function undoAction(app: AppContext, actionId: number, by: string):
         ...dto,
         Name: name,
         ForcedSortName: saved?.sortTitle ?? dto.ForcedSortName,
-        Overview: saved?.overview ?? dto.Overview,
+        Overview: saved?.overview ?? def?.overview ?? '',
         Tags: [...new Set([...(dto.Tags ?? []), MANAGED_TAG])],
         LockedFields: [...new Set([...(dto.LockedFields ?? []), ...((was.lockedFields ?? []) as never[])])],
         DisplayOrder: was.displayOrder ?? dto.DisplayOrder,
       }));
-      if (saved?.posterUrl) {
+      const values = { jfBoxsetId: id, origin: 'created' as const, state: 'live' as const, artwork: null, updatedAt: now };
+      app.db.insert(managedCollection).values({ definitionId: defId, ...values }).onConflictDoUpdate({ target: managedCollection.definitionId, set: values }).run();
+      // Created locked; provider IDs and artwork are the app's own (ADR-040).
+      if (def) {
         try {
-          const res = await request(app.fetch, saved.posterUrl, { retries: 1 });
-          if (res.ok) await jf.uploadPrimaryImage(id, new Uint8Array(await res.arrayBuffer()), res.headers.get('content-type')?.startsWith('image/') ? res.headers.get('content-type')! : 'image/jpeg');
+          await secureArtwork(identityCtx(app), def, id);
         } catch (e) {
-          log.warn(`Poster upload while restoring ${name} failed: ${(e as Error).message}`);
+          log.warn(`Artwork while restoring ${name} failed: ${(e as Error).message}; the next run repairs it`);
         }
       }
-      const values = { jfBoxsetId: id, origin: 'created' as const, state: 'live' as const, updatedAt: now };
-      app.db.insert(managedCollection).values({ definitionId: defId, ...values }).onConflictDoUpdate({ target: managedCollection.definitionId, set: values }).run();
       for (const jfId of members) app.db.insert(membership).values({ definitionId: defId, jfId, provenance: { sources: [], match: 'restored' }, since: now, actionId: a.id }).onConflictDoNothing().run();
       record('collection.create', { before: null, after: { id, name, members: members.length } });
       const lost = was.members.length - members.length;
@@ -111,6 +111,7 @@ export async function undoAction(app: AppContext, actionId: number, by: string):
 
     case 'collection.update_metadata': {
       if (!liveId) throw new Error('The box set isn’t live any more, so there is nothing to undo');
+      if ((a.after as { adopted?: boolean } | null)?.adopted) throw new Error('Adopting replaced the old box set with a fresh one, so it can’t be undone. Turn the collection off or delete it instead.');
       const was = (a.before ?? {}) as { Name?: string | null; ForcedSortName?: string | null; Overview?: string | null; Tags?: string[] | null; LockedFields?: string[] | null };
       const { after } = await jf.updateItem(liveId, (dto) => ({
         ...dto,

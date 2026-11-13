@@ -91,7 +91,7 @@ Kometa's additions apply, such as Prometheus in Alien and Hobbs & Shaw in The Fa
 
 **Turning it on.** Use Getting started (step 4) or ask Claude. It's one switch for every series, and the next run adds them. It needs a TMDb key. The minimum number of films is a setting (2 by default).
 
-**Your existing series box sets.** If Jellyfin already made them, open **Collections → Existing box sets** after that run. It lists Jellyfin's own series box sets; **Adopt all suggested** takes them over, keeping their ids and posters. They're then renamed without "Collection" and kept up to date.
+**Your existing series box sets.** If Jellyfin already made them, open **Collections → Existing box sets** after that run. It lists Jellyfin's own series box sets, and says whether each one's TMDb link matches its series and films. **Adopt all suggested** replaces each with a fresh box set holding the same films, with this app's name, overview and artwork; nothing Jellyfin attached carries over.
 
 Which series a film belongs to comes from Jellyfin's TMDb metadata. If Jellyfin has recorded none, the app asks TMDb, a few hundred films per run, and remembers the answers.
 
@@ -111,6 +111,20 @@ A collection for each service, such as **Netflix Movies** or **Disney+ Shows**, 
 
 Streaming data comes from JustWatch, through TMDb.
 
+### Box set artwork
+
+Jellyfin fills in an unlocked box set by searching TMDb for its name, and can pick the wrong collection: another collection's poster, backdrop and overview. So for every box set it manages, the app:
+
+- creates it locked, so that search never runs (the titles in it aren't locked)
+- sets its TMDb link itself: the series' own for a film series, none for anything else
+- gives it this app's poster (TMDb's for a film series, Kometa's for presets) or none, and no backdrop, logo, thumb, banner or art
+- checks all of that every run, with its lock, name and overview, and puts back anything else changed. Each repair shows on the Dashboard for a week.
+
+Some things follow from that:
+- A box set found unlocked is replaced by a fresh locked one with the same titles. Locking it in place would lock every title in it.
+- Your own collections have no poster in this app, so a poster added in Jellyfin is removed.
+- If "Automatically add to collection" is on for a Jellyfin library, the Dashboard warns you: Jellyfin makes unlocked box sets of its own. Turn it off in Jellyfin: Dashboard → Libraries, open the library's menu → Manage library.
+
 ### In the editor
 
 - **Schedule.** Always on, or between two dates each year. A range can wrap past New Year.
@@ -128,7 +142,7 @@ Streaming data comes from JustWatch, through TMDb.
 
 **Collections → Existing box sets** lists box sets with the same names as your collections, and leftovers from Jellyfin-Auto-Collections. You can:
 
-- **adopt** a box set: the app manages it from then on
+- **adopt** a box set: it's replaced by a fresh, locked box set with the same titles and this app's name, overview and artwork, which the app manages from then on. Nothing Jellyfin attached to the old one carries over, because Jellyfin may have linked it to the wrong TMDb collection (see [Box set artwork](#box-set-artwork)).
 - **delete** a box set: its titles stay in your library
 - **leave** it alone
 
