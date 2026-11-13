@@ -4,6 +4,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
 import { action, run, libraryItem, library, managedCollection, membership, definitionMode, definitionArr, type ActionType } from '../db/schema.js';
 import { indexLibrary } from '../library/indexer.js';
+import { needsSeeding, rememberFirstAdded } from '../library/first-added.js';
 import { loadDefinitions } from '../domain/definitions.js';
 import { LibraryIndex, type LibRow } from '../domain/matching.js';
 import { resolveSource, type ResolvedSource, type SourceContext } from '../sources/index.js';
@@ -66,6 +67,11 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
       step('Indexing the Jellyfin library');
       const s = await indexLibrary(app.db, jf, step);
       Object.assign(stats, { indexedMovies: s.movies, indexedSeries: s.series, indexedEpisodes: s.episodes });
+      // When each title first arrived, so a replaced file doesn't count as newly added (ADR-038).
+      let radarrAdded: Map<string, number> | undefined;
+      const radarr = app.radarr();
+      if (radarr && needsSeeding(app.db)) radarrAdded = await radarr.addedDates().catch((e: Error) => { log.warn(`Radarr's added dates unavailable: ${e.message}`); return undefined; });
+      rememberFirstAdded(app.db, now, radarrAdded);
     }
 
     // Film series (ADR-035): one collection per TMDb film series you own enough of; new series appear as films arrive.

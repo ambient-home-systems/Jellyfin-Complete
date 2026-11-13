@@ -384,8 +384,18 @@ export const ADAPTERS: Record<string, Adapter> = {
       if (!Number.isInteger(days) || days < 1 || days > 3650) throw new SourceError('Days must be a whole number from 1 to 3650', 'BAD_INPUT');
       const kind = c.kind === 'series' || c.kind === 'episode' ? c.kind : 'movie';
       const today = Math.floor((ctx.now?.() ?? Date.now()) / 86_400_000);
+      // Added: when the title first arrived, not when its file was last replaced (ADR-038). A show was added when its
+      // newest episode was, as in Plex and Kometa, so it comes back when new episodes arrive.
+      const newestEpisode = new Map<string, number>();
+      if (c.field === 'added' && kind === 'series') {
+        for (const e of ctx.db.select({ series: libraryItem.seriesJfId, first: libraryItem.firstAdded, added: libraryItem.dateAdded }).from(libraryItem).where(eq(libraryItem.kind, 'episode')).all()) {
+          const at = e.first ?? e.added;
+          if (e.series && at !== null && at > (newestEpisode.get(e.series) ?? -Infinity)) newestEpisode.set(e.series, at);
+        }
+      }
+      const addedAt = (r: typeof libraryItem.$inferSelect) => (kind === 'series' ? newestEpisode.get(r.jfId) ?? r.dateAdded : r.firstAdded ?? r.dateAdded);
       const rows = ctx.db.select().from(libraryItem).where(eq(libraryItem.kind, kind)).all()
-        .map((r) => ({ r, at: c.field === 'added' ? r.dateAdded : r.premiereDate }))
+        .map((r) => ({ r, at: c.field === 'added' ? addedAt(r) : r.premiereDate }))
         .filter((x): x is { r: typeof x.r; at: number } => x.at !== null && Math.floor(x.at / 86_400_000) > today - days && Math.floor(x.at / 86_400_000) <= today)
         .sort((a, b) => b.at - a.at);
       const as = kind === 'series' ? ('show' as const) : kind;

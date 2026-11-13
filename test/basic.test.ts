@@ -14,6 +14,7 @@ import { action, definition, definitionMode, libraryItem, sourceResult } from '.
 import { PRESETS } from '../src/presets/index.js';
 import { parseSourceInput } from '../src/domain/source-input.js';
 import { FakeJellyfin, FAKE_URL } from './fakes/jellyfin.js';
+import { FakeArr } from './fakes/arr.js';
 import type { FetchLike } from '../src/clients/http.js';
 import { setup, signIn } from './helpers/web.js';
 
@@ -44,9 +45,11 @@ describe('basic presets vs Kometa v2.5.3 defaults/chart/basic.yml', () => {
   });
 });
 
-function world() {
+const RADARR = 'http://radarr.test:7878';
+
+function world(opts: { radarrAdded?: Record<number, number> } = {}) {
   const fake = new FakeJellyfin();
-  const film = (Id: string, Name: string, released: number | null, added: number) => fake.add({ Id, Name, Type: 'Movie', ParentId: 'lib-movies', ProductionYear: 2026, ...(released === null ? {} : { PremiereDate: daysAgo(released) }), DateCreated: daysAgo(added) });
+  const film = (Id: string, Name: string, released: number | null, added: number, tmdb?: number) => fake.add({ Id, Name, Type: 'Movie', ParentId: 'lib-movies', ProductionYear: 2026, ...(released === null ? {} : { PremiereDate: daysAgo(released) }), DateCreated: daysAgo(added), ...(tmdb ? { ProviderIds: { Tmdb: String(tmdb) } } : {}) });
   film('m-new', 'Fresh Film', 10, 5); // released 10 days ago, added 5 days ago
   film('m-edge', 'Edge Film', 89, 29); // just inside 90 and 30 days
   film('m-old', 'Old Film', 400, 100);
@@ -58,18 +61,29 @@ function world() {
   ep('e-today', 3, 0);
   ep('e-week', 2, 6); // the 7th day back, today counted
   ep('e-older', 1, 7);
-  const net: FetchLike = async (url) => (url.includes('Default-Images') ? new Response(new Uint8Array([0xff, 0xd8, 1]), { headers: { 'content-type': 'image/jpeg' } }) : new Response('[]'));
+  const radarr = new FakeArr('radarr', RADARR, 'rk', []);
+  radarr.library = Object.entries(opts.radarrAdded ?? {}).map(([tmdb, ago], i) => ({ id: i + 1, title: `Film ${tmdb}`, year: 2026, tmdbId: Number(tmdb), status: 'released', monitored: true, hasFile: true, added: daysAgo(ago) }));
+  const radarrFetch = radarr.fetch();
+  const net: FetchLike = async (url, init) => {
+    if (url.startsWith(RADARR)) return radarrFetch(url, init);
+    return url.includes('Default-Images') ? new Response(new Uint8Array([0xff, 0xd8, 1]), { headers: { 'content-type': 'image/jpeg' } }) : new Response('[]');
+  };
   const config = { ...readConfig({}), configDir: mkdtempSync(join(tmpdir(), 'mc-')), timezone: 'America/New_York', seeds: {} };
   const app = createContext(config, { db: openDb(':memory:'), fetch: net, jellyfinFetch: fake.fetch() });
   app.updateSettings({ connections: { jellyfinUrl: FAKE_URL, plexUrl: '', radarrUrl: '', sonarrUrl: '' }, firstRunDone: true });
   app.secrets.set('jellyfin.apiKey', fake.apiKey);
+  if (opts.radarrAdded) {
+    app.updateSettings({ connections: { jellyfinUrl: FAKE_URL, plexUrl: '', radarrUrl: RADARR, sonarrUrl: '' } });
+    app.secrets.set('radarr.apiKey', 'rk');
+  }
   app.db.update(definition).set({ enabled: false }).run();
   for (const p of PRESETS.filter((x) => x.family === 'basic')) app.db.update(definition).set({ enabled: true }).where(eq(definition.slug, p.definition.slug)).run();
   const def = (name: string) => app.db.select().from(definition).where(eq(definition.name, name)).get()!;
   const proposed = (name: string) => app.db.select().from(action).where(eq(action.definitionId, def(name).id)).all()
     .filter((a) => a.type === 'collection.add_items' && a.status === 'proposed').map((a) => a.item!.name).sort();
   const box = (name: string) => fake.boxSets().find((b) => b.Name === name);
-  return { fake, app, def, proposed, box };
+  const sourceTitles = (label: string, kind: string) => app.db.select().from(sourceResult).all().find((r) => r.label === label && r.items?.some((i) => i.kind === kind))?.items?.map((i) => i.title) ?? [];
+  return { fake, app, def, proposed, box, sourceTitles };
 }
 
 describe('New and recent collections', () => {
@@ -92,7 +106,8 @@ describe('New and recent collections', () => {
     const added = app.db.select().from(sourceResult).all().find((r) => r.label === 'Added in the last 30 days' && r.items?.some((i) => i.kind === 'movie'))!;
     expect(added.items!.map((i) => i.title)).toEqual(['Future Film', 'Fresh Film', 'Edge Film']);
     expect(proposed('Recently Added Movies')).toEqual(['Edge Film', 'Fresh Film', 'Future Film']);
-    expect(proposed('Recently Added Shows')).toEqual(['New Show']);
+    // A show was added when its newest episode was (Old Show's arrived today), as in Plex and Kometa.
+    expect(proposed('Recently Added Shows')).toEqual(['New Show', 'Old Show']);
   });
 
   it('keeps up day by day: titles that age out are taken out without waiting for review', async () => {
@@ -114,6 +129,48 @@ describe('New and recent collections', () => {
     const { app, def } = world();
     const id = def('Newly Released Movies').id;
     expect(app.db.select().from(definitionMode).where(eq(definitionMode.definitionId, id)).all().map((m) => [m.actionType, m.mode])).toEqual([['collection.remove_items', 'auto']]);
+  });
+});
+
+describe('Recently Added counts when a title first arrived (ADR-038)', () => {
+  it('a replaced file, even one Jellyfin indexes as a new item, keeps its first date', async () => {
+    const { app, fake, sourceTitles } = world();
+    fake.add({ Id: 'm-up', Name: 'Upgraded Film', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(40), ProviderIds: { Tmdb: '777' } });
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW });
+    expect(sourceTitles('Added in the last 30 days', 'movie')).not.toContain('Upgraded Film');
+    // Radarr upgrades it: the new file is a new Jellyfin item, created today.
+    fake.items.delete('m-up');
+    fake.add({ Id: 'm-up2', Name: 'Upgraded Film', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(-1), ProviderIds: { Tmdb: '777' } });
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + DAY });
+    expect(sourceTitles('Added in the last 30 days', 'movie')).not.toContain('Upgraded Film');
+    // Episodes too: a replaced episode file doesn't bring its show back.
+    fake.items.get('e-older')!.DateCreated = daysAgo(-1);
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + 2 * DAY });
+    expect(app.db.select().from(libraryItem).where(eq(libraryItem.jfId, 'e-older')).get()!.firstAdded).toBe(Date.parse(daysAgo(7)));
+  });
+
+  it('the first time, uses Radarr’s added date for films already there; after that, new arrivals count from when they arrive', async () => {
+    const { app, fake, sourceTitles } = world({ radarrAdded: { 555: 200, 556: 100 } });
+    fake.add({ Id: 'm-old-up', Name: 'Upgraded Before', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(2), ProviderIds: { Tmdb: '555' } });
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW });
+    expect(sourceTitles('Added in the last 30 days', 'movie')).not.toContain('Upgraded Before'); // in Radarr for 200 days
+    expect(sourceTitles('Added in the last 30 days', 'movie')).toContain('Fresh Film'); // not in Radarr: Jellyfin's date
+    // Wanted in Radarr for 100 days, downloaded today: it's new to the library.
+    fake.add({ Id: 'm-wanted', Name: 'Long Wanted', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(-1), ProviderIds: { Tmdb: '556' } });
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + DAY });
+    expect(sourceTitles('Added in the last 30 days', 'movie')).toContain('Long Wanted');
+  });
+
+  it('a title gone for over a week that comes back counts as newly added', async () => {
+    const { app, fake, sourceTitles } = world();
+    fake.add({ Id: 'm-back', Name: 'Came Back', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(300), ProviderIds: { Tmdb: '888' } });
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW });
+    const item = fake.items.get('m-back')!;
+    fake.items.delete('m-back');
+    for (const d of [1, 4, 9]) await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + d * DAY });
+    fake.add({ ...item, Id: 'm-back2', DateCreated: new Date(NOW + 9 * DAY).toISOString() });
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + 10 * DAY });
+    expect(sourceTitles('Added in the last 30 days', 'movie')).toContain('Came Back');
   });
 });
 

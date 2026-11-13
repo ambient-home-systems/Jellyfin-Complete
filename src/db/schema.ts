@@ -55,10 +55,22 @@ export const libraryItem = sqliteTable(
     dateAdded: integer('date_added'),
     /** Release date (films), first air date (series) or air date (episodes), from Jellyfin's PremiereDate; ADR-037. */
     premiereDate: integer('premiere_date'),
+    /** When this title first arrived, remembered across replaced files (title_added); falls back to dateAdded. ADR-038. */
+    firstAdded: integer('first_added'),
     seenAt: integer('seen_at').notNull(),
   },
   (t) => [index('library_item_imdb').on(t.imdb), index('library_item_tmdb').on(t.tmdb), index('library_item_tvdb').on(t.tvdb), index('library_item_kind').on(t.kind), index('library_item_tmdb_collection').on(t.tmdbCollection)],
 );
+
+/**
+ * When each film or episode first arrived in the library, by a stable key (TMDb, IMDb or TVDB ID; season and episode
+ * numbers for episodes), so an upgraded file, which Jellyfin may index as a new item, keeps its first date (ADR-038).
+ */
+export const titleAdded = sqliteTable('title_added', {
+  key: text('key').primaryKey(),
+  firstAdded: integer('first_added').notNull(),
+  lastSeen: integer('last_seen').notNull(),
+});
 
 export const tmdbCache = sqliteTable('tmdb_cache', {
   key: text('key').primaryKey(),

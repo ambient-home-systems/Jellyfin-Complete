@@ -70,10 +70,11 @@ Five collections that follow your library's own dates:
 | Newly Released Movies | Films released in the last 90 days |
 | Newly Released Shows | Shows that first aired in the last 90 days |
 | New Episodes | Episodes that aired in the last 7 days |
-| Recently Added Movies | Films added to Jellyfin in the last 30 days |
-| Recently Added Shows | Shows added to Jellyfin in the last 30 days |
+| Recently Added Movies | Films that arrived in the last 30 days |
+| Recently Added Shows | Shows with an episode that arrived in the last 30 days |
 
 - Days are whole days, today included. A release date still to come doesn't count.
+- **Added means first arrived.** A replaced file, such as a Radarr or Sonarr upgrade, keeps its first date, so upgrades don't show as new. The first time this runs, a film already in your library uses Radarr's added date if that's earlier. A title that was gone for over a week and comes back counts as new.
 - They change every night: titles that have aged out are taken out without waiting for review (unless dry run is on). You can change that, or the number of days, per collection.
 - A collection with nothing in it is deleted, and made again when something qualifies.
 - After updating to 0.10.0, they start after the next nightly refresh (or a manual run), when the app has read each title's release date.

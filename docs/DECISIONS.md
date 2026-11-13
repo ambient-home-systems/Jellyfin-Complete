@@ -580,6 +580,18 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - Jellyfin box sets can only list oldest first, so the newest-first order shows only in the app.
   - Until the first full index after updating, release dates are unknown, so these collections start after the next nightly refresh or a manual run.
 
+### ADR-038 When a title was added: Decided (13 Nov)
+- **Context.** Two problems in 0.10.0's Recently Added, from using Jellyfin's `DateCreated`:
+  - Shows went by when the series entry was created, so a show with new episodes didn't come back. Plex and Kometa go by the newest episode.
+  - Films whose file was replaced (a Radarr upgrade) showed as newly added: Jellyfin often indexes the new file as a new item, with a new date.
+  - You suggested Radarr's "added" date, which doesn't move on upgrade. But it's when a film was added *to Radarr*: a film added there before release can download months later, and wouldn't show as new when it arrives.
+- **Decision.**
+  - **The app remembers when each film and episode first arrived** (`title_added`, migration 0006), keyed by a stable ID: TMDb, else IMDb, for films; the series' TMDb, TVDB or IMDb ID with season and episode numbers for episodes. After each index it keeps the earliest Jellyfin date seen, and writes it to the library index (`first_added`).
+  - **Radarr seeds it once.** The first time films are remembered, a film's Radarr "added" date is used when it's earlier, since the library may already hold upgrades. After that only Jellyfin's dates count, so a long-wanted film shows as new when it downloads.
+  - **A title missing from every index for over a week that comes back** counts as newly added (deleted, then downloaded again). Missing only while the app wasn't running doesn't count.
+  - **Recently Added Shows** goes by the newest episode's first-arrival date. A show with no episodes uses its own date.
+- **Consequences.** Upgrades no longer count as new, for films or episodes. When this first runs, a film added to Radarr before it downloaded in the last 30 days may be missed until it ages out.
+
 ---
 
 ## Open questions

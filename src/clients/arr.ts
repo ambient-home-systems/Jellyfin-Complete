@@ -73,6 +73,18 @@ export class ArrClient {
     return { ids, monitoredNoFile };
   }
 
+  /** Radarr only: when each film was added to Radarr, by "tmdb:<id>" and "imdb:<id>" (ADR-038). */
+  async addedDates(): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    for (const r of await this.get<{ tmdbId?: number; imdbId?: string; added?: string }[]>('/movie')) {
+      const at = r.added ? Date.parse(r.added) : NaN;
+      if (!Number.isFinite(at) || at <= 0) continue; // Radarr reports 0001-01-01 for unknown
+      if (r.tmdbId) out.set(`tmdb:${r.tmdbId}`, at);
+      if (r.imdbId) out.set(`imdb:${r.imdbId}`, at);
+    }
+    return out;
+  }
+
   /** Excluded titles: Radarr /exclusions/paged (TMDb IDs), Sonarr /importlistexclusion/paged (TVDB IDs). */
   async exclusions(): Promise<Set<string>> {
     const out = new Set<string>();
