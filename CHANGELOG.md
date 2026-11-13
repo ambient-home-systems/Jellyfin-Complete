@@ -1,8 +1,26 @@
 # Changelog
 
-Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. Nothing has been published yet.
+Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
-## 0.4.0 — unreleased
+## 0.5.0 — 13 Nov 2026
+
+The first published release, so it also includes 0.1.0 to 0.4.0, which were never published (see the [changelog](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/CHANGELOG.md)). Install or update with the image `ghcr.io/ambient-home-systems/jellyfin-complete:latest` (amd64 and arm64); the [README](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/README.md) has Docker Compose and Portainer steps.
+
+- **Claude access (MCP).** Claude Code or Claude Desktop on a computer on your network can use the app for you through an MCP endpoint at `/mcp`.
+  - Create a token in Settings → Claude access: **Read only**, or **Read, review and run**.
+  - Read only covers status, collections, Review, Missing and Activity. Read, review and run can also approve, snooze or dismiss proposals and start a run.
+  - Approving through Claude works exactly like Review's Approve button: it applies straight away, even in dry run.
+  - See [Let Claude use it](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/docs/USER-GUIDE.md#let-claude-use-it).
+- **Ready-made images.** Nobody has to build the image.
+  - Each release publishes `:latest` and its version (`:0.5.0`, `:0.5`).
+  - Every change to `main` publishes `:main`.
+  - The README covers Portainer, including moving a `docker compose` install into it.
+- **Fixed:**
+  - On phones, the navigation rail filled the whole screen and covered the page. It's now a tab bar along the bottom. On tablets, the rail shows the logo again.
+  - Getting started showed a bare count beside each kind of collection ("Show franchises 27"), which read like titles found on your server. It now says how many collections each kind can make, and that a franchise or universe collection needs at least 2 of its titles.
+  - The interface no longer names Kometa where it isn't about Kometa, and the Plex token's hint says what it's for.
+
+## 0.4.0 — 4 Nov 2026 (not published)
 
 Getting ready for other people's servers (Phase 4).
 
@@ -18,13 +36,9 @@ Getting ready for other people's servers (Phase 4).
   - CI runs on every push.
   - Tagged releases publish a multi-arch (amd64, arm64) image to GitHub Container Registry.
   - The image's default timezone is UTC. `TZ` now only seeds the timezone setting on first start.
-- **A ready-made image of the newest code.** Every change to `main` publishes `ghcr.io/ambient-home-systems/jellyfin-complete:main` (amd64 and arm64), so nobody has to build the image. The compose file and the README's Portainer steps use it, and the README covers moving a `docker compose` install into Portainer.
-- **Claude access (MCP).** Claude Code or Claude Desktop on your network can use the app through an MCP endpoint at `/mcp`. Create a token in Settings → Claude access: **Read only**, or **Read, review and run**, which can also approve, snooze or dismiss proposals and start a run. Approving through Claude works exactly like Review's Approve button. See [docs/USER-GUIDE.md](docs/USER-GUIDE.md#let-claude-use-it).
 - **Fixed:**
-  - On phones, the navigation rail filled the whole screen and covered the page. It's now a tab bar along the bottom. On tablets, the rail shows the logo again.
   - Saving Settings → Libraries with every library ticked failed with an error.
   - `OfficialRating` and `ProductionYear` were requested as `Fields` values, which no Jellyfin version accepts.
-  - Getting started showed a bare count beside each kind of collection ("Show franchises 27"), which read like titles found on your server. It now says what the number means: how many collections it can make, and that a franchise or universe collection needs at least 2 of its titles. The interface also no longer names Kometa where it isn't about Kometa.
 
 ## 0.3.0 — 3 Nov 2026 (not published)
 

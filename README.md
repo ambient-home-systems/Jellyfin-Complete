@@ -19,7 +19,7 @@ Kometa-style collections for Jellyfin: seasonal box sets that appear and disappe
   - show a home-screen row per live collection
   - let Claude Code or Claude Desktop use it for you, over MCP
 
-**Status: 0.4.0, not yet released.** It runs nightly on one Jellyfin 12.4 server. Jellyfin 10.10 and later should work: see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+**Status: 0.5.0, the first release.** It's young: it runs nightly on one Jellyfin 12.4 server. Jellyfin 10.10 and later should work: see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 ## Quick start
 
@@ -29,7 +29,7 @@ You need Docker and a Jellyfin 10.10+ server the container can reach.
 # docker-compose.yml
 services:
   maverick-jellyfin-complete:
-    image: ghcr.io/ambient-home-systems/jellyfin-complete:main
+    image: ghcr.io/ambient-home-systems/jellyfin-complete:latest
     container_name: maverick-jellyfin-complete
     restart: unless-stopped
     ports:
@@ -83,7 +83,7 @@ Then open `http://<host>:8097`:
 
 | | |
 |---|---|
-| Image | `ghcr.io/ambient-home-systems/jellyfin-complete`, for amd64 and arm64. `main` is the newest code. Releases add `latest` and version tags such as `0.4.0`. |
+| Image | `ghcr.io/ambient-home-systems/jellyfin-complete`, for amd64 and arm64. `latest` is the newest release. A version such as `0.5.0` stays on that release. `main` is the newest code between releases. The version is shown in the app's side menu. |
 | Port | 8097 |
 | `/config` | Database, encryption key (`secret.key`) and logs. Back up the whole folder, and keep `secret.key` with the database: without it, saved API keys can't be read. |
 | `TZ` | Seeds the timezone setting on first start. After that, change it in Settings. |

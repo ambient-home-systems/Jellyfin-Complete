@@ -3,8 +3,8 @@
 # Docker Compose:  docker compose up -d   (in the folder holding this file)
 # Portainer:       Stacks → Add stack → Web editor: paste this file, then Deploy the stack.
 #
-# The image is built and published by this repository. ":main" is the newest code; releases add ":latest" and
-# version tags such as ":0.4.0". To run your own build instead, run
+# The image is built and published by this repository. ":latest" is the newest release; a version such as ":0.5.0"
+# stays on that release; ":main" is the newest code between releases. To run your own build instead, run
 #   docker build -t maverick-jellyfin-complete:local .
 # in a copy of this repository and change the image line to maverick-jellyfin-complete:local.
 #
@@ -13,7 +13,7 @@
 
 services:
   maverick-jellyfin-complete:
-    image: ghcr.io/ambient-home-systems/jellyfin-complete:main
+    image: ghcr.io/ambient-home-systems/jellyfin-complete:latest
     container_name: maverick-jellyfin-complete
     restart: unless-stopped
     ports:
