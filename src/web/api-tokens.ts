@@ -11,7 +11,7 @@ export type ApiToken = typeof apiToken.$inferSelect;
 export const SCOPE_LABEL: Record<TokenScope, string> = {
   read: 'Read only',
   review: 'Read, review and run',
-  full: 'Full control',
+  full: 'Full control (except connections and keys)',
 };
 
 const PREFIX = 'mjc_';

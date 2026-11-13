@@ -5,10 +5,10 @@ import type { Context } from 'hono';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
 import { APP_VERSION } from '../config.js';
-import { action, jobSchedule, libraryItem, managedCollection, run } from '../db/schema.js';
+import { action, definitionArr, jobSchedule, libraryItem, managedCollection, membership, run } from '../db/schema.js';
 import type { WindowDef } from '../db/schema.js';
 import { loadDefinition, loadDefinitions, type LoadedDefinition } from '../domain/definitions.js';
 import { LibraryIndex, type LibRow } from '../domain/matching.js';
@@ -23,6 +23,16 @@ import { reviewVerdict, type SnoozeFor } from './review-actions.js';
 import { verifyToken, type ApiToken } from './api-tokens.js';
 import { AttemptLimiter, clientIp } from './security.js';
 import { applySettings, setCollectionEnabled, setSchedule, SettingsError, MODE_KEYS } from './settings-actions.js';
+import { createCollection, updateCollection, addSource, removeSource, setSourceRole, setPin, deleteCollection, sendMissing, monitorInRadarr, saveArrDefaults } from './collection-actions.js';
+import { explainCollection } from './explain.js';
+import { adoptionCandidates, adopt, deleteUnmanaged } from '../pipeline/adoption.js';
+import { undoAction } from '../pipeline/undo.js';
+import { arrOptions } from '../pipeline/arr.js';
+import { syncHomeRows } from '../homescreen/index.js';
+import { getPlanSummary } from '../pipeline/summary.js';
+import { parity } from '../domain/parity.js';
+import { resolveSource, sourceKey, sourceLabel } from '../sources/index.js';
+import { SOURCE_INPUTS } from '../domain/source-input.js';
 import { CONNECTIONS } from './pages/settings.js';
 import { JOBS, type JobName } from '../jobs/schedules.js';
 import { nextRuns } from '../jobs/scheduler.js';
@@ -32,7 +42,7 @@ const INSTRUCTIONS = `Maverick Jellyfin Complete builds collections (box sets) i
 Each run plans changes. Changes set to Review, and every change while dry run is on, wait in Review until someone approves, snoozes or dismisses them.
 Approving applies the change to Jellyfin straight away (or when the collection's dates open), even while dry run is on: dry run only stops changes from applying without approval.
 Before approving, show the user exactly what will change (collection, action, titles) and get their go-ahead, especially for deletions and removals. Never approve on your own initiative.
-With a full-control token you can also change settings, job schedules and which collections are on. Ask the user before turning dry run off, setting a mode to auto, or turning a collection off: each of those can change Jellyfin without a further approval.
+With a full-control token you can do everything the app's pages can, except connections, keys and access tokens: change settings and schedules; create, edit, delete and turn collections on or off, with their dates, filters and sources; adopt or delete existing box sets; undo changes; send missing titles to Radarr/Sonarr. Ask the user before turning dry run off, setting a mode to auto, turning a collection off, deleting anything, or undoing a change: those change Jellyfin without a further approval.
 Times are local to the app's timezone, given by get_status.`;
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
@@ -92,26 +102,64 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('get_collection', {
     title: 'Collection details',
-    description: 'One collection: settings, sources and their health, the titles it would contain now (from the last run\'s cached lists), what is in its box set, and its proposals in Review.',
+    description: 'One collection: its settings (dates, minimum, filters, modes, what happens when it closes), its sources with their ids, roles and health, the titles it would contain now (from the last run\'s cached lists, with title ids), its box set, and its proposals in Review. Use explain_collection to see why titles are left out.',
     inputSchema: { id: z.number().int().positive().describe('Collection id, from list_collections.'), maxTitles: z.number().int().min(1).max(1000).optional().describe('Most titles to list (default 200).') },
     annotations: read,
   }, async ({ id, maxTitles }) => {
     const def = loadDefinition(app.db, id);
     if (!def) return fail(`No collection with id ${id}.`);
     const row = collectionsModel(app).find((r) => r.def.id === id);
+    const sum = getPlanSummary(app.db)?.defs[String(id)];
     const plan = cachedPlan(app, def);
     const limit = maxTitles ?? 200;
-    const planned = plan ? [...plan.members.keys()].map((jfId) => { const r = plan.index.get(jfId)!; return { name: plan.index.displayName(r), year: r.kind === 'episode' ? null : r.year }; }).sort((a, b) => a.name.localeCompare(b.name)) : null;
+    const planned = plan ? [...plan.members.entries()].map(([jfId, prov]) => { const r = plan.index.get(jfId)!; return { id: jfId, name: plan.index.displayName(r), year: r.kind === 'episode' ? null : r.year, pinned: Boolean(prov.pinned) }; }).sort((a, b) => a.name.localeCompare(b.name)) : null;
     const box = app.db.select().from(managedCollection).where(eq(managedCollection.definitionId, id)).get();
+    const boxCount = app.db.select({ n: sql<number>`count(*)` }).from(membership).where(eq(membership.definitionId, id)).get()?.n ?? 0;
     const proposals = app.db.select().from(action).where(and(eq(action.definitionId, id), inArray(action.status, ['proposed', 'approved']))).all();
+    const lastRun = new Map((sum?.sources ?? []).map((x) => [x.key, x]));
+    const arr = app.db.select().from(definitionArr).where(eq(definitionArr.definitionId, id)).get();
     return ok({
-      id: def.id, name: def.name, kind: kindOf(def), on: def.enabled, status: row?.status.label ?? null, contains: def.target,
-      dates: windowText(def.window as WindowDef | null), next: row?.next ? `${row.next.kind} ${day(row.next.at)}` : null,
-      minimumTitles: def.minItems, whenClosed: def.visibility === 'tag_gate' ? 'box set hidden' : 'box set deleted',
-      sources: (row?.sources ?? []).map((s) => ({ source: s.label, status: s.status, error: s.error, listed: s.listed, inYourLibrary: s.matched })),
-      boxSet: box ? { state: box.state } : null,
+      id: def.id, name: def.name, kind: kindOf(def), preset: Boolean(def.presetKey), on: def.enabled, status: row?.status.label ?? null, contains: def.target,
+      dates: windowText(def.window as WindowDef | null), datesEditable: !def.window || def.window.type === 'range', next: row?.next ? `${row.next.kind} ${day(row.next.at)}` : null,
+      minimumTitles: def.minItems, filters: def.filters ?? {}, syncMode: def.syncMode, sortTitle: def.sortTitle, overview: def.overview,
+      whenClosed: def.visibility === 'tag_gate' ? 'hide' : 'delete', homeRow: def.homeRow, sendMissingToRadarrSonarr: arr?.addMissing ?? false,
+      actionModes: Object.keys(def.modes).length ? def.modes : 'as in Settings',
+      sources: def.sources.map((src) => {
+        const key = sourceKey({ type: src.type, config: src.config });
+        const r = lastRun.get(key);
+        return { sourceId: src.id, source: r?.label ?? sourceLabel({ type: src.type, config: src.config }), type: src.type, config: src.config, role: src.role === 'suggest' ? 'suggests (waits in Review)' : 'adds', status: r?.status ?? 'not fetched yet', error: r?.error ?? null, listed: r?.listed ?? null, matchedLastRun: r?.matched ?? null };
+      }),
+      lastRun: sum ? { plannedTitles: sum.members, blocked: sum.blocked } : 'not planned yet',
+      boxSet: box ? { state: box.state, titlesInIt: boxCount } : null,
+      pinned: [...def.pins], excluded: [...def.excludes],
       titles: planned ? { count: planned.length, list: planned.slice(0, limit), truncated: planned.length > limit } : 'No library index yet: run once first.',
       waitingInReview: proposals.map((a) => ({ id: a.id, change: TYPE_LABEL[a.type] ?? a.type, title: a.item?.name ?? null, status: a.status })),
+    });
+  });
+
+  server.registerTool('explain_collection', {
+    title: 'Why titles are in or out',
+    description: 'For every title a collection\'s sources list: whether it\'s a member, and if not, why (not in your library, wrong kind, outside the chosen libraries, filtered out, excluded, or only suggested). Counts per source, plus the titles for one reason or matching a search.',
+    inputSchema: {
+      id: z.number().int().positive(),
+      reason: z.enum(['member', 'suggested', 'excluded', 'filtered out', 'outside the chosen libraries', 'wrong kind', 'not in your library']).optional().describe('List the titles with this verdict.'),
+      search: z.string().optional().describe('List titles whose name contains this text, whatever their verdict.'),
+      limit: z.number().int().min(1).max(500).optional().describe('Most titles to list per source (default 50).'),
+    },
+    annotations: read,
+  }, async ({ id, reason, search, limit }) => {
+    const def = loadDefinition(app.db, id);
+    if (!def) return fail(`No collection with id ${id}.`);
+    const e = explainCollection(app, def);
+    if (!e) return fail('No library index yet: run once first.');
+    const n = limit ?? 50;
+    const q = search?.trim().toLowerCase();
+    return ok({
+      collection: def.name, titlesNow: e.members, minimum: e.minimum,
+      sources: e.sources.map((x) => {
+        const pick = x.items.filter((i) => (reason ? i.verdict === reason : true) && (q ? i.title.toLowerCase().includes(q) : true));
+        return { sourceId: x.sourceId, source: x.source, role: x.role, status: x.status, error: x.error, listed: x.listed, counts: x.counts, ...(reason || q ? { titles: pick.slice(0, n), truncated: pick.length > n } : {}) };
+      }),
     });
   });
 
@@ -150,7 +198,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
     if (!def) return fail(`No collection with id ${collectionId}.`);
     const list = missingOf(def);
     const n = limit ?? 50;
-    return ok({ collection: def.name, total: list.length, titles: list.slice(0, n).map((m) => ({ title: m.title, year: m.year, imdb: m.imdb ?? null, tmdb: m.tmdb ?? null, tvdb: m.tvdb ?? null, sources: m.sources.map((s) => `${s.label} #${s.rank}`) })), truncated: list.length > n });
+    return ok({ collection: def.name, total: list.length, titles: list.slice(0, n).map((m) => ({ key: m.keys[0], sendsTo: m.app, title: m.title, year: m.year, imdb: m.imdb ?? null, tmdb: m.tmdb ?? null, tvdb: m.tvdb ?? null, sources: m.sources.map((s) => `${s.label} #${s.rank}`) })), truncated: list.length > n });
   });
 
   server.registerTool('list_activity', {
@@ -201,8 +249,59 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       schedules: app.db.select().from(jobSchedule).all().map((j) => ({ job: j.job, what: JOBS[j.job as JobName]?.detail ?? null, cron: j.cron, on: j.enabled, next: at(runs.find((r) => r.job === j.job)?.next?.getTime()) })),
       otherToolsSchedules: s.neighbours,
       connections: Object.fromEntries(CONNECTIONS.map((x) => [x.key, { address: x.urlField ? s.connections[x.urlField] || null : undefined, keySaved: x.secret ? app.secrets.masked(x.secret).set : undefined }])),
-      whatThisTokenCanChange: token.scope === 'full' ? 'Everything here except connections and keys, which stay on the Settings page.' : 'Nothing: this token can read settings only.',
+      whatThisTokenCanChange: token.scope === 'full' ? 'Everything except connections, keys and access tokens, which stay on the Settings page.' : 'Nothing: this token can read settings only.',
     });
+  });
+
+  server.registerTool('list_existing_box_sets', {
+    title: 'Existing box sets',
+    description: 'Box sets already in Jellyfin that this app doesn\'t manage but that match a collection that\'s on, by name or an older name: each with a suggestion (adopt, delete or leave) and why. Adopting keeps the box set and lets the app manage it.',
+    annotations: { ...read, openWorldHint: true },
+  }, async () => {
+    try {
+      return ok((await adoptionCandidates(app)).map((b) => ({ boxSetId: b.boxsetId, name: b.name, titles: b.childCount, fromJellyfinAutoCollections: b.jac, collectionId: b.definitionId, collection: b.definitionName, suggestion: b.suggestion, why: b.why })));
+    } catch (e) {
+      return fail(`Couldn’t read box sets from Jellyfin: ${(e as Error).message}`);
+    }
+  });
+
+  server.registerTool('compare_with_plex', {
+    title: 'Compare with Plex',
+    description: 'Compare a collection with the same-named collection in Plex (read-only): how many titles each has, how many are in both, and which are only in one, including Plex titles that aren\'t in your Jellyfin library.',
+    inputSchema: { id: z.number().int().positive() },
+    annotations: { ...read, openWorldHint: true },
+  }, async ({ id }) => {
+    const def = loadDefinition(app.db, id);
+    if (!def) return fail(`No collection with id ${id}.`);
+    const plex = app.plex();
+    if (!plex) return fail('Plex isn\'t connected (Settings → Connections).');
+    const plan = cachedPlan(app, def);
+    if (!plan) return fail('No library index yet: run once first.');
+    const s = app.settings();
+    const r = await resolveSource({ db: app.db, fetch: app.fetch, tmdb: app.tmdb(), plex, mdblistKey: null, imdbRoute: s.imdbRoute }, { type: 'plex_collection', config: { name: def.name } }, { maxAgeMs: 10 * 60_000 });
+    if (r.status === 'failed') return fail(`Couldn’t read Plex: ${r.error}`);
+    if (!(r.meta as { found?: boolean } | null)?.found) return ok(`Plex has no collection called “${def.name}” right now.`);
+    const want = def.target === 'movies' ? 'movie' : def.target === 'shows' ? 'series' : def.target === 'episodes' ? 'episode' : 'any';
+    return ok(parity(r.items, new Set(plan.members.keys()), plan.index, want));
+  });
+
+  server.registerTool('get_radarr_sonarr_options', {
+    title: 'Radarr and Sonarr options',
+    description: 'The defaults used when titles are sent to Radarr or Sonarr, and the choices each app offers now (quality profiles, root folders, tags).',
+    annotations: { ...read, openWorldHint: true },
+  }, async () => {
+    const out: Record<string, unknown> = {};
+    for (const which of ['radarr', 'sonarr'] as const) {
+      const cl = which === 'radarr' ? app.radarr() : app.sonarr();
+      if (!cl) { out[which] = 'not connected'; continue; }
+      try {
+        const [profiles, rootFolders, tags] = await Promise.all([cl.qualityProfiles(), cl.rootFolders(), cl.tags()]);
+        out[which] = { defaults: app.settings().arr[which], profiles, rootFolders, tags };
+      } catch (e) {
+        out[which] = `couldn’t read its options: ${(e as Error).message}`;
+      }
+    }
+    return ok(out);
   });
 
   if (token.scope === 'read') return server;
@@ -339,6 +438,216 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
     } catch (e) {
       if (e instanceof SettingsError) return fail(e.message);
       throw e;
+    }
+  });
+
+  const attempt = async (what: string, f: () => string | Promise<string>) => {
+    try {
+      const msg = await f();
+      log.info(`Claude access: ${what} via token “${token.name}”`);
+      return ok(msg);
+    } catch (e) {
+      if (e instanceof SettingsError) return fail(e.message);
+      if (e instanceof Error && /not connected|Only applied changes/i.test(e.message)) return fail(e.message);
+      throw e;
+    }
+  };
+  const target = z.enum(['movies', 'shows', 'episodes']);
+  const dates = z.union([z.object({ from: z.string().describe('MM/DD, e.g. 12/01'), to: z.string().describe('MM/DD, e.g. 12/31') }), z.literal('all year')]);
+  const sourceType = z.enum(SOURCE_INPUTS.map((x) => x.key) as [string, ...string[]]).describe(`Source type: ${SOURCE_INPUTS.map((x) => `${x.key} (${x.placeholder})`).join('; ')}.`);
+  const filters = z.object({
+    yearFrom: z.number().int().optional(), yearTo: z.number().int().optional(),
+    genresInclude: z.array(z.string()).optional().describe('Only titles with at least one of these genres.'),
+    genresExclude: z.array(z.string()).optional().describe('No titles with any of these genres.'),
+    maxRating: z.string().optional().describe('Highest content rating, e.g. PG-13 or TV-PG.'),
+  });
+  const modeOrDefault = z.enum(['off', 'review', 'auto', 'default']);
+  const findTitle = (q: string): string | null => {
+    const rows = app.db.select().from(libraryItem).all() as LibRow[];
+    if (rows.some((r) => r.jfId === q)) return q;
+    const hit = rows.filter((r) => r.name.toLowerCase() === q.trim().toLowerCase() && r.kind !== 'episode');
+    return hit.length === 1 ? hit[0]!.jfId : null;
+  };
+
+  server.registerTool('create_collection', {
+    title: 'Create a collection',
+    description: 'Create one of your own collections with a first source, as Collections → New collection does. It\'s on straight away; the next run fetches its source and plans it.',
+    inputSchema: { name: z.string(), contains: target, dates: dates.optional().describe('When it shows: {"from":"MM/DD","to":"MM/DD"}, or "all year" (default).'), sourceType, sourceValue: z.string().describe('The list URL, IDs or keywords, as the source type expects.') },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  }, async (a) => attempt(`collection “${a.name}” created`, () => {
+    const id = createCollection(app, { name: a.name, target: a.contains, dates: !a.dates || a.dates === 'all year' ? null : a.dates, sourceType: a.sourceType, sourceValue: a.sourceValue });
+    return `Created “${a.name}” (id ${id}). Start a run to fetch its source and plan it.`;
+  }));
+
+  server.registerTool('update_collection', {
+    title: 'Change a collection',
+    description: 'Change a collection, as its editor does: name, dates, minimum titles, filters, overview, sort title, sync or append, what happens when it closes, its home-screen row, sending missing titles to Radarr/Sonarr, and per-collection modes. Give only what should change. Sources have their own tools. The next run plans with the new settings.',
+    inputSchema: {
+      id: z.number().int().positive(), name: z.string().optional(), on: z.boolean().optional(),
+      dates: dates.optional().describe('{"from":"MM/DD","to":"MM/DD"} or "all year". Not for collections whose dates follow a rule, such as Easter.'),
+      minimumTitles: z.number().int().min(1).max(1000).optional(),
+      filters: filters.optional().describe('Replaces the collection\'s filters; {} clears them.'),
+      overview: z.string().optional(), sortTitle: z.string().optional(),
+      syncMode: z.enum(['sync', 'append']).optional().describe('sync: remove titles no source lists any more. append: only ever add.'),
+      whenClosed: z.enum(['delete', 'hide']).optional().describe('delete the box set when its dates end, or hide it and keep it for next time.'),
+      homeRow: z.boolean().optional(), sendMissingToRadarrSonarr: z.boolean().optional(),
+      actionModes: z.object({
+        'collection.create': modeOrDefault.optional(), 'collection.add_items': modeOrDefault.optional(), 'collection.remove_items': modeOrDefault.optional(),
+        'collection.update_metadata': modeOrDefault.optional(), 'radarr.add_movie': modeOrDefault.optional(), 'sonarr.add_series': modeOrDefault.optional(), 'radarr.monitor_collection': modeOrDefault.optional(),
+      }).optional().describe('This collection\'s own modes; "default" follows Settings.'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  }, async (a) => attempt(`collection ${a.id} changed`, () => {
+    updateCollection(app, a.id, {
+      name: a.name, enabled: a.on, dates: a.dates === undefined ? undefined : a.dates === 'all year' ? null : a.dates, minItems: a.minimumTitles,
+      filters: a.filters, overview: a.overview, sortTitle: a.sortTitle, syncMode: a.syncMode,
+      visibility: a.whenClosed === undefined ? undefined : a.whenClosed === 'hide' ? 'tag_gate' : 'delete',
+      homeRow: a.homeRow, addMissing: a.sendMissingToRadarrSonarr, modes: a.actionModes,
+    });
+    return 'Saved. The next run plans with these settings.';
+  }));
+
+  server.registerTool('add_collection_source', {
+    title: 'Add a source',
+    description: 'Add a source to a collection. With suggestOnly, its titles wait in Review as suggestions instead of joining directly.',
+    inputSchema: { id: z.number().int().positive(), sourceType, sourceValue: z.string(), suggestOnly: z.boolean().optional() },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  }, async (a) => attempt(`source added to collection ${a.id}`, () => addSource(app, a.id, { type: a.sourceType, value: a.sourceValue, suggestOnly: a.suggestOnly })));
+
+  server.registerTool('remove_collection_source', {
+    title: 'Remove a source',
+    description: 'Remove a source from a collection (source ids are in get_collection). Titles only it supplied are proposed for removal on the next run.',
+    inputSchema: { id: z.number().int().positive(), sourceId: z.number().int().positive() },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  }, async (a) => attempt(`source ${a.sourceId} removed from collection ${a.id}`, () => removeSource(app, a.id, a.sourceId)));
+
+  server.registerTool('set_source_role', {
+    title: 'Source adds or suggests',
+    description: 'Make a source add its titles directly, or only suggest them (they wait in Review).',
+    inputSchema: { id: z.number().int().positive(), sourceId: z.number().int().positive(), role: z.enum(['add', 'suggest']) },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  }, async (a) => attempt(`source ${a.sourceId} set to ${a.role}`, () => setSourceRole(app, a.id, a.sourceId, a.role)));
+
+  server.registerTool('pin_or_exclude_title', {
+    title: 'Always include or never include a title',
+    description: 'Pin a title (always in this collection), exclude it (never in it), or clear either. Give the title id from get_collection or explain_collection, or its exact name.',
+    inputSchema: { id: z.number().int().positive(), title: z.string().describe('Title id, or exact name.'), rule: z.enum(['pin', 'exclude', 'clear']) },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  }, async (a) => attempt(`title ${a.rule} on collection ${a.id}`, () => {
+    const jfId = findTitle(a.title);
+    if (!jfId) throw new SettingsError(`No single title in your library matches “${a.title}”. Use its id from get_collection or explain_collection.`);
+    return setPin(app, a.id, jfId, a.rule);
+  }));
+
+  server.registerTool('delete_collection', {
+    title: 'Delete a collection',
+    description: 'Delete one of your own collections (presets can only be turned off). Its box set must be gone first: turn it off and run once.',
+    inputSchema: { id: z.number().int().positive() },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  }, async (a) => attempt(`collection ${a.id} deleted`, () => deleteCollection(app, a.id)));
+
+  server.registerTool('adopt_box_set', {
+    title: 'Adopt an existing box set',
+    description: 'Take over a box set already in Jellyfin (from list_existing_box_sets) for a collection: the app manages it from now on, keeping its id and poster. Its titles then sync through Review.',
+    inputSchema: { boxSetId: z.string(), collectionId: z.number().int().positive() },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, async (a) => attempt(`box set ${a.boxSetId} adopted for collection ${a.collectionId}`, async () => {
+    await adopt(app, a.collectionId, a.boxSetId, by);
+    return 'Adopted. The next run syncs its titles through Review.';
+  }));
+
+  server.registerTool('delete_box_set', {
+    title: 'Delete an existing box set',
+    description: 'Delete a box set the app doesn\'t manage (from list_existing_box_sets), such as a leftover from another tool. The films and shows stay in your library. Confirm with the user first.',
+    inputSchema: { boxSetId: z.string() },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+  }, async (a) => attempt(`box set ${a.boxSetId} deleted`, async () => {
+    if (!(await adoptionCandidates(app)).some((b) => b.boxsetId === a.boxSetId)) throw new SettingsError('Only box sets listed by list_existing_box_sets can be deleted here.');
+    await deleteUnmanaged(app, a.boxSetId, by);
+    return 'Box set deleted. Its films and shows are still in your library.';
+  }));
+
+  server.registerTool('undo_change', {
+    title: 'Undo a change',
+    description: 'Undo a change that was applied to Jellyfin (ids from list_activity), as Activity\'s Undo does. Each change can be undone once.',
+    inputSchema: { activityId: z.number().int().positive() },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  }, async (a) => attempt(`change ${a.activityId} undone`, () => undoAction(app, a.activityId, by)));
+
+  server.registerTool('send_missing_titles', {
+    title: 'Send missing titles to Radarr or Sonarr',
+    description: 'Send titles a collection is missing (keys from list_missing) to Radarr (films) or Sonarr (shows), with the defaults from get_radarr_sonarr_options and this collection\'s own options. Up to the per-run cap. With sendNow false they wait in Review instead.',
+    inputSchema: { collectionId: z.number().int().positive(), keys: z.array(z.string()).min(1).max(200), sendNow: z.boolean().optional().describe('Default true.') },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, async (a) => {
+    try {
+      const def = loadDefinition(app.db, a.collectionId);
+      if (!def) return fail(`No collection with id ${a.collectionId}.`);
+      const tab = def.target === 'movies' ? 'movies' : 'shows';
+      const r = await sendMissing(app, { defId: def.id, tab, keys: a.keys, sendNow: a.sendNow ?? true, options: arrOptions(app, tab === 'movies' ? 'radarr' : 'sonarr', def.id), by });
+      log.info(`Claude access: ${a.keys.length} missing title(s) of ${def.name} sent via token “${token.name}”`);
+      return r.ok ? ok(r.message) : fail(r.message);
+    } catch (e) {
+      if (e instanceof SettingsError) return fail(e.message);
+      throw e;
+    }
+  });
+
+  server.registerTool('monitor_in_radarr', {
+    title: 'Monitor a TMDb collection in Radarr',
+    description: 'Have Radarr monitor one of a collection\'s TMDb collections (its tmdb_collection source IDs), so Radarr adds that series\' missing films itself as they\'re released.',
+    inputSchema: { collectionId: z.number().int().positive(), tmdbCollectionId: z.string() },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, async (a) => {
+    const cl = app.radarr();
+    if (!cl) return fail('Radarr isn\'t connected (Settings → Connections).');
+    const found = (await cl.collections()).find((c) => String(c.tmdbId) === a.tmdbCollectionId);
+    if (!found) return fail(`Radarr has no collection with TMDb id ${a.tmdbCollectionId}. Radarr only knows a TMDb collection once it has one of its films.`);
+    try {
+      const r = await monitorInRadarr(app, { defId: a.collectionId, radarrCollectionId: found.id, title: found.title, by });
+      log.info(`Claude access: Radarr collection ${found.title} monitored via token “${token.name}”`);
+      return r.ok ? ok(r.message) : fail(r.message);
+    } catch (e) {
+      if (e instanceof SettingsError) return fail(e.message);
+      throw e;
+    }
+  });
+
+  server.registerTool('update_radarr_sonarr_defaults', {
+    title: 'Radarr/Sonarr defaults',
+    description: 'Change the defaults used when titles are sent to Radarr or Sonarr. Give only what should change; choices are in get_radarr_sonarr_options.',
+    inputSchema: {
+      app: z.enum(['radarr', 'sonarr']), qualityProfileId: z.number().int().optional(), rootFolderPath: z.string().optional(), tags: z.array(z.number().int()).optional(),
+      monitored: z.boolean().optional(), searchOnAdd: z.boolean().optional(),
+      minimumAvailability: z.enum(['announced', 'inCinemas', 'released']).optional().describe('Radarr only.'),
+      seriesType: z.enum(['standard', 'anime', 'daily']).optional().describe('Sonarr only.'), seasonFolder: z.boolean().optional().describe('Sonarr only.'), monitor: z.string().optional().describe('Sonarr only: which episodes to monitor, e.g. all, future, missing.'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, async ({ app: which, ...change }) => attempt(`${which} defaults changed`, async () => {
+    const cl = which === 'radarr' ? app.radarr() : app.sonarr();
+    if (cl && (change.qualityProfileId !== undefined || change.rootFolderPath !== undefined)) {
+      const [profiles, roots] = await Promise.all([cl.qualityProfiles(), cl.rootFolders()]);
+      if (change.qualityProfileId !== undefined && !profiles.some((p) => p.id === change.qualityProfileId)) throw new SettingsError(`No quality profile ${change.qualityProfileId}. Choices: ${profiles.map((p) => `${p.id} ${p.name}`).join(', ')}.`);
+      if (change.rootFolderPath !== undefined && !roots.some((r) => r.path === change.rootFolderPath)) throw new SettingsError(`No root folder ${change.rootFolderPath}. Choices: ${roots.map((r) => r.path).join(', ')}.`);
+    }
+    const next = { ...app.settings().arr[which], ...Object.fromEntries(Object.entries(change).filter(([, v]) => v !== undefined)) };
+    saveArrDefaults(app, which, next);
+    return `Saved ${which === 'radarr' ? 'Radarr' : 'Sonarr'} defaults: ${JSON.stringify(next)}`;
+  }));
+
+  server.registerTool('sync_home_rows', {
+    title: 'Update home-screen rows now',
+    description: 'Update the home-screen rows in Jellyfin now, as Settings → Home-screen rows → "Update rows in Jellyfin now" does. Home-screen rows must be on (update_settings homeRows.enabled).',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, async () => {
+    if (!app.settings().homeRows.enabled) return fail('Home-screen rows are off. Turn them on with update_settings first.');
+    try {
+      const r = await syncHomeRows(app, { dryRun: false });
+      if (r.problem) return fail(r.problem);
+      log.info(`Claude access: home-screen rows updated via token “${token.name}”`);
+      return ok(r.changed ? `Rows updated. Showing: ${r.showing.join(', ') || 'none right now'}.` : 'Rows were already up to date.');
+    } catch (e) {
+      return fail(`Couldn’t update the rows: ${(e as Error).message}`);
     }
   });
 

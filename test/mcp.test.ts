@@ -73,7 +73,7 @@ describe('Claude access (MCP)', () => {
     const { token } = await makeToken(t, 'Reader', 'read');
     const client = await connect(t.web, token);
     const names = (await client.listTools()).tools.map((x) => x.name).sort();
-    expect(names).toEqual(['get_collection', 'get_run', 'get_settings', 'get_status', 'list_activity', 'list_collections', 'list_missing', 'list_review']);
+    expect(names).toEqual(['compare_with_plex', 'explain_collection', 'get_collection', 'get_radarr_sonarr_options', 'get_run', 'get_settings', 'get_status', 'list_activity', 'list_collections', 'list_existing_box_sets', 'list_missing', 'list_review']);
     const status = json(await client.callTool({ name: 'get_status', arguments: {} }));
     expect(status.app.dryRun).toBe(true);
     expect(status.app.timezone).toBe('America/New_York');
@@ -96,7 +96,7 @@ describe('Claude access (MCP)', () => {
 
     const tg = json(await client.callTool({ name: 'list_collections', arguments: { only: 'on' } })).find((c: { name: string }) => c.name === 'Thanksgiving Movies');
     const detail = json(await client.callTool({ name: 'get_collection', arguments: { id: tg.id } }));
-    expect(detail.titles.list).toEqual([{ name: 'Planes, Trains and Automobiles', year: 1987 }]);
+    expect(detail.titles.list).toEqual([{ id: 'm-ptna', name: 'Planes, Trains and Automobiles', year: 1987, pinned: false }]);
     expect(detail.waitingInReview).toHaveLength(3);
 
     // Approving applies straight away, even in dry run, exactly as the Review page does.
@@ -155,6 +155,50 @@ describe('Claude access (MCP)', () => {
     const universe = json(await client.callTool({ name: 'list_collections', arguments: {} })).find((c: { kind: string; on: boolean }) => c.kind === 'Universes' && !c.on);
     expect(text(await client.callTool({ name: 'set_collection_enabled', arguments: { id: universe.id, on: true } }))).toContain('is on');
     expect(json(await client.callTool({ name: 'get_collection', arguments: { id: universe.id } })).on).toBe(true);
+    await client.close();
+  });
+
+  it('lets full control do what the pages do: collections, sources, filters, titles, undo and Radarr/Sonarr defaults', async () => {
+    const { token } = await makeToken(t, 'Desk', 'full');
+    await runPipeline(t.app, { job: 'manual', trigger: 'manual', index: true, now: Date.UTC(2026, 10, 17, 15) });
+    const client = await connect(t.web, token);
+    const call = (name: string, args: Record<string, unknown> = {}) => client.callTool({ name, arguments: args });
+
+    // A collection of your own, then its dates, filters and sources.
+    const created = text(await call('create_collection', { name: 'Feel-good', contains: 'movies', sourceType: 'imdb_list', sourceValue: 'ls000000001' }));
+    const id = Number(created.match(/id (\d+)/)![1]);
+    expect(text(await call('update_collection', { id, dates: { from: '12/01', to: '12/24' }, minimumTitles: 2, filters: { yearFrom: 1980, genresExclude: ['Horror'] } }))).toContain('Saved');
+    expect((await call('update_collection', { id, dates: { from: '13/01', to: '12/24' } })).isError).toBe(true);
+    expect((await call('update_collection', { id, filters: { maxRating: 'X' } })).isError).toBe(true);
+    expect(text(await call('add_collection_source', { id, sourceType: 'imdb_keyword', sourceValue: 'feel-good' }))).toContain('Added');
+    const detail = json(await call('get_collection', { id }));
+    expect(detail).toMatchObject({ dates: '12/01 to 12/24', minimumTitles: 2, filters: { yearFrom: 1980, genresExclude: ['Horror'] } });
+    expect(detail.sources).toHaveLength(2);
+    expect(text(await call('remove_collection_source', { id, sourceId: detail.sources[1].sourceId }))).toContain('Removed');
+    expect(text(await call('delete_collection', { id }))).toContain('Deleted Feel-good');
+
+    // Why titles are in or out, and excluding one.
+    const tg = json(await call('list_collections')).find((c: { name: string }) => c.name === 'Thanksgiving Movies');
+    const why = json(await call('explain_collection', { id: tg.id, search: 'planes' }));
+    expect(why.sources[0].counts).toEqual({ member: 1 });
+    expect(why.sources[0].titles[0]).toMatchObject({ title: 'Planes, Trains and Automobiles', verdict: 'member' });
+    expect(text(await call('pin_or_exclude_title', { id: tg.id, title: 'Planes, Trains and Automobiles', rule: 'exclude' }))).toContain('Excluded');
+    expect(json(await call('explain_collection', { id: tg.id })).sources[0].counts).toEqual({ excluded: 1 });
+    expect(text(await call('pin_or_exclude_title', { id: tg.id, title: 'Planes, Trains and Automobiles', rule: 'clear' }))).toContain('Cleared');
+    expect((await call('delete_collection', { id: tg.id })).isError).toBe(true); // presets can only be turned off
+
+    // Approve, then undo the addition.
+    const queue = json(await call('list_review', { collectionId: tg.id }));
+    await call('approve_proposals', { ids: queue.proposals.map((x: { id: number }) => x.id) });
+    const added = json(await call('list_activity')).changes.find((c: { change: string }) => c.change === 'Add items');
+    expect(text(await call('undo_change', { activityId: added.id }))).toBeTruthy();
+    expect(t.fake.boxSets().find((b) => b.Name === 'Thanksgiving Movies')?.children ?? []).toEqual([]);
+
+    expect(json(await call('list_existing_box_sets'))).toEqual([]);
+    expect(json(await call('get_radarr_sonarr_options'))).toEqual({ radarr: 'not connected', sonarr: 'not connected' });
+    expect(text(await call('update_radarr_sonarr_defaults', { app: 'radarr', minimumAvailability: 'announced' }))).toContain('"minimumAvailability":"announced"');
+    expect(t.app.settings().arr.radarr.minimumAvailability).toBe('announced');
+    expect((await call('sync_home_rows')).isError).toBe(true); // rows are off
     await client.close();
   });
 });

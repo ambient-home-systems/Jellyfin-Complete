@@ -104,7 +104,7 @@ Claude Code or Claude Desktop, on a computer on your home network, can use the a
 
 1. **Create a token** in Settings → Claude access. Name it after where you'll use it, and choose what it may do:
    - **Read, review and run**
-   - **Full control**
+   - **Full control (except connections and keys)**
    - **Read only**
 
    The token is shown once, with the Claude Code command and the Claude Desktop config already filled in.
@@ -121,7 +121,10 @@ Claude Code or Claude Desktop, on a computer on your home network, can use the a
 | See status, settings, collections and their titles, Review, Missing, Activity and runs | ✓ | ✓ | ✓ |
 | Approve, snooze or dismiss proposals in Review | | ✓ | ✓ |
 | Start a run | | ✓ | ✓ |
-| Change settings and job schedules, and turn collections on or off | | | ✓ |
+| See why a title is in or out of a collection, compare with Plex, see existing box sets and Radarr/Sonarr options | ✓ | ✓ | ✓ |
+| Change settings and job schedules | | | ✓ |
+| Create, edit, delete and turn collections on or off, with their dates, minimum, filters and sources; pin or exclude titles | | | ✓ |
+| Adopt or delete existing box sets, undo changes, send missing titles to Radarr or Sonarr, update home-screen rows | | | ✓ |
 | See or change connections and keys, or Claude access tokens | | | |
 
 Connections and keys stay on the Settings page. If Claude could change an address, someone with a leaked token could point it at their own server, and the app would send your saved key there.

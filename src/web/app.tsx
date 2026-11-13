@@ -8,8 +8,8 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { Cron } from 'croner';
 import type { AppContext } from '../app-context.js';
 import { APP_ROOT, APP_VERSION } from '../config.js';
-import { action, definition, definitionMode, definitionSource, membership, pin, jobSchedule, sourceResult, libraryItem, managedCollection, type ActionType, type WindowDef } from '../db/schema.js';
-import { parseSourceInput, type Target } from '../domain/source-input.js';
+import { action, definition, definitionSource, jobSchedule, sourceResult, libraryItem, managedCollection } from '../db/schema.js';
+import type { Target } from '../domain/source-input.js';
 import { queriesFor } from '../imdb/queries.js';
 import { JellyfinClient } from '../clients/jellyfin/index.js';
 import { TmdbClient } from '../clients/tmdb.js';
@@ -23,10 +23,8 @@ import { RunProgress } from './pages/run-progress.js';
 import { CollectionsList, CollectionEditor, NewCollection, Preview, ParityPanel, type PreviewItem } from './pages/collections.js';
 import { parity } from '../domain/parity.js';
 import { cachedPlan } from './plan-cache.js';
-import { cached } from '../cache.js';
 import { Missing, ArrOptionsFields, parseArrOptions } from './pages/missing.js';
-import { missingModel, missingFor } from './missing-model.js';
-import { executeArrDue, resolveTerm, forgetArrState } from '../pipeline/arr.js';
+import { missingModel } from './missing-model.js';
 import { fingerprint } from '../pipeline/planner.js';
 import { definitionArr, run } from '../db/schema.js';
 import { homeStatus, syncHomeRows } from '../homescreen/index.js';
@@ -47,11 +45,11 @@ import { createToken, listTokens, revokeToken, SCOPE_LABEL, type TokenScope } fr
 import type { Reveal } from './pages/claude-access.js';
 import { mcpHandler } from './mcp.js';
 import { applySettings, setSchedule, setCollectionEnabled, SettingsError, MODE_KEYS, type ModeKey, type SettingsPatch } from './settings-actions.js';
+import { createCollection, updateCollection, addSource, removeSource, setSourceRole, setPin, deleteCollection, sendMissing, monitorInRadarr, saveArrDefaults, type CollectionPatch } from './collection-actions.js';
 import { undoAction } from '../pipeline/undo.js';
 import { adoptionCandidates, adopt, deleteUnmanaged } from '../pipeline/adoption.js';
 import { loadDefinition, loadDefinitions } from '../domain/definitions.js';
 import { members as computeMembers } from '../pipeline/planner.js';
-import { LibraryIndex, type LibRow } from '../domain/matching.js';
 import { syncLibraries } from '../library/indexer.js';
 import { sourceKey, sourceLabel, resolveSource, type ResolvedSource } from '../sources/index.js';
 import type { LoadedDefinition } from '../domain/definitions.js';
@@ -61,18 +59,6 @@ import { log } from '../log.js';
 import type { Mode, Settings } from '../settings.js';
 
 const MODES = new Set(['off', 'review', 'auto']);
-const MMDD = /^(0?[1-9]|1[0-2])\/(0?[1-9]|[12]\d|3[01])$/;
-
-/** Schedule fields → window. "Always on" is no window; otherwise both dates are required. */
-function scheduleFrom(b: Record<string, unknown>): WindowDef | null | { error: string } {
-  if (b.schedule === 'always') return null;
-  const from = String(b.from ?? '').trim();
-  const to = String(b.to ?? '').trim();
-  if (!MMDD.test(from) || !MMDD.test(to)) return { error: 'Dates must be MM/DD, for example 12/01.' };
-  return { type: 'range', from, to };
-}
-
-const slugify = (name: string) => name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'collection';
 
 export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): Hono {
   const web = new Hono();
@@ -298,27 +284,17 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   web.post('/collections/new', async (c) => {
     const b = await c.req.parseBody();
     const values = Object.fromEntries(['name', 'target', 'schedule', 'from', 'to', 'type', 'value'].map((k) => [k, String(b[k] ?? '')]));
-    const again = (error: string) => c.html(
-      <Layout title="New collection" nav="collections" user={{ name: userOf(c).name, csrf: userOf(c).csrf }} {...shellModel(app)} flash={null}>
-        <NewCollection csrf={userOf(c).csrf} error={error} values={values} />
-      </Layout>, 400);
-    const name = values.name!.trim();
-    if (!name || name.length > 200) return again('Name is required (up to 200 characters).');
     const target: Target = values.target === 'shows' ? 'shows' : values.target === 'episodes' ? 'episodes' : 'movies';
-    const window = scheduleFrom(b);
-    if (window && 'error' in window) return again(window.error);
-    const spec = parseSourceInput(values.type!, values.value!, target);
-    if (typeof spec === 'string') return again(spec);
-    let slug = `custom-${slugify(name)}`;
-    for (let n = 2; app.db.select({ id: definition.id }).from(definition).where(eq(definition.slug, slug)).get(); n++) slug = `custom-${slugify(name)}-${n}`;
-    const now = Date.now();
-    const row = app.db.insert(definition).values({
-      slug, name, target, enabled: true, presetKey: null, presetRev: null, window, filters: {}, libraryIds: null, minItems: 1,
-      syncMode: 'sync', sortBy: 'title.asc', sortTitle: null, overview: null, poster: { kind: 'none' }, visibility: 'delete', createdAt: now, updatedAt: now,
-    }).returning({ id: definition.id }).get();
-    // Title matches are only ever suggestions (ADR-018).
-    app.db.insert(definitionSource).values({ definitionId: row.id, type: spec.type, config: spec.config, role: spec.type === 'jellyfin_episode_title' ? 'suggest' : 'add', position: 0 }).run();
-    return back(c, `/collections/${row.id}`, { ok: 'Collection created. Run now from the Dashboard to fetch its sources and plan it.' });
+    try {
+      const id = createCollection(app, { name: values.name!, target, dates: b.schedule === 'always' ? null : { from: values.from!, to: values.to! }, sourceType: values.type!, sourceValue: values.value! });
+      return back(c, `/collections/${id}`, { ok: 'Collection created. Run now from the Dashboard to fetch its sources and plan it.' });
+    } catch (e) {
+      if (!(e instanceof SettingsError)) throw e;
+      return c.html(
+        <Layout title="New collection" nav="collections" user={{ name: userOf(c).name, csrf: userOf(c).csrf }} {...shellModel(app)} flash={null}>
+          <NewCollection csrf={userOf(c).csrf} error={e.message} values={values} />
+        </Layout>, 400);
+    }
   });
 
   web.get('/collections/:id', (c) => {
@@ -342,36 +318,24 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const def = loadDefinition(app.db, id);
     if (!def) return c.notFound();
     const b = await c.req.parseBody();
-    const name = String(b.name ?? '').trim();
-    const minItems = Number(b.minItems ?? def.minItems);
-    if (!name || name.length > 200) return back(c, `/collections/${id}`, { err: 'Name is required (up to 200 characters).' });
-    if (!Number.isInteger(minItems) || minItems < 1 || minItems > 1000) return back(c, `/collections/${id}`, { err: 'Minimum items must be a whole number from 1 to 1000.' });
-    let window = def.window;
-    if (!def.window || def.window.type === 'range') {
-      const w = scheduleFrom(b);
-      if (w && 'error' in w) return back(c, `/collections/${id}`, { err: w.error });
-      window = w;
-    }
-    app.db.update(definition).set({
-      name, enabled: b.enabled === '1', overview: String(b.overview ?? '') || null, minItems, window,
-      syncMode: b.syncMode === 'append' ? 'append' : 'sync', sortTitle: String(b.sortTitle ?? '') || null, updatedAt: Date.now(),
-      visibility: b.visibility === 'tag_gate' ? 'tag_gate' : b.visibility === 'delete' ? 'delete' : def.visibility,
-      homeRow: b.homeRowForm === '1' ? b.homeRow === '1' : def.homeRow,
-    }).where(eq(definition.id, id)).run();
-    if (b.arrForm === '1') {
-      const addMissing = b.arrAddMissing === '1';
-      app.db.insert(definitionArr).values({ definitionId: id, addMissing, options: {} })
-        .onConflictDoUpdate({ target: definitionArr.definitionId, set: { addMissing } }).run();
-    }
+    const modes: CollectionPatch['modes'] = {};
     for (const [k, v] of Object.entries(b)) {
-      if (!k.startsWith('mode:')) continue;
-      const actionType = k.slice(5) as ActionType;
-      app.db.delete(definitionMode).where(and(eq(definitionMode.definitionId, id), eq(definitionMode.actionType, actionType))).run();
-      if (MODES.has(String(v))) app.db.insert(definitionMode).values({ definitionId: id, actionType, mode: String(v) as Mode }).run();
-      if (actionType === 'collection.create' && MODES.has(String(v))) {
-        app.db.delete(definitionMode).where(and(eq(definitionMode.definitionId, id), eq(definitionMode.actionType, 'collection.delete'))).run();
-        app.db.insert(definitionMode).values({ definitionId: id, actionType: 'collection.delete', mode: String(v) as Mode }).run();
-      }
+      if (k.startsWith('mode:') && (MODE_KEYS as readonly string[]).includes(k.slice(5))) modes[k.slice(5) as ModeKey] = MODES.has(String(v)) ? (String(v) as Mode) : 'default';
+    }
+    try {
+      updateCollection(app, id, {
+        name: String(b.name ?? ''), enabled: b.enabled === '1', overview: String(b.overview ?? ''), minItems: Number(b.minItems ?? def.minItems),
+        // Dates that follow a rule (such as Easter) aren't editable here; fixed dates and "always" are.
+        dates: !def.window || def.window.type === 'range' ? (b.schedule === 'always' ? null : { from: String(b.from ?? ''), to: String(b.to ?? '') }) : undefined,
+        syncMode: b.syncMode === 'append' ? 'append' : 'sync', sortTitle: String(b.sortTitle ?? ''),
+        visibility: b.visibility === 'tag_gate' ? 'tag_gate' : b.visibility === 'delete' ? 'delete' : undefined,
+        homeRow: b.homeRowForm === '1' ? b.homeRow === '1' : undefined,
+        addMissing: b.arrForm === '1' ? b.arrAddMissing === '1' : undefined,
+        modes,
+      });
+    } catch (e) {
+      if (e instanceof SettingsError) return back(c, `/collections/${id}`, { err: e.message });
+      throw e;
     }
     return back(c, `/collections/${id}`, { ok: 'Saved. The next run plans with these settings.' });
   });
@@ -414,65 +378,42 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   web.post('/collections/:id/pins', async (c) => {
     const id = Number(c.req.param('id'));
     const b = await c.req.parseBody();
-    const jfId = String(b.jfId ?? '');
     const kind = String(b.kind ?? '');
-    if (!jfId) return back(c, `/collections/${id}`, { err: 'Nothing selected.' });
-    app.db.delete(pin).where(and(eq(pin.definitionId, id), eq(pin.jfId, jfId))).run();
-    if (kind === 'pin' || kind === 'exclude') app.db.insert(pin).values({ definitionId: id, jfId, kind }).run();
-    return back(c, `/collections/${id}#pv-h`, { ok: kind === 'pin' ? 'Pinned. The next run adds it.' : kind === 'exclude' ? 'Excluded. The next run proposes removing it if it’s in the box set.' : 'Cleared.' });
+    try {
+      return back(c, `/collections/${id}#pv-h`, { ok: setPin(app, id, String(b.jfId ?? ''), kind === 'pin' || kind === 'exclude' ? kind : 'clear') });
+    } catch (e) {
+      if (e instanceof SettingsError) return back(c, `/collections/${id}`, { err: e.message });
+      throw e;
+    }
   });
 
   web.post('/collections/:id/sources', async (c) => {
     const id = Number(c.req.param('id'));
-    const def = loadDefinition(app.db, id);
-    if (!def) return c.notFound();
+    if (!loadDefinition(app.db, id)) return c.notFound();
     const b = await c.req.parseBody();
     const op = String(b.op ?? '');
     const here = `/collections/${id}#src-h`;
-    const touch = () => app.db.update(definition).set({ updatedAt: Date.now() }).where(eq(definition.id, id)).run();
-    if (op === 'add') {
-      const spec = parseSourceInput(String(b.type ?? ''), String(b.value ?? ''), def.target);
-      if (typeof spec === 'string') return back(c, here, { err: spec });
-      const key = sourceKey(spec);
-      if (def.sources.some((s) => sourceKey({ type: s.type, config: s.config }) === key)) return back(c, here, { err: 'That source is already on this collection.' });
-      const position = Math.max(-1, ...def.sources.map((s) => s.position)) + 1;
-      const role = b.role === 'suggest' || spec.type === 'jellyfin_episode_title' ? 'suggest' : 'add'; // title matches only suggest (ADR-018)
-      app.db.insert(definitionSource).values({ definitionId: id, type: spec.type, config: spec.config, role, position }).run();
-      touch();
-      return back(c, here, { ok: `Added ${sourceLabel(spec)}. The next run fetches it.` });
+    try {
+      if (op === 'add') return back(c, here, { ok: addSource(app, id, { type: String(b.type ?? ''), value: String(b.value ?? ''), suggestOnly: b.role === 'suggest' }) });
+      const m = op.match(/^(remove|role):(\d+)(?::(add|suggest))?$/);
+      if (!m) return back(c, here, { err: 'That source no longer exists.' });
+      if (m[1] === 'remove') return back(c, here, { ok: removeSource(app, id, Number(m[2])) });
+      return back(c, here, { ok: setSourceRole(app, id, Number(m[2]), m[3] === 'suggest' ? 'suggest' : 'add') });
+    } catch (e) {
+      if (e instanceof SettingsError) return back(c, here, { err: e.message });
+      throw e;
     }
-    const m = op.match(/^(remove|role):(\d+)(?::(add|suggest))?$/);
-    const src = m ? def.sources.find((s) => s.id === Number(m[2])) : undefined;
-    if (!m || !src) return back(c, here, { err: 'That source no longer exists.' });
-    if (m[1] === 'remove') {
-      if (def.presetKey && def.sources.length === 1) return back(c, here, { err: 'A preset needs at least one source. Turn the collection off instead.' });
-      app.db.delete(definitionSource).where(eq(definitionSource.id, src.id)).run();
-      touch();
-      return back(c, here, { ok: `Removed ${sourceLabel({ type: src.type, config: src.config })}. Titles only it supplied are proposed for removal on the next run.` });
-    }
-    if (src.type === 'jellyfin_episode_title' && m[3] === 'add') return back(c, here, { err: 'Episode-title matches can only be suggestions; they’re matched by title, not by ID.' });
-    app.db.update(definitionSource).set({ role: m[3] === 'suggest' ? 'suggest' : 'add' }).where(eq(definitionSource.id, src.id)).run();
-    touch();
-    return back(c, here, { ok: m[3] === 'suggest' ? 'Its titles now go to Review as suggestions.' : 'Its titles are now added directly.' });
   });
 
   web.post('/collections/:id/delete', async (c) => {
     const id = Number(c.req.param('id'));
-    const def = loadDefinition(app.db, id);
-    if (!def) return c.notFound();
-    if (def.presetKey) return back(c, `/collections/${id}`, { err: 'Presets can’t be deleted; turn it off instead.' });
-    const m = app.db.select().from(managedCollection).where(eq(managedCollection.definitionId, id)).get();
-    if (m?.state === 'live' || m?.state === 'hidden') return back(c, `/collections/${id}`, { err: 'Turn it off and run once to remove its box set first.' });
-    app.db.transaction((tx) => {
-      tx.delete(definitionSource).where(eq(definitionSource.definitionId, id)).run();
-      tx.delete(definitionMode).where(eq(definitionMode.definitionId, id)).run();
-      tx.delete(pin).where(eq(pin.definitionId, id)).run();
-      tx.delete(membership).where(eq(membership.definitionId, id)).run();
-      tx.delete(managedCollection).where(eq(managedCollection.definitionId, id)).run();
-      tx.update(action).set({ status: 'superseded', updatedAt: Date.now() }).where(and(eq(action.definitionId, id), inArray(action.status, ['proposed', 'approved', 'snoozed']))).run();
-      tx.delete(definition).where(eq(definition.id, id)).run();
-    });
-    return back(c, '/collections', { ok: `Deleted ${def.name}.` });
+    if (!loadDefinition(app.db, id)) return c.notFound();
+    try {
+      return back(c, '/collections', { ok: deleteCollection(app, id) });
+    } catch (e) {
+      if (e instanceof SettingsError) return back(c, `/collections/${id}`, { err: e.message });
+      throw e;
+    }
   });
 
   // ── missing (Phase 2): what collections list that you don't own; send to Radarr/Sonarr ──
@@ -486,60 +427,30 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const b = await c.req.parseBody({ all: true });
     const tab = b.tab === 'shows' ? 'shows' : 'movies';
     const which = tab === 'movies' ? 'radarr' : 'sonarr';
-    const name = which === 'radarr' ? 'Radarr' : 'Sonarr';
     const def = loadDefinition(app.db, Number(b.def));
     const here = `/missing?tab=${tab}${def ? `&def=${def.id}` : ''}`;
     if (!def) return back(c, here, { err: 'Choose a collection first.' });
-    const ids = new Set(([] as unknown[]).concat(b.ids ?? []).map(String));
-    if (!ids.size) return back(c, here, { err: 'Select at least one title.' });
-    const cap = app.settings().guardrails.arrCapPerRun;
-    if (ids.size > cap) return back(c, here, { err: `Select up to ${cap} at a time. That’s the per-run cap in Settings.` });
-    const chosen = missingFor(app, def, tab, new LibraryIndex(app.db.select().from(libraryItem).all() as LibRow[])).filter((m) => ids.has(m.keys[0]!));
-    const options = parseArrOptions(b, which);
-    const type = which === 'radarr' ? 'radarr.add_movie' as const : 'sonarr.add_series' as const;
-    const now = Date.now();
-    const by = userOf(c).name;
-    const send = b.mode !== 'review';
-    const created: number[] = [];
-    const noId: string[] = [];
-    for (const m of chosen) {
-      const term = await resolveTerm(app, m).catch(() => null);
-      if (!term) { noId.push(m.title ?? m.keys[0]!); continue; }
-      const fp = fingerprint(type, term);
-      // A title for Review and Activity when the source had none (e.g. TMDb ID lists); cached for a day.
-      const cl = which === 'radarr' ? app.radarr() : app.sonarr();
-      const info = !m.title && cl ? await cached(app.db, `${which}:lookup:${term}`, 1, () => cl.lookup(term)).catch(() => null) : null;
-      app.db.update(action).set({ status: 'superseded', updatedAt: now }).where(and(eq(action.fingerprint, fp), inArray(action.status, ['proposed', 'approved']))).run();
-      const row = app.db.insert(action).values({
-        type, fingerprint: fp, definitionId: def.id, mode: 'review', status: send ? 'approved' : 'proposed', reason: `Chosen on the Missing page by ${by}`,
-        item: { name: m.title ?? info?.title ?? term, year: m.year ?? info?.year ?? null, provenance: { sources: m.sources.map((x) => ({ key: x.label, label: x.label, rank: x.rank })), match: 'missing' } },
-        payload: { app: which, term, options, manual: true }, decidedBy: send ? by : null, decidedAt: send ? now : null, createdAt: now, updatedAt: now,
-      }).returning({ id: action.id }).get();
-      created.push(row.id);
+    try {
+      const r = await sendMissing(app, { defId: def.id, tab, keys: ([] as unknown[]).concat(b.ids ?? []).map(String), sendNow: b.mode !== 'review', options: parseArrOptions(b, which), by: userOf(c).name });
+      return back(c, here, r.ok ? { ok: r.message } : { err: r.message });
+    } catch (e) {
+      if (e instanceof SettingsError) return back(c, here, { err: e.message });
+      throw e;
     }
-    const noIdNote = noId.length ? ` ${noId.length} couldn’t be sent: no TVDB ID (add a TMDb key to look them up).` : '';
-    if (!send) return back(c, here, { ok: `${created.length} queued in Review.${noIdNote}` });
-    const r = await executeArrDue(app, now, created);
-    const parts = [`Sent ${r.applied} to ${name}.`];
-    if (r.skipped.length) parts.push(`Skipped ${r.skipped.map((x) => `${x.title} (${x.why})`).join(', ')}.`);
-    if (r.failed.length) parts.push(`Failed: ${r.failed.map((x) => `${x.title}: ${x.why}`).join('; ')}.`);
-    return back(c, here, r.failed.length && !r.applied ? { err: parts.join(' ') + noIdNote } : { ok: parts.join(' ') + noIdNote });
   });
 
   web.post('/missing/monitor', async (c) => {
     const b = await c.req.parseBody();
     const def = loadDefinition(app.db, Number(b.def));
-    const id = Number(b.radarrCollectionId);
     const here = `/missing?tab=movies${def ? `&def=${def.id}` : ''}`;
-    if (!def || !Number.isInteger(id)) return back(c, here, { err: 'That collection no longer exists.' });
-    const now = Date.now();
-    const row = app.db.insert(action).values({
-      type: 'radarr.monitor_collection', fingerprint: fingerprint('radarr.monitor_collection', id), definitionId: def.id, mode: 'review', status: 'approved',
-      reason: `Chosen on the Missing page by ${userOf(c).name}`, item: { name: String(b.title ?? `Radarr collection ${id}`), year: null },
-      payload: { app: 'radarr', radarrCollectionIds: [id], collectionTitle: String(b.title ?? ''), manual: true }, decidedBy: userOf(c).name, decidedAt: now, createdAt: now, updatedAt: now,
-    }).returning({ id: action.id }).get();
-    const r = await executeArrDue(app, now, [row.id]);
-    return back(c, here, r.applied ? { ok: `Radarr now monitors ${b.title}. It adds the missing films itself as they’re released.` } : { err: r.failed[0]?.why ?? 'Radarr didn’t accept that.' });
+    if (!def) return back(c, here, { err: 'That collection no longer exists.' });
+    try {
+      const r = await monitorInRadarr(app, { defId: def.id, radarrCollectionId: Number(b.radarrCollectionId), title: String(b.title ?? ''), by: userOf(c).name });
+      return back(c, here, r.ok ? { ok: r.message } : { err: r.message });
+    } catch (e) {
+      if (e instanceof SettingsError) return back(c, here, { err: e.message });
+      throw e;
+    }
   });
 
   // ── review ──
@@ -764,8 +675,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   web.post('/settings/arr', async (c) => {
     const b = await c.req.parseBody({ all: true });
     const which = b.which === 'sonarr' ? 'sonarr' : 'radarr';
-    app.updateSettings({ arr: { ...app.settings().arr, [which]: parseArrOptions(b, which) } });
-    forgetArrState();
+    saveArrDefaults(app, which, parseArrOptions(b, which));
     return back(c, '/settings#arr', { ok: `${which === 'radarr' ? 'Radarr' : 'Sonarr'} defaults saved.` });
   });
 

@@ -41,6 +41,7 @@ Each entry is a short ADR: context, options, recommendation, consequences.
 | 031 | Public release: what changes now and what waits | Accepted (2 Nov) |
 | 032 | Claude access through MCP, on the home network | **Decided** (13 Nov) |
 | 033 | Claude can change settings (Full control tokens) | **Decided** (13 Nov) |
+| 034 | Full control means everything except connections, keys and tokens | **Decided** (13 Nov) |
 
 ---
 
@@ -496,6 +497,24 @@ Each entry is a short ADR: context, options, recommendation, consequences.
 - **Consequences.**
   - Existing tokens keep their level. For settings, create a Full control token.
   - The settings forms now save through the shared module. Their checks and messages are unchanged.
+
+### ADR-034 Full control means everything except connections, keys and tokens: Decided (13 Nov)
+- **Context.** ADR-033's Full control covered settings, schedules and turning collections on or off. It couldn't edit a collection's dates, so Claude couldn't fix a collection, and the name overstated what it did.
+- **Decision.**
+  - **Full control does whatever the pages do,** except connections, keys and Claude access tokens (ADR-033's reasons). The level is renamed "Full control (except connections and keys)". New tools:
+    - collections: create, update (name, dates, minimum, filters, overview, sort title, sync or append, when closed, home row, sending missing titles, per-collection modes), delete, add and remove sources, make a source add or suggest
+    - titles: pin or exclude
+    - existing box sets: adopt, or delete
+    - undo an applied change
+    - Radarr and Sonarr: send missing titles, monitor a TMDb collection, change the defaults
+    - update home-screen rows now
+  - **Every token can read more:**
+    - `explain_collection`: for every title a collection's sources list, whether it's a member and, if not, the first reason why (not in the library, wrong kind, outside the chosen libraries, filtered out, excluded, or only suggested)
+    - `compare_with_plex`, `list_existing_box_sets` and `get_radarr_sonarr_options`
+    - `get_collection` now shows filters, modes and source ids, and title ids
+  - **One code path.** The collection editor, Missing and the Radarr/Sonarr defaults now save through `src/web/collection-actions.ts`, the same code the tools use.
+  - **Filters,** which the planner already applied but no page set, can now be set by Claude and are shown by `get_collection`. A page for them can follow.
+- **Consequences.** `get_collection`'s titles include their ids (used by the pin and exclude tool).
 
 ---
 

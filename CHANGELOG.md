@@ -2,6 +2,23 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.7.0 — 13 Nov 2026
+
+- **Full control is full.** The level is now called "Full control (except connections and keys)". With it, Claude can:
+  - create, edit and delete collections, including dates, minimum, filters and sources
+  - pin or exclude titles
+  - adopt or delete existing box sets
+  - undo changes
+  - send missing titles to Radarr or Sonarr, and change their defaults
+  - update home-screen rows
+
+  Every token can also see why a title is in or out of a collection, compare with Plex, and list existing box sets.
+- **Fixed:**
+  - External MDBList lists (such as `k0meta/external/15110`) were requested without their list number and failed, which broke the In Association With Marvel and Middle Earth universes.
+  - A title you accepted from a suggestion was proposed for removal on the next run, then suggested again, over and over. It now stays while a source still suggests it.
+  - Approving "Create box set" didn't create it until each title was approved too. Approving it now also approves that collection's pending titles and metadata (not its suggestions), so the box set is created and filled in one step.
+  - 9-1-1 now includes 9-1-1: Nashville, and Yellowstone includes Dutton Ranch and The Madison. Existing installs get them on update, and IDs you added yourself are kept.
+
 ## 0.6.0 — 13 Nov 2026
 
 - **Claude can change settings.** A new access level for Claude access tokens, **Full control**, lets Claude:
