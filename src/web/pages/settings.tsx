@@ -71,6 +71,9 @@ export const SettingsPage: FC<{
                 <div class="field"><span class="label">Before any add</span><label class="check"><input type="checkbox" name="releasedOnly" value="1" checked={s.guardrails.releasedOnly} /> Released titles only</label><label class="check"><input type="checkbox" checked disabled /> Skip if already present or excluded</label></div>
                 <div class="field"><label for="nb">Other tools’ schedules</label><textarea id="nb" name="neighbours" rows={3} placeholder={'Jellyfin-Auto-Collections 04:00\nKometa (Plex) 05:00'}>{s.neighbours.map((n) => `${n.name} ${n.time}`).join('\n')}</textarea><span class="hint">Shown beside this app’s jobs so they don’t collide.</span></div>
               </div>
+              <div class="grid3">
+                <div class="field"><label for="region">Streaming country</label><input id="region" name="streamingRegion" type="text" value={s.streaming.region} maxlength={2} pattern="[A-Za-z]{2}" class="num" autocomplete="off" /><span class="hint">Streaming collections count the services offered here. Two letters, such as US, GB or CA. Streaming data from JustWatch, through TMDb.</span></div>
+              </div>
               <div><button class="btn primary" type="submit">Save</button></div>
             </form>
           </section>

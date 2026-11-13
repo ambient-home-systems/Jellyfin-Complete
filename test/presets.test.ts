@@ -138,8 +138,13 @@ describe('universe presets vs Kometa v2.5.3 defaults/both/universe.yml', () => {
 });
 
 describe('preset registry', () => {
-  it('seeds 66 presets: seasonal films and holiday episodes on, universes and show franchises off', () => {
-    expect(PRESETS).toHaveLength(19 + 3 + 17 + 27);
+  it('seeds 112 presets: seasonal films and holiday episodes on, universes, show franchises, charts and streaming off', () => {
+    expect(PRESETS).toHaveLength(19 + 3 + 17 + 27 + 5 + 41);
+    // Chart and streaming names clash with nothing (Star Trek and Arrowverse are both a universe and a show franchise, as in Kometa).
+    const added = PRESETS.filter((p) => p.family === 'imdb_chart' || p.family === 'streaming').map((p) => p.definition.name);
+    const others = new Set(PRESETS.filter((p) => p.family !== 'imdb_chart' && p.family !== 'streaming').map((p) => p.definition.name));
+    expect(new Set(added).size).toBe(added.length);
+    expect(added.filter((n) => others.has(n))).toEqual([]);
     expect(new Set(PRESETS.map((p) => p.definition.slug)).size).toBe(PRESETS.length);
     expect(PRESETS.filter((p) => p.enabledByDefault).every((p) => p.family === 'seasonal' || p.family === 'holiday_episodes')).toBe(true);
     expect(PRESETS.filter((p) => p.enabledByDefault)).toHaveLength(22);

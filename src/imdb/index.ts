@@ -11,7 +11,8 @@ export const HASH_URLS = {
   list: 'https://raw.githubusercontent.com/Kometa-Team/IMDb-Hash/master/LIST_HASH',
   search: 'https://raw.githubusercontent.com/Kometa-Team/IMDb-Hash/master/HASH',
 } as const;
-export const KOMETA_SERVICE_URL = 'https://utilities.kometa.wiki/imdb-service/search/advanced';
+export const KOMETA_SERVICE_BASE = 'https://utilities.kometa.wiki/imdb-service';
+export const KOMETA_SERVICE_URL = `${KOMETA_SERVICE_BASE}/search/advanced`;
 
 export class ImdbError extends Error {
   constructor(message: string, public code: string) {
@@ -116,10 +117,14 @@ export async function fetchHashes(f: Fetch): Promise<{ list: string; search: str
 }
 
 async function graphql(f: Fetch, operationName: string, sha256Hash: string, variables: Record<string, unknown>): Promise<any> {
+  return graphqlPost(f, { operationName, variables, extensions: { persistedQuery: { version: 1, sha256Hash } } });
+}
+
+async function graphqlPost(f: Fetch, body: Record<string, unknown>): Promise<any> {
   const res = await f(GRAPHQL_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-imdb-client-name': 'imdb-web-next' },
-    body: JSON.stringify({ operationName, variables, extensions: { persistedQuery: { version: 1, sha256Hash } } }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new ImdbError(`IMDb GraphQL HTTP ${res.status}`, res.status === 429 ? 'RATE_LIMITED' : 'HTTP_ERROR');
   let json: any;
@@ -198,4 +203,47 @@ export async function kometaServiceSearch(f: Fetch, search: KometaImdbSearch): P
   const json: any = await res.json();
   const ids: string[] = json.results ?? [];
   return { titles: ids.map((id) => ({ id })), total: json.total ?? ids.length };
+}
+
+// ── charts (Kometa's imdb_chart) ──
+/** The IMDb charts Kometa's chart defaults use, with Kometa's GraphQL chart types and sizes (modules/imdb.py chart_graphql_map). */
+export const IMDB_CHARTS = {
+  top_movies: { chartType: 'TOP_RATED_MOVIES', first: 250, kind: 'movie', label: 'Top 250 Movies' },
+  top_shows: { chartType: 'TOP_RATED_TV_SHOWS', first: 250, kind: 'show', label: 'Top 250 TV Shows' },
+  popular_movies: { chartType: 'MOST_POPULAR_MOVIES', first: 100, kind: 'movie', label: 'Most Popular Movies' },
+  popular_shows: { chartType: 'MOST_POPULAR_TV_SHOWS', first: 100, kind: 'show', label: 'Most Popular TV Shows' },
+  lowest_rated: { chartType: 'LOWEST_RATED_MOVIES', first: 100, kind: 'movie', label: 'Lowest Rated Movies' },
+} as const;
+export type ImdbChart = keyof typeof IMDB_CHARTS;
+export const isImdbChart = (v: unknown): v is ImdbChart => typeof v === 'string' && Object.prototype.hasOwnProperty.call(IMDB_CHARTS, v);
+
+/**
+ * A chart's titles in rank order, through IMDb's GraphQL API (no persisted query hash needed). Asks for each title's
+ * name and year too, for the Missing page; if IMDb refuses those fields, falls back to Kometa's exact query (IDs only).
+ */
+export async function imdbChart(f: Fetch, chart: ImdbChart): Promise<ImdbTitle[]> {
+  const c = IMDB_CHARTS[chart];
+  if (!c) throw new ImdbError(`Unknown IMDb chart: ${chart}`, 'BAD_INPUT');
+  const args = `chart: { chartType: ${c.chartType} }, first: ${c.first}`;
+  const read = (data: any): ImdbTitle[] => {
+    const edges = data?.chartTitles?.edges;
+    if (!Array.isArray(edges)) throw new ImdbError(`IMDb chart ${chart} returned no data`, 'BAD_RESPONSE');
+    return edges.map((e: any) => ({ id: e.node.id as string, title: e.node.titleText?.text, year: e.node.releaseYear?.year }));
+  };
+  try {
+    return read(await graphqlPost(f, { query: `{ chartTitles(${args}) { edges { node { id titleText { text } releaseYear { year } } } total } }` }));
+  } catch (e) {
+    if (!(e instanceof ImdbError) || e.code === 'HTTP_ERROR' || e.code === 'RATE_LIMITED') throw e;
+    return read(await graphqlPost(f, { query: `{ chartTitles(${args}) { edges { node { id } } total } }` }));
+  }
+}
+
+/** A chart from Kometa's hosted IMDb service (the opt-in parity route). */
+export async function kometaServiceChart(f: Fetch, chart: ImdbChart): Promise<ImdbTitle[]> {
+  if (!IMDB_CHARTS[chart]) throw new ImdbError(`Unknown IMDb chart: ${chart}`, 'BAD_INPUT');
+  const res = await f(`${KOMETA_SERVICE_BASE}/chart/${chart}`, { headers: { accept: 'application/json' } });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new ImdbError(`Kometa IMDb service HTTP ${res.status}`, 'HTTP_ERROR');
+  const json: any = await res.json();
+  return ((json.results ?? []) as { tconst?: string }[]).filter((r) => r.tconst).map((r) => ({ id: r.tconst! }));
 }

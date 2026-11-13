@@ -148,6 +148,10 @@ describe('Claude access (MCP)', () => {
     expect(text(bad)).toContain('Unknown timezone');
     expect(t.app.settings().leadDays).toBe(7);
     expect((await client.callTool({ name: 'update_settings', arguments: { filmLibraries: ['Nope'] } })).isError).toBe(true);
+    // The streaming country (ADR-036).
+    expect(text(await client.callTool({ name: 'update_settings', arguments: { streamingCountry: 'ca' } }))).toContain('"region":"CA"');
+    expect(json(await client.callTool({ name: 'get_settings', arguments: {} })).streamingCountry).toBe('CA');
+    expect((await client.callTool({ name: 'update_settings', arguments: { streamingCountry: 'Canada' } })).isError).toBe(true);
 
     expect(text(await client.callTool({ name: 'set_schedule', arguments: { job: 'nightly-refresh', cron: '15 4 * * *' } }))).toContain('15 4 * * *, on');
     expect((await client.callTool({ name: 'set_schedule', arguments: { job: 'nightly-refresh', cron: 'whenever' } })).isError).toBe(true);

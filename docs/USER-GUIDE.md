@@ -55,6 +55,8 @@ The ready-made **presets** come in families. Turn single ones on or off under Co
 | Universes (17) | Kometa's universe collections | Off |
 | Film series (one per series you own) | Kometa's movie franchise collections: every TMDb film series you have at least 2 films of | Off |
 | Show franchises (27) | Kometa's show franchise collections | Off |
+| IMDb charts (5) | Kometa's IMDb chart collections: the titles you own from the Top 250, Most Popular and Lowest Rated charts | Off |
+| Streaming services (41) | Kometa's streaming collections: the titles you own that stream on Netflix, Disney+ and 20 more services in your country | Off |
 
 **New collection** makes your own: films, shows or episodes, always on or between two dates, from any sources.
 
@@ -74,10 +76,26 @@ Kometa's additions apply, such as Prometheus in Alien and Hobbs & Shaw in The Fa
 
 Which series a film belongs to comes from Jellyfin's TMDb metadata. If Jellyfin has recorded none, the app asks TMDb, a few hundred films per run, and remembers the answers.
 
+### IMDb charts
+
+Five collections: **IMDb Top 250 Movies**, **IMDb Top 250 Shows**, **IMDb Popular Movies**, **IMDb Popular Shows** and **IMDb Lowest Rated Movies**. Each holds the titles you own from that IMDb chart, follows the chart as it changes, and stays all year. The chart's other titles are on the Missing page, ready for Radarr or Sonarr.
+
+Turn them on in Getting started (step 4) or one at a time under Collections. They use the IMDb route in Settings, like every IMDb source.
+
+### Streaming services
+
+A collection for each service, such as **Netflix Movies** or **Disney+ Shows**, holding the titles you own that stream on it in your country. Subscription, free and with-ads offers count; rentals and purchases don't. The services are Kometa's 22: Netflix, Prime Video, Disney+, HBO Max, Hulu, Apple TV, Paramount+, Peacock and more, with some offered in one country only (ITVX and NOW in the UK, Crave in Canada, Movistar Plus+ in Spain).
+
+- **Your country** is set in Settings → Run and review (US by default).
+- **Turning them on** in Getting started (step 4) turns on the services offered in your country. Turn single ones on or off under Collections.
+- **How it works.** Each run asks TMDb which services carry the titles you own, starting with ones it hasn't asked about, then each title once a week. It asks about at most 600 titles a run, so a big library fills in over a few nights. Until every title has been checked once, nothing is removed from these collections. It needs a TMDb key.
+
+Streaming data comes from JustWatch, through TMDb.
+
 ### In the editor
 
 - **Schedule.** Always on, or between two dates each year. A range can wrap past New Year.
-- **Sources.** Paste an ID, a URL or keywords. A source can **add** titles directly or only **suggest** them for Review. A source the app hasn't fetched yet is fetched on the next run.
+- **Sources.** Paste an ID, a URL or keywords. An **IMDb chart** source takes top, popular or lowest; a **Streaming service** source takes a service's name (for a collection of films or of shows). A source can **add** titles directly or only **suggest** them for Review. A source the app hasn't fetched yet is fetched on the next run.
 - **Live preview.** What the collection would hold right now, with the reason each title is in. **Pin** a title to keep it whatever the sources say; **exclude** one to keep it out.
 - **Output in Jellyfin:**
   - **Minimum items:** below this, the box set isn't created, or it's deleted.

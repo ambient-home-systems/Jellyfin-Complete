@@ -535,6 +535,31 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - A library can get a hundred or more collections. They go through Review like any other change while dry run is on. Approving a create approves its titles.
   - New series need a TMDb key; without one, the run logs which ones are waiting.
 
+### ADR-036 Streaming services and IMDb charts: Decided (13 Nov)
+- **Context.** Kometa's `defaults/both/streaming.yml` and `defaults/chart/imdb.yml` (v2.5.3, unchanged on master on 13 Nov 2026) were next on your list of gaps.
+  - Kometa builds each streaming collection from TMDb's discover, filtered by watch provider and country. That is a service's whole catalogue: thousands of titles, hundreds of requests for every service, every day.
+  - Kometa reads IMDb charts with a plain GraphQL `chartTitles` query (no persisted-query hash), or from its hosted service.
+- **Decision.**
+  - **IMDb charts: a new source, `imdb_chart`,** with Kometa's five charts and sizes (Top 250 films and shows, Most Popular films and shows, Lowest Rated films). It follows the IMDb route setting:
+    - **direct:** Kometa's query, also asking for each title's name and year for the Missing page; if IMDb refuses those fields, Kometa's exact IDs-only query
+    - **Kometa's service:** its `chart/<name>` endpoint
+    - **snapshot:** a new `charts` table in the snapshot, which the snapshot job now fills
+    - An empty chart counts as a failure, so the last good one is kept.
+  - **Streaming: a new source, `tmdb_watch_provider`,** asks the other way round: which services carry each title you own.
+    - Before sources resolve, each run looks up TMDb's `/movie|tv/{id}/watch/providers` for titles with a TMDb ID: ones never checked in this country first, then the oldest past a week, at most 600 a run.
+    - Subscription, free and with-ads offers count; rentals and purchases don't. The answers are kept per country, so changing the country keeps the old ones.
+    - The source reads only those stored answers, so it's resolved afresh each run. Until every title has been checked once, it's partial, so nothing is removed.
+  - **Presets, both off by default:**
+    - **IMDb charts (5):** "IMDb Top 250 Movies", "IMDb Top 250 Shows" and so on. Kometa makes one "IMDb Top 250" in each Plex library; Jellyfin shows every collection together, so films and shows are named apart.
+    - **Streaming services (41):** Kometa's 22 services as "<service> Movies" and "<service> Shows", except shows only for hayu, discovery+ and Crunchyroll. Kometa's TMDb provider IDs, its Prime Video rule (119 outside AT, DE, GB, JP and US), and its earlier names for adoption.
+    - Both use Kometa's sections (020, 030), summaries and Default-Images colour posters; sync; minimum 1; release order, since Jellyfin box sets can't sort newest first.
+  - **A country setting, `streaming.region`** (US by default, as in Kometa), in Settings → Run and review and through Claude. Turning the family on in Getting started turns on only the services offered there, using Kometa's single-country rules.
+  - Both sources are in the collection editor, for your own collections.
+- **Consequences.**
+  - A first fill takes a few nights on a big library: about 3 minutes of TMDb lookups per run at its rate limit. After that, about a seventh of the library is checked each night.
+  - Streaming data comes from JustWatch, through TMDb; the Settings page and the guide say so.
+  - IMDb can't be reached from the development sandbox, so the chart query is tested against fakes. Kometa uses the same query.
+
 ---
 
 ## Open questions

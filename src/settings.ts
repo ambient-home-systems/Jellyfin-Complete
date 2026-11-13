@@ -32,6 +32,8 @@ export type Settings = {
   onboarding: { done: OnboardingStep[]; finished: boolean };
   /** Film series (ADR-035): a collection for each TMDb film series you own at least `minimum` films of. Off until turned on. */
   filmSeries: { enabled: boolean; minimum: number };
+  /** Streaming-service collections (ADR-036): the country whose services count, as a two-letter code. */
+  streaming: { region: string };
   /** The Jellyfin version seen at the last run (Phase 4 compatibility). */
   server: { version: string | null; seenAt: number | null };
 };
@@ -74,6 +76,7 @@ export function defaultSettings(timezone: string): Settings {
     homeRows: { enabled: false, orderIndex: 2, viewMode: 'Portrait' },
     onboarding: { done: [], finished: false },
     filmSeries: { enabled: false, minimum: 2 },
+    streaming: { region: 'US' },
     server: { version: null, seenAt: null },
   };
 }

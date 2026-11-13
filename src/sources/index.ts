@@ -9,9 +9,11 @@ import { USER_AGENT, request, requestJson, HttpError } from '../clients/http.js'
 import type { TmdbClient } from '../clients/tmdb.js';
 import type { PlexClient } from '../clients/plex.js';
 import type { ImdbRoute } from '../settings.js';
-import { fetchHashes, imdbList, imdbSearch, kometaServiceSearch, ImdbError, type KometaImdbSearch, type ImdbTitle } from '../imdb/index.js';
+import { fetchHashes, imdbChart, imdbList, imdbSearch, isImdbChart, kometaServiceChart, kometaServiceSearch, ImdbError, IMDB_CHARTS, type KometaImdbSearch, type ImdbTitle } from '../imdb/index.js';
 import { cached, getCached } from '../cache.js';
-import { readSnapshot, searchKey, listKey, stableJson, type ImdbSnapshot } from '../imdb/snapshot.js';
+import { readSnapshot, searchKey, listKey, chartKey, stableJson, type ImdbSnapshot } from '../imdb/snapshot.js';
+import { providerIdsIn, serviceByKey } from '../presets/streaming.js';
+import { providerKey, storedProviders } from './watch-providers.js';
 import { episodeSearches } from '../imdb/queries.js';
 import { log } from '../log.js';
 
@@ -35,6 +37,10 @@ export type SourceContext = {
   imdbSnapshot?: { url: string; token: string | null };
   /** Per-run memo of the snapshot. */
   snapshot?: Promise<ImdbSnapshot>;
+  /** The country whose streaming services count (Settings → Run and review), default US. */
+  streamingRegion?: string;
+  /** Per-run memo of the stored watch providers for that country. */
+  providers?: Map<string, number[]>;
 };
 
 /** A snapshot older than this is treated as a failure, so sources fall back to their last good result (ADR-008). */
@@ -49,8 +55,8 @@ async function snapshotFor(ctx: SourceContext): Promise<ImdbSnapshot> {
   return snap;
 }
 
-function fromSnapshot<T>(snap: ImdbSnapshot, table: 'searches' | 'lists', key: string): T {
-  const hit = snap[table][key] as T | undefined;
+function fromSnapshot<T>(snap: ImdbSnapshot, table: 'searches' | 'lists' | 'charts', key: string): T {
+  const hit = snap[table]?.[key] as T | undefined;
   if (hit) return hit;
   const err = snap.errors[key];
   throw new SourceError(err ? `IMDb snapshot couldn’t resolve this: ${err}` : 'Not in the IMDb snapshot; add it to the snapshot job (npm run imdb:snapshot reads your collections)', err ? 'SNAPSHOT_ERROR' : 'NOT_IN_SNAPSHOT');
@@ -110,6 +116,8 @@ async function withHashRetry<T>(ctx: SourceContext, fn: (h: { list: string; sear
 // ── adapters ──
 type Adapter = {
   label: (config: Record<string, unknown>) => string;
+  /** Reads only this app's own data, so it's resolved afresh every run rather than kept for a day. */
+  fresh?: boolean;
   resolve: (config: Record<string, unknown>, ctx: SourceContext) => Promise<{ items: SourceItem[]; meta?: Record<string, unknown> }>;
 };
 
@@ -152,6 +160,49 @@ export const ADAPTERS: Record<string, Adapter> = {
         items: r.titles.map((t, i) => ({ imdb: t.id, kind: IMDB_KIND[t.type ?? ''] ?? (t.type ? 'other' : 'other'), rank: i + 1, title: t.title, year: t.year, seriesImdb: t.seriesId })),
         meta: { total: r.total },
       };
+    },
+  },
+
+  // IMDb's Top 250, Most Popular and Lowest Rated charts (Kometa's imdb_chart, ADR-036).
+  imdb_chart: {
+    label: (c) => `IMDb chart: ${isImdbChart(c.chart) ? IMDB_CHARTS[c.chart].label : String(c.chart)}`,
+    async resolve(c, ctx) {
+      if (!isImdbChart(c.chart)) throw new SourceError(`Unknown IMDb chart: ${String(c.chart)}`, 'BAD_INPUT');
+      const chart = c.chart;
+      let titles: ImdbTitle[];
+      if (ctx.imdbRoute === 'snapshot') titles = fromSnapshot<{ titles: ImdbTitle[] }>(await snapshotFor(ctx), 'charts', chartKey(chart)).titles;
+      else if (ctx.imdbRoute === 'kometa_service') titles = await kometaServiceChart(ctx.fetch, chart);
+      else titles = await imdbChart(ctx.fetch, chart);
+      if (!titles.length) throw new SourceError(`IMDb returned an empty ${IMDB_CHARTS[chart].label} chart`, 'EMPTY');
+      const kind = IMDB_CHARTS[chart].kind;
+      return { items: titles.map((t, i) => ({ imdb: t.id, kind, rank: i + 1, title: t.title, year: t.year })), meta: { total: titles.length } };
+    },
+  },
+
+  // The titles you own that stream on a service in your country (ADR-036), from the weekly per-title TMDb lookups
+  // the run makes first. Until every title has been looked up once the result is partial, so nothing is removed.
+  tmdb_watch_provider: {
+    fresh: true,
+    label: (c) => `Streaming on ${serviceByKey(c.service)?.name ?? String(c.service)}`,
+    async resolve(c, ctx) {
+      const service = serviceByKey(c.service);
+      if (!service) throw new SourceError(`Unknown streaming service: ${String(c.service)}`, 'BAD_INPUT');
+      const region = ctx.streamingRegion ?? 'US';
+      const wanted = new Set(providerIdsIn(service, region));
+      const show = c.kind === 'show';
+      const rows = ctx.db.select().from(libraryItem).where(eq(libraryItem.kind, show ? 'series' : 'movie')).all();
+      ctx.providers ??= storedProviders(ctx.db, region);
+      const items: SourceItem[] = [];
+      let waiting = 0;
+      for (const r of rows) {
+        if (!r.tmdb) continue; // TMDb can't be asked about a title Jellyfin has no TMDb ID for
+        const ids = ctx.providers.get(providerKey(region, show ? 'tv' : 'movie', r.tmdb));
+        if (!ids) waiting++;
+        else if (ids.some((id) => wanted.has(id))) {
+          items.push({ jf: r.jfId, imdb: r.imdb ?? undefined, tmdb: r.tmdb, tvdb: r.tvdb ?? undefined, kind: show ? 'show' : 'movie', rank: items.length + 1, title: r.name, year: r.year ?? undefined });
+        }
+      }
+      return { items, meta: { region, titles: rows.length, waiting, partial: waiting > 0 } };
     },
   },
 
@@ -369,10 +420,10 @@ export async function resolveSource(ctx: SourceContext, spec: SourceSpec, opts: 
   const now = ctx.now?.() ?? Date.now();
   const prev = ctx.db.select().from(sourceResult).where(eq(sourceResult.sourceKey, key)).get();
   const maxAge = opts.maxAgeMs ?? 86_400_000;
-  if (!opts.force && prev?.status === 'ok' && prev.fetchedAt && now - prev.fetchedAt < maxAge && prev.items) {
+  const adapter = ADAPTERS[spec.type];
+  if (!opts.force && !adapter?.fresh && prev?.status === 'ok' && prev.fetchedAt && now - prev.fetchedAt < maxAge && prev.items) {
     return { key, label, status: 'ok', items: prev.items, error: null, fetchedAt: prev.fetchedAt, meta: prev.meta ?? null };
   }
-  const adapter = ADAPTERS[spec.type];
   try {
     if (!adapter) throw new SourceError(`Unknown source type ${spec.type}`, 'BAD_INPUT');
     const { items, meta } = await adapter.resolve(spec.config, ctx);

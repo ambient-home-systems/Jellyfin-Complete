@@ -19,6 +19,7 @@ import type { Mode } from '../settings.js';
 import { proposeArrAdds, executeArrDue } from './arr.js';
 import { syncHomeRows } from '../homescreen/index.js';
 import { syncFilmSeries } from './film-series.js';
+import { refreshWatchProviders, type ProviderKind } from '../sources/watch-providers.js';
 import { adoptionCandidates } from './adoption.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
 import { missingTitles } from '../domain/missing.js';
@@ -80,8 +81,19 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
     }
 
     const defs = loadDefinitions(app.db); // disabled ones too, so their box sets can be removed
+
+    // Streaming collections (ADR-036): ask TMDb which services carry the titles you own, a few hundred a run, weekly.
+    const providerKinds = new Set<ProviderKind>(defs.filter((d) => d.enabled).flatMap((d) => d.sources.filter((s) => s.type === 'tmdb_watch_provider').map((s): ProviderKind => (s.config.kind === 'show' ? 'tv' : 'movie'))));
+    if (providerKinds.size) {
+      step('Checking which streaming services carry your titles');
+      const p = await refreshWatchProviders(app.db, app.tmdb(), { region: settings.streaming.region, kinds: providerKinds, now });
+      Object.assign(stats, { streamingLookups: p.lookedUp, streamingWaiting: p.waiting });
+      if (p.problem) log.warn(p.problem);
+      if (p.waiting) log.info(`${p.waiting} titles still to check for streaming services; the next runs will get to them`);
+    }
+
     const ctx: SourceContext = { db: app.db, fetch: app.fetch, tmdb: app.tmdb(), plex: app.plex(), mdblistKey: app.secrets.get('mdblist.apiKey'), imdbRoute: settings.imdbRoute, now: () => now,
-      imdbSnapshot: settings.snapshotUrl ? { url: settings.snapshotUrl, token: app.secrets.get('imdb.snapshotToken') } : undefined };
+      imdbSnapshot: settings.snapshotUrl ? { url: settings.snapshotUrl, token: app.secrets.get('imdb.snapshotToken') } : undefined, streamingRegion: settings.streaming.region };
     const resolved = new Map<number, ResolvedSource[]>();
     const memo = new Map<string, Promise<ResolvedSource>>();
     const today = localDay(now, settings.timezone);

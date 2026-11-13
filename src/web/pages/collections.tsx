@@ -12,7 +12,7 @@ import type { Parity } from '../../domain/parity.js';
 type Row = ReturnType<typeof collectionsModel>[number];
 const srcDot = (status: string) => (status === 'ok' ? 'ok' : status === 'stale' ? 'warn' : status === 'failed' ? 'err' : 'ok') as 'ok' | 'warn' | 'err';
 
-const FAMILY_ORDER: (PresetFamily | 'custom')[] = ['seasonal', 'holiday_episodes', 'custom', 'film_series', 'universe', 'show_franchise'];
+const FAMILY_ORDER: (PresetFamily | 'custom')[] = ['seasonal', 'holiday_episodes', 'custom', 'film_series', 'imdb_chart', 'streaming', 'universe', 'show_franchise'];
 
 const CollectionsTable: FC<{ rows: Row[]; tz: string; csrf: string }> = ({ rows, tz, csrf }) => (
   <div class="table-wrap">

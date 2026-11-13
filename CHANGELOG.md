@@ -2,6 +2,18 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.9.0 — 13 Nov 2026
+
+- **Streaming services.** A collection for each service, such as "Netflix Movies" or "Disney+ Shows", holding the titles you own that stream on it in your country. Like Kometa's streaming collections, with its 22 services and posters.
+  - Subscription, free and with-ads offers count; rentals and purchases don't.
+  - Each run asks TMDb which services carry your titles: new titles first, then each title once a week, at most 600 a run. A big library fills in over a few nights, and nothing is removed until every title has been checked once.
+  - Set your country in Settings → Run and review (US by default). Turning the family on in Getting started turns on the services offered there.
+  - Needs a TMDb key. Streaming data comes from JustWatch, through TMDb.
+- **IMDb charts.** IMDb Top 250, IMDb Popular (films and shows of each) and IMDb Lowest Rated Movies: the titles you own from each chart, following it as it changes. Like Kometa's chart collections. The rest of each chart is on the Missing page.
+- Both are off until you turn them on, in Getting started, under Collections or through Claude. Both are also sources in the collection editor, and Claude can set the streaming country.
+- **IMDb snapshot route:** snapshots now include the charts. Run the snapshot job again before using the charts on that route.
+- See [IMDb charts](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/docs/USER-GUIDE.md#imdb-charts) and [Streaming services](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/docs/USER-GUIDE.md#streaming-services).
+
 ## 0.8.1 — 13 Nov 2026
 
 - **Fixed:**

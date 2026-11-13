@@ -29,6 +29,8 @@ export type SettingsPatch = {
   movieLibraryIds?: string[] | null;
   showLibraryIds?: string[] | null;
   homeRows?: Partial<Settings['homeRows']>;
+  /** Two-letter country code for streaming collections. */
+  streamingRegion?: string;
 };
 
 /** Check the whole patch, then save it. Throws SettingsError with a message for people. */
@@ -94,6 +96,11 @@ export function applySettings(app: AppContext, patch: SettingsPatch): { changed:
     if (!Number.isInteger(h.orderIndex) || h.orderIndex < 0 || h.orderIndex > 99) throw new SettingsError('Position must be a whole number from 0 to 99.');
     if (!['Portrait', 'Landscape', 'Square', 'Small'].includes(h.viewMode)) throw new SettingsError('View must be Portrait, Landscape, Square or Small.');
     next.homeRows = h;
+  }
+  if (patch.streamingRegion !== undefined) {
+    const region = patch.streamingRegion.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(region)) throw new SettingsError('The streaming country must be a two-letter code, such as US, GB or CA.');
+    next.streaming = { ...s.streaming, region };
   }
   app.updateSettings(next);
   return { changed: Object.keys(next) as (keyof Settings)[], timezoneChanged: next.timezone !== undefined && next.timezone !== s.timezone };

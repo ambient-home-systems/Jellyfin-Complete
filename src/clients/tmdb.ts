@@ -114,6 +114,22 @@ export class TmdbClient {
     });
   }
 
+  /**
+   * The services a film or show streams on in one country: subscription, free and with-ads offers, not rentals or
+   * purchases. TMDb's data comes from JustWatch. Not cached here: the run's refresh step stores it (ADR-036).
+   */
+  async watchProviders(kind: 'movie' | 'tv', id: string, region: string): Promise<number[]> {
+    type Offer = { provider_id: number };
+    try {
+      const r = await this.get<{ results?: Record<string, { flatrate?: Offer[]; free?: Offer[]; ads?: Offer[] }> }>(`/${kind}/${encodeURIComponent(id)}/watch/providers`);
+      const here = r.results?.[region];
+      return [...new Set([...(here?.flatrate ?? []), ...(here?.free ?? []), ...(here?.ads ?? [])].map((p) => p.provider_id))];
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 404) return [];
+      throw e;
+    }
+  }
+
   /** The TMDb collection a film belongs to, for films Jellyfin hasn't recorded one for. Cached for 30 days. */
   movieCollection(id: number | string): Promise<string | null> {
     return cached(this.db, `movie-collection:${id}`, 30, async () => {

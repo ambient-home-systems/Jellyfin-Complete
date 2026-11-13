@@ -1,14 +1,17 @@
-// Every preset the app ships, in one registry. Seasonal films and holiday episodes start on; show franchises and universes start off
+// Every preset the app ships, in one registry. Seasonal films and holiday episodes start on; the rest start off
 // (Kometa's defaults are opt-in, and Jellyfin already builds TMDb franchise collections). ADR-014.
 import { SEASONAL_PRESETS, presetDefinition } from './seasonal.js';
 import { SHOW_FRANCHISES, showFranchiseDefinition } from './franchise.js';
 import { UNIVERSES, universeDefinition } from './universe.js';
 import { HOLIDAY_EPISODES, holidayEpisodesDefinition } from './episodes.js';
+import { streamingPresets } from './streaming.js';
+import { CHART_PRESETS, chartDefinition } from './charts.js';
 import type { ActionType, WindowDef, Poster } from '../db/schema.js';
 import type { SourceSpec } from '../sources/index.js';
 import type { Mode } from '../settings.js';
 
-export type PresetFamily = 'seasonal' | 'holiday_episodes' | 'film_series' | 'show_franchise' | 'universe';
+export type PresetFamily = 'seasonal' | 'holiday_episodes' | 'film_series' | 'imdb_chart' | 'streaming' | 'show_franchise' | 'universe';
+export const PRESET_FAMILIES: PresetFamily[] = ['seasonal', 'holiday_episodes', 'film_series', 'universe', 'show_franchise', 'imdb_chart', 'streaming'];
 
 export const FAMILY_LABEL: Record<PresetFamily | 'custom', string> = {
   seasonal: 'Seasonal',
@@ -17,6 +20,8 @@ export const FAMILY_LABEL: Record<PresetFamily | 'custom', string> = {
   universe: 'Universes',
   show_franchise: 'Show franchises',
   film_series: 'Film series',
+  imdb_chart: 'IMDb charts',
+  streaming: 'Streaming services',
 };
 
 export type PresetDefinition = {
@@ -41,10 +46,12 @@ export const PRESETS: Preset[] = [
   ...HOLIDAY_EPISODES.map((h): Preset => ({ family: 'holiday_episodes', definition: holidayEpisodesDefinition(h), deleteCollectionsNamed: [], enabledByDefault: true })),
   ...UNIVERSES.map((u): Preset => ({ family: 'universe', definition: universeDefinition(u), deleteCollectionsNamed: u.deleteCollectionsNamed, enabledByDefault: false })),
   ...SHOW_FRANCHISES.map((f): Preset => ({ family: 'show_franchise', definition: showFranchiseDefinition(f), deleteCollectionsNamed: [], enabledByDefault: false })),
+  ...CHART_PRESETS.map((c): Preset => ({ family: 'imdb_chart', definition: chartDefinition(c), deleteCollectionsNamed: [], enabledByDefault: false })),
+  ...streamingPresets().map((p): Preset => ({ family: 'streaming', definition: p.definition, deleteCollectionsNamed: p.oldNames, enabledByDefault: false })),
 ];
 
 /** "seasonal:christmas" → "seasonal"; custom collections have no preset key. */
 export function familyOf(presetKey: string | null): PresetFamily | 'custom' {
   const f = presetKey?.split(':')[0];
-  return f === 'seasonal' || f === 'holiday_episodes' || f === 'film_series' || f === 'show_franchise' || f === 'universe' ? f : 'custom';
+  return (PRESET_FAMILIES as (string | undefined)[]).includes(f) ? (f as PresetFamily) : 'custom';
 }

@@ -24,8 +24,9 @@ export function episodeSearches(keywords: string[], seriesImdbIds: string[]): Ko
 
 /** Every IMDb query these sources need. Episode sources need the owned series' IMDb IDs. */
 export function queriesFor(sources: { type: string; config: Record<string, unknown> }[], seriesImdbIds: string[] = []): SnapshotRequest {
-  const req: SnapshotRequest = { searches: [], lists: [] };
+  const req: SnapshotRequest = { searches: [], lists: [], charts: [] };
   for (const s of sources) {
+    if (s.type === 'imdb_chart' && s.config.chart && !req.charts!.includes(String(s.config.chart))) req.charts!.push(String(s.config.chart));
     if (s.type === 'imdb_episodes') req.searches.push(...episodeSearches(((s.config.keywords ?? []) as string[]).map(String), seriesImdbIds));
     else if (s.type === 'imdb_search' && s.config.search) req.searches.push(s.config.search as KometaImdbSearch);
     else if (s.type === 'imdb_list' && s.config.listId) req.lists.push({ listId: String(s.config.listId), ...(s.config.limit ? { limit: Number(s.config.limit) } : {}) });

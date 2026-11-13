@@ -1,6 +1,8 @@
 // Turns what someone types in the collection editor into a source spec, with a plain-language error
 // when it can't. One text field per source; IDs or the URL you'd copy from the browser both work.
 import type { SourceSpec } from '../sources/index.js';
+import { IMDB_CHARTS, isImdbChart } from '../imdb/index.js';
+import { STREAMING_SERVICES } from '../presets/streaming.js';
 
 export type Target = 'movies' | 'shows' | 'both' | 'episodes';
 
@@ -40,6 +42,28 @@ export const SOURCE_INPUTS: SourceInput[] = [
       if (!kws.length) return 'Enter one or more IMDb keywords, separated by commas.';
       const type = target === 'shows' ? ['tv_series', 'tv_mini_series'] : target === 'movies' ? ['movie'] : undefined;
       return { type: 'imdb_search', config: { search: { 'keyword.any': kws, ...(type ? { type } : {}), limit: 500 } } };
+    },
+  },
+  {
+    key: 'imdb_chart', label: 'IMDb chart', placeholder: 'top (Top 250), popular or lowest',
+    parse: (v, target) => {
+      const w = v.trim().toLowerCase().replace(/[\s-]+/g, '_');
+      const shows = target === 'shows';
+      const chart = isImdbChart(w) ? w
+        : /^top(_250)?$/.test(w) ? (shows ? 'top_shows' : 'top_movies')
+        : /^(most_)?popular$/.test(w) ? (shows ? 'popular_shows' : 'popular_movies')
+        : /^lowest(_rated)?$/.test(w) && !shows ? 'lowest_rated' : null;
+      return chart ? { type: 'imdb_chart', config: { chart } } : `Enter one IMDb chart: ${Object.keys(IMDB_CHARTS).join(', ')} (or top, popular, lowest).`;
+    },
+  },
+  {
+    key: 'streaming_service', label: 'Streaming service', placeholder: 'Netflix, Disney+, Prime Video…',
+    parse: (v, target) => {
+      const w = v.trim().toLowerCase();
+      const service = STREAMING_SERVICES.find((s) => s.key === w || s.name.toLowerCase() === w);
+      if (!service) return `Enter one streaming service: ${STREAMING_SERVICES.map((s) => s.name).join(', ')}.`;
+      if (target !== 'movies' && target !== 'shows') return 'A streaming-service source needs a collection of films or of shows.';
+      return { type: 'tmdb_watch_provider', config: { service: service.key, kind: target === 'shows' ? 'show' : 'movie' } };
     },
   },
   {

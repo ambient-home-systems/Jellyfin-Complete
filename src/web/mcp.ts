@@ -39,7 +39,7 @@ import { JOBS, type JobName } from '../jobs/schedules.js';
 import { nextRuns } from '../jobs/scheduler.js';
 import type { Settings } from '../settings.js';
 
-const INSTRUCTIONS = `Maverick Jellyfin Complete builds collections (box sets) in the user's Jellyfin media server: seasonal ones that appear and disappear on their dates, holiday episodes, film universes, TV franchises and the user's own.
+const INSTRUCTIONS = `Maverick Jellyfin Complete builds collections (box sets) in the user's Jellyfin media server: seasonal ones that appear and disappear on their dates, holiday episodes, film series, film universes, TV franchises, IMDb charts, streaming services (the titles the user owns that stream on Netflix and so on) and the user's own.
 Each run plans changes. Changes set to Review, and every change while dry run is on, wait in Review until someone approves, snoozes or dismisses them.
 Approving applies the change to Jellyfin straight away (or when the collection's dates open), even while dry run is on: dry run only stops changes from applying without approval.
 Before approving, show the user exactly what will change (collection, action, titles) and get their go-ahead, especially for deletions and removals. Never approve on your own initiative.
@@ -234,7 +234,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('get_settings', {
     title: 'Settings',
-    description: 'Every setting on the Settings page: dry run, timezone, plan-ahead days, action modes, Radarr/Sonarr guardrails and defaults, IMDb route, which libraries collections draw from, home-screen rows, job schedules, and which connections are set up (never the keys themselves).',
+    description: 'Every setting on the Settings page: dry run, timezone, plan-ahead days, action modes, Radarr/Sonarr guardrails and defaults, IMDb route, which libraries collections draw from, home-screen rows, film series, the streaming country, job schedules, and which connections are set up (never the keys themselves).',
     annotations: read,
   }, async () => {
     const s = app.settings();
@@ -249,6 +249,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       libraries: { films: libList('movies', s.movieLibraryIds), tv: libList('tvshows', s.showLibraryIds) },
       homeRows: { enabled: s.homeRows.enabled, position: s.homeRows.orderIndex, view: s.homeRows.viewMode },
       filmSeries: s.filmSeries,
+      streamingCountry: s.streaming.region,
       schedules: app.db.select().from(jobSchedule).all().map((j) => ({ job: j.job, what: JOBS[j.job as JobName]?.detail ?? null, cron: j.cron, on: j.enabled, next: at(runs.find((r) => r.job === j.job)?.next?.getTime()) })),
       otherToolsSchedules: s.neighbours,
       connections: Object.fromEntries(CONNECTIONS.map((x) => [x.key, { address: x.urlField ? s.connections[x.urlField] || null : undefined, keySaved: x.secret ? app.secrets.masked(x.secret).set : undefined }])),
@@ -389,6 +390,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       homeRows: z.object({ enabled: z.boolean().optional(), position: z.number().int().min(0).max(99).optional(), view: z.enum(['Portrait', 'Landscape', 'Square', 'Small']).optional() }).optional(),
       otherToolsSchedules: z.array(z.object({ name: z.string(), time: z.string() })).optional().describe('Replaces the list of other tools\' run times shown beside this app\'s jobs, e.g. [{"name":"Kometa (Plex)","time":"05:00"}].'),
       filmSeries: z.object({ enabled: z.boolean(), minimum: z.number().int().min(2).max(20).optional() }).optional().describe('Film series: one collection for each TMDb film series with at least `minimum` (default 2) owned films. Turning it on or off also turns every film series collection on or off; the next run adds new series.'),
+      streamingCountry: z.string().optional().describe('Two-letter country code (US, GB, CA…) whose streaming services the streaming collections (Netflix Movies and so on) count.'),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   }, async (a) => {
@@ -400,7 +402,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
         imdbRoute: a.imdbRoute, snapshotUrl: a.snapshotUrl,
         movieLibraryIds: libraryIds(a.filmLibraries, 'movies'), showLibraryIds: libraryIds(a.tvLibraries, 'tvshows'),
         homeRows: a.homeRows ? { enabled: a.homeRows.enabled, orderIndex: a.homeRows.position, viewMode: a.homeRows.view } : undefined,
-        neighbours: a.otherToolsSchedules,
+        neighbours: a.otherToolsSchedules, streamingRegion: a.streamingCountry,
       });
       if (a.filmSeries) setFilmSeries(app, a.filmSeries.enabled, a.filmSeries.minimum);
       if (r.timezoneChanged) opts.restartScheduler?.();

@@ -6,7 +6,7 @@ The job uses the same resolver code as the app (`src/imdb/`), so the results are
 
 ## What's in a snapshot
 
-- **Presets.** Every IMDb list and search the presets use (seasonal, universes, show franchises), whether or not they're turned on.
+- **Presets.** Every IMDb list, search and chart the presets use (seasonal, universes, show franchises, IMDb charts), whether or not they're turned on. Snapshots made before 0.9.0 have no charts; run the job again for them.
 - **Your collections.** Any IMDb sources from your own collections, if you give the job your query list (step 3 below).
 
 A full snapshot of the presets is about 0.5 MB and takes about a minute to build.
@@ -39,4 +39,4 @@ Publish the file anywhere the app can fetch it over HTTP(S).
 
 - **Reads.** The snapshot is read once per run.
 - **Stale snapshots.** A snapshot older than **3 days** counts as a failed source. Each collection keeps its last good result and makes no removals until a fresh snapshot arrives (ADR-008).
-- **Missing queries.** A list or search that isn't in the snapshot fails with "Not in the IMDb snapshot". Add it with the query list and run the job again.
+- **Missing queries.** A list, search or chart that isn't in the snapshot fails with "Not in the IMDb snapshot". Add it with the query list and run the job again.
