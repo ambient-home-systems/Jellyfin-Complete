@@ -5,7 +5,9 @@
   "license": "MIT",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.12" },
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
@@ -19,6 +21,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.6",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "better-sqlite3": "^13.0.3",
     "croner": "^11.0.0",
     "drizzle-orm": "^0.45.4",

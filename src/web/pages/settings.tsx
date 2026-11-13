@@ -4,13 +4,15 @@ import { Icon, Csrf, Seg, fmtDate, fmtTime } from '../ui.js';
 import type { Settings } from '../../settings.js';
 import type { SecretName } from '../../secrets.js';
 import { JOBS } from '../../jobs/schedules.js';
+import { ClaudeAccess, type Reveal } from './claude-access.js';
+import type { ApiToken } from '../api-tokens.js';
 
 export type ConnRow = { key: string; name: string; urlField?: keyof Settings['connections']; secret?: SecretName; secretLabel: string; note?: string; optional?: boolean };
 export const CONNECTIONS: ConnRow[] = [
   { key: 'jellyfin', name: 'Jellyfin', urlField: 'jellyfinUrl', secret: 'jellyfin.apiKey', secretLabel: 'API key' },
   { key: 'tmdb', name: 'TMDb', secret: 'tmdb.apiKey', secretLabel: 'API key', note: 'api.themoviedb.org' },
   { key: 'mdblist', name: 'MDBList', secret: 'mdblist.apiKey', secretLabel: 'API key', note: 'Optional: public lists work without a key', optional: true },
-  { key: 'plex', name: 'Plex', urlField: 'plexUrl', secret: 'plex.token', secretLabel: 'Token', note: 'Optional, for parity (Phase 2)', optional: true },
+  { key: 'plex', name: 'Plex', urlField: 'plexUrl', secret: 'plex.token', secretLabel: 'Token', note: 'Optional: only to compare a collection with the same-named one in Plex. Read-only.', optional: true },
   { key: 'radarr', name: 'Radarr', urlField: 'radarrUrl', secret: 'radarr.apiKey', secretLabel: 'API key', optional: true },
   { key: 'sonarr', name: 'Sonarr', urlField: 'sonarrUrl', secret: 'sonarr.apiKey', secretLabel: 'API key', optional: true },
 ];
@@ -25,14 +27,15 @@ export const SettingsPage: FC<{
   libraries: { id: string; name: string; collectionType: string | null }[];
   libError?: string | null;
   schedules: { job: string; cron: string; enabled: boolean; next: Date | null }[];
-}> = ({ s, csrf, masked, libraries, libError, schedules }) => (
+  claude: { tokens: ApiToken[]; reveal: Reveal | null; endpoint: string };
+}> = ({ s, csrf, masked, libraries, libError, schedules, claude }) => (
   <>
     <header class="top"><h1>Settings</h1></header>
     <div class="content">
       <div class="settings">
         <nav class="subnav" aria-label="Settings sections">
           <a href="#conn" aria-current="true">Connections</a><a href="#run">Run and review</a><a href="#modes">Action modes</a>
-          <a href="#imdb">IMDb route</a><a href="#libs">Libraries</a><a href="#sched">Schedules</a>
+          <a href="#imdb">IMDb route</a><a href="#libs">Libraries</a><a href="#sched">Schedules</a><a href="#claude">Claude access</a>
         </nav>
         <div>
           <section class="form-sec" id="conn" aria-labelledby="conn-h">
@@ -165,6 +168,8 @@ export const SettingsPage: FC<{
               <div style="margin-top:var(--s3)"><button class="btn primary" type="submit"><Icon name="check" /> Save schedules</button></div>
             </form>
           </section>
+
+          <ClaudeAccess tokens={claude.tokens} reveal={claude.reveal} endpoint={claude.endpoint} tz={s.timezone} csrf={csrf} />
         </div>
       </div>
     </div>

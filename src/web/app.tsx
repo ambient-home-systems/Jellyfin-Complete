@@ -40,8 +40,12 @@ import { Activity } from './pages/activity.js';
 import { SettingsPage, CONNECTIONS } from './pages/settings.js';
 import { Login, Setup } from './pages/auth.js';
 import { Adoption } from './pages/adoption.js';
-import { runPipeline, currentRun, isRunning, applyNow } from '../pipeline/run.js';
-import { decide, forgetDecision } from '../pipeline/store.js';
+import { runPipeline, currentRun, isRunning } from '../pipeline/run.js';
+import { forgetDecision } from '../pipeline/store.js';
+import { reviewVerdict, type SnoozeFor } from './review-actions.js';
+import { createToken, listTokens, revokeToken, SCOPE_LABEL, type TokenScope } from './api-tokens.js';
+import type { Reveal } from './pages/claude-access.js';
+import { mcpHandler } from './mcp.js';
 import { undoAction } from '../pipeline/undo.js';
 import { adoptionCandidates, adopt, deleteUnmanaged } from '../pipeline/adoption.js';
 import { loadDefinition, loadDefinitions } from '../domain/definitions.js';
@@ -51,7 +55,6 @@ import { syncLibraries } from '../library/indexer.js';
 import { sourceKey, sourceLabel, resolveSource, type ResolvedSource } from '../sources/index.js';
 import type { LoadedDefinition } from '../domain/definitions.js';
 import { getPlanSummary } from '../pipeline/summary.js';
-import { localDay, localMidnight, opensWithin, transitions } from '../domain/windows.js';
 import { startScheduler, nextRuns, lastHeartbeat } from '../jobs/scheduler.js';
 import { log } from '../log.js';
 import type { Mode, Settings } from '../settings.js';
@@ -169,6 +172,9 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       return c.html(<Login server={url} error="Jellyfin didn’t accept that username and password." />, 401);
     }
   });
+
+  // ── MCP for Claude (ADR-032): its own bearer-token auth, so it sits before the session check ──
+  web.all('/mcp', mcpHandler(app));
 
   // ── everything below needs an admin session ──
   web.use('*', requireAuth(app));
@@ -555,38 +561,10 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       for (const a of app.db.select().from(action).where(inArray(action.id, ids)).all()) forgetDecision(app.db, a.fingerprint);
       return back(c, `/review?tab=${tab}`, { ok: 'Undone. The next run proposes it again.' });
     }
-    if (verdict === 'approve') {
-      decide(app.db, ids, 'approve', by);
-      const due = app.db.select().from(action).where(inArray(action.id, ids)).all().filter((a) => a.applyAt === null || a.applyAt <= Date.now()).map((a) => a.id);
-      if (due.length) {
-        try {
-          const r = await applyNow(app, due);
-          return back(c, `/review?tab=${tab}`, { ok: `Approved ${ids.length}. Applied ${r.applied}${r.waiting ? `, ${r.waiting} waiting for other approvals (a box set is created only with members)` : ''}${r.failed ? `, ${r.failed} failed (see Activity)` : ''}.` });
-        } catch (e) {
-          return back(c, `/review?tab=${tab}`, { err: `Approved, but applying failed: ${(e as Error).message}` });
-        }
-      }
-      return back(c, `/review?tab=${tab}`, { ok: `Approved ${ids.length}. They apply when the window opens.` });
-    }
-    if (verdict === 'dismiss') {
-      decide(app.db, ids, 'dismiss', by);
-      return back(c, `/review?tab=${tab}`, { ok: `Dismissed ${ids.length}. They won’t be proposed again unless you undo it.` });
-    }
-    if (verdict === 'snooze') {
+    if (verdict === 'approve' || verdict === 'dismiss' || verdict === 'snooze') {
       const choice = String(b.snooze ?? app.settings().defaultSnooze);
-      const s = app.settings();
-      for (const a of app.db.select().from(action).where(inArray(action.id, ids)).all()) {
-        let until: number | null = Date.now() + (choice === '30d' ? 30 : 7) * 86_400_000;
-        if (choice === 'window') {
-          const def = a.definitionId ? loadDefinition(app.db, a.definitionId) : undefined;
-          const today = localDay(Date.now(), s.timezone);
-          const open = def?.window ? transitions(def.window, today, 4).find((t) => t.kind === 'opens') : undefined;
-          until = open ? localMidnight(open.day, s.timezone) : Date.now() + 30 * 86_400_000;
-          void opensWithin;
-        }
-        decide(app.db, [a.id], 'snooze', by, { until });
-      }
-      return back(c, `/review?tab=${tab}`, { ok: `Snoozed ${ids.length}.` });
+      const r = await reviewVerdict(app, ids, verdict, by, { snooze: (['7d', '30d', 'window'].includes(choice) ? choice : 'window') as SnoozeFor });
+      return back(c, `/review?tab=${tab}`, r.ok ? { ok: r.message } : { err: r.message });
     }
     return back(c, `/review?tab=${tab}`, { err: 'Unknown action.' });
   });
@@ -610,7 +588,32 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const masked = { ...Object.fromEntries(CONNECTIONS.map((x) => [x.key, x.secret ? app.secrets.masked(x.secret) : { set: false, last4: null }])), imdbSnapshot: app.secrets.masked('imdb.snapshotToken') };
     const runs = nextRuns(app);
     const schedules = app.db.select().from(jobSchedule).all().map((j) => ({ ...j, next: runs.find((r) => r.job === j.job)?.next ?? null }));
-    return page(c, 'Settings', 'settings', <SettingsPage s={app.settings()} csrf={userOf(c).csrf} masked={masked} libraries={librariesModel(app)} libError={libError} schedules={schedules} />);
+    const sessionId = userOf(c).sessionId;
+    const reveal = reveals.get(sessionId);
+    reveals.delete(sessionId); // shown once
+    const claude = { tokens: listTokens(app.db), reveal: reveal && reveal.expires > Date.now() ? reveal : null, endpoint: mcpEndpoint(c) };
+    return page(c, 'Settings', 'settings', <SettingsPage s={app.settings()} csrf={userOf(c).csrf} masked={masked} libraries={librariesModel(app)} libError={libError} schedules={schedules} claude={claude} />);
+  });
+
+  // ── Claude access (ADR-032): MCP access tokens. A new token waits here for one page view, then only its hash remains. ──
+  const reveals = new Map<string, Reveal & { expires: number }>();
+  const mcpEndpoint = (c: Context) => `${isHttps(c, app.config.trustProxy) ? 'https' : 'http'}://${(app.config.trustProxy && c.req.header('x-forwarded-host')) || c.req.header('host') || new URL(c.req.url).host}/mcp`;
+  web.post('/settings/claude', async (c) => {
+    const b = await c.req.parseBody();
+    const name = String(b.name ?? '').trim().slice(0, 60);
+    const scope: TokenScope = b.scope === 'read' ? 'read' : 'review';
+    if (!name) return back(c, '/settings#claude', { err: 'Give the token a name, such as where it’s used.' });
+    const { token } = createToken(app.db, name, scope, userOf(c).name);
+    reveals.set(userOf(c).sessionId, { name, token, scope, expires: Date.now() + 10 * 60_000 });
+    log.info(`Claude access token “${name}” (${SCOPE_LABEL[scope]}) created by ${userOf(c).name}`);
+    return back(c, '/settings#claude', { ok: `Token “${name}” created. Copy it below: it isn’t shown again.` });
+  });
+  web.post('/settings/claude/:id/revoke', (c) => {
+    const id = Number(c.req.param('id'));
+    const row = listTokens(app.db).find((t) => t.id === id);
+    if (!row || !revokeToken(app.db, id)) return back(c, '/settings#claude', { err: 'That token no longer exists.' });
+    log.info(`Claude access token “${row.name}” revoked by ${userOf(c).name}`);
+    return back(c, '/settings#claude', { ok: `Revoked “${row.name}”. Claude can’t use it any more.` });
   });
 
   web.post('/settings/connections', async (c) => {

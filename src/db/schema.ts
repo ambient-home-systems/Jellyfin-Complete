@@ -272,3 +272,19 @@ export const imdbHash = sqliteTable('imdb_hash', {
   checkedAt: integer('checked_at'),
   error: text('error'),
 });
+
+/** Access tokens for the MCP endpoint (ADR-032). Only a SHA-256 hash is stored; the token is shown once. */
+export const apiToken = sqliteTable(
+  'api_token',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    hash: text('hash').notNull(),
+    hint: text('hint').notNull(),
+    scope: text('scope').$type<'read' | 'review'>().notNull(),
+    createdBy: text('created_by').notNull(),
+    createdAt: integer('created_at').notNull(),
+    lastUsedAt: integer('last_used_at'),
+  },
+  (t) => [uniqueIndex('api_token_hash').on(t.hash)],
+);

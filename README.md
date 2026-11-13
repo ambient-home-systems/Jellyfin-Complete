@@ -17,6 +17,7 @@ Kometa-style collections for Jellyfin: seasonal box sets that appear and disappe
   - send missing titles to Radarr or Sonarr
   - compare collections with what Kometa built in Plex
   - show a home-screen row per live collection
+  - let Claude Code or Claude Desktop use it for you, over MCP
 
 **Status: 0.4.0, not yet released.** It runs nightly on one Jellyfin 12.4 server. Jellyfin 10.10 and later should work: see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
@@ -106,7 +107,7 @@ Database migrations run at start-up. Read [CHANGELOG.md](CHANGELOG.md) first.
 
 | Using it | |
 |---|---|
-| [docs/USER-GUIDE.md](docs/USER-GUIDE.md) | How it works, each screen, modes, collections, Missing, home-screen rows, troubleshooting |
+| [docs/USER-GUIDE.md](docs/USER-GUIDE.md) | How it works, each screen, modes, collections, Missing, home-screen rows, Claude access, troubleshooting |
 | [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md) | Where data comes from, which keys you need, and the risks: IMDb's GraphQL API isn't official, and Letterboxd has no API |
 | [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md) | Reaching it from outside your network safely |
 | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) | Jellyfin versions |

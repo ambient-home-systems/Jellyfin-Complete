@@ -9,7 +9,7 @@
 # in a copy of this repository and change the image line to maverick-jellyfin-complete:local.
 #
 # Jellyfin's address and API key are entered on the setup page at first launch, not here.
-# Dry run is on until you turn it off in Settings: nothing changes in Jellyfin before then.
+# Dry run is on until you turn it off in Settings: until then every change waits in Review, and only what you approve is applied.
 
 services:
   maverick-jellyfin-complete:

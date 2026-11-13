@@ -4,7 +4,7 @@ import { Icon, Csrf, fmtDate, fmtTime } from '../ui.js';
 import type { reviewModel } from '../model.js';
 
 type M = ReturnType<typeof reviewModel>;
-const TYPE_LABEL: Record<string, string> = {
+export const TYPE_LABEL: Record<string, string> = {
   'collection.create': 'Create box set',
   'collection.delete': 'Delete box set',
   'collection.add_items': 'Add items',

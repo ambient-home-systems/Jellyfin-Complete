@@ -39,6 +39,7 @@ Each entry is a short ADR: context, options, recommendation, consequences.
 | 029 | Testing strategy | Accepted |
 | 030 | Jellyfin client from the live 12.4.0 spec | Accepted |
 | 031 | Public release: what changes now and what waits | Accepted (2 Nov) |
+| 032 | Claude access through MCP, on the home network | **Decided** (13 Nov) |
 
 ---
 
@@ -454,6 +455,28 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - IMDb's GraphQL API isn't an official public API. Many installs calling it could draw blocks. The private-snapshot route (route 4) and last-good results soften this, but don't remove the risk.
   - Letterboxd's site terms. Kometa and JAC carry the same exposure.
 - **Consequences.** About 8 h added to Phase 1, outside the Christmas slice. Public release becomes its own phase with its own approval.
+
+### ADR-032 Claude access through MCP: Decided (13 Nov)
+- **Context.** You want Claude to use the app for you: say what's coming up, what's waiting in Review and why a title is missing, and act on Review.
+- **Decision.**
+  - **An MCP endpoint at `/mcp`** (Streamable HTTP, stateless, JSON responses), using the official TypeScript SDK. MCP is how Claude Code and Claude Desktop call other apps' tools.
+  - **For computers on your network only.** Claude Code connects directly. Claude Desktop connects through the `mcp-remote` bridge, which runs on that computer. The Claude app on the web or a phone would need the app reachable from the internet, with an OAuth sign-in. That isn't built.
+  - **Access tokens made in Settings → Claude access.** A token is shown once. Only its SHA-256 hash and last four characters are stored, and revoking deletes it. Each token is either **Read only**, or **Read, review and run** (the default, chosen 13 Nov).
+  - **Tools.**
+    - Reading: status, collections, one collection with its titles, the Review queue, missing titles, activity, run details.
+    - With a review token, also: approve, dismiss or snooze proposals, and start a run.
+    - Never: settings, keys, connections, or editing and enabling collections.
+  - **Approving through Claude is the Review button.** It is the same code path (`reviewVerdict`), so it applies straight away even in dry run. It is recorded as decided by "Claude (token name)". The tool and server descriptions tell Claude to show the change and get your go-ahead first.
+  - **Hardening.**
+    - Bearer tokens only (no cookies), so the endpoint needs no CSRF token.
+    - Requests that carry another site's `Origin` are refused (DNS rebinding).
+    - Ten wrong tokens from one address in 15 minutes lock that address out for 15 minutes.
+    - `GET` and `DELETE` answer 405.
+    - Tokens never appear in the log.
+- **Consequences.**
+  - A new dependency, `@modelcontextprotocol/sdk`.
+  - A new table, `api_token` (migration 0003).
+  - Anyone holding a review token can change your Jellyfin through Review. Treat a token like a password, and revoke it when a computer is no longer yours.
 
 ---
 

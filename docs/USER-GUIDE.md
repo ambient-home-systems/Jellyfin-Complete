@@ -95,6 +95,41 @@ Choose the defaults (quality profile, root folder, tags and so on) in Settings �
 
 With the Home Screen Sections and Collection Sections plugins installed in Jellyfin, each live collection that asks for one gets a row on the home screen while it's live. Turn this on in Settings → Home-screen rows. See [PHASE3.md](PHASE3.md) for how it works and its limits.
 
+## Let Claude use it
+
+Claude Code or Claude Desktop, on a computer on your home network, can use the app for you through MCP. You can ask, for example:
+- "What's waiting in Review?"
+- "Which Christmas films am I missing?"
+- "Approve the Thanksgiving additions."
+
+1. **Create a token** in Settings → Claude access. Name it after where you'll use it, and choose what it may do:
+   - **Read, review and run**
+   - **Read only**
+
+   The token is shown once, with the Claude Code command and the Claude Desktop config already filled in.
+2. **Claude Code:** run the command shown. Then `claude mcp list` should show `maverick … Connected`.
+   ```bash
+   claude mcp add --transport http maverick http://<host>:8097/mcp --header "Authorization: Bearer <token>"
+   ```
+3. **Claude Desktop:** paste the config shown into `claude_desktop_config.json` (Settings → Developer → Edit config), then restart Claude Desktop.
+   - It uses the `mcp-remote` bridge, which needs Node.js on that computer.
+   - Settings → Connectors won't work for this: it expects a server that's reachable from the internet.
+
+| Claude can | Read only | Read, review and run |
+|---|---|---|
+| See status, collections and their titles, Review, Missing, Activity and runs | ✓ | ✓ |
+| Approve, snooze or dismiss proposals in Review | | ✓ |
+| Start a run | | ✓ |
+| Change settings, keys or connections, or edit or turn collections on and off | | |
+
+**Approving through Claude does the same as pressing Approve in Review:**
+- The change applies to Jellyfin straight away, even with dry run on.
+- Activity shows "Claude (*token name*)" as who approved it.
+
+Claude is told to show you each change and wait for your yes. Still, treat a review token like a password. Revoking it in Settings → Claude access stops it at once.
+
+The Claude app on the web or on a phone can't connect: Claude would reach the app from Anthropic's servers, which can't see your home network.
+
 ## Troubleshooting
 
 | You see | What to do |
@@ -105,6 +140,7 @@ With the Home Screen Sections and Collection Sections plugins installed in Jelly
 | A run **failed** with "older than 10.10.0" | Update Jellyfin. See [COMPATIBILITY.md](COMPATIBILITY.md). |
 | "Too many failed sign-ins" | Wait 15 minutes. It's per address and per username. |
 | Lost the **setup code** | Restart the container. A new code is printed in its log for as long as Jellyfin isn't connected. |
+| Claude can't connect | Open `http://<host>:8097/healthz` from that computer: it should say `ok`. A 401 means the token is wrong or revoked; create a new one. After ten wrong tokens, that address waits 15 minutes. |
 
 ## Back up and move
 

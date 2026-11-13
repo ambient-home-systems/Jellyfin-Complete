@@ -19,7 +19,9 @@ Getting ready for other people's servers (Phase 4).
   - Tagged releases publish a multi-arch (amd64, arm64) image to GitHub Container Registry.
   - The image's default timezone is UTC. `TZ` now only seeds the timezone setting on first start.
 - **A ready-made image of the newest code.** Every change to `main` publishes `ghcr.io/ambient-home-systems/jellyfin-complete:main` (amd64 and arm64), so nobody has to build the image. The compose file and the README's Portainer steps use it, and the README covers moving a `docker compose` install into Portainer.
+- **Claude access (MCP).** Claude Code or Claude Desktop on your network can use the app through an MCP endpoint at `/mcp`. Create a token in Settings → Claude access: **Read only**, or **Read, review and run**, which can also approve, snooze or dismiss proposals and start a run. Approving through Claude works exactly like Review's Approve button. See [docs/USER-GUIDE.md](docs/USER-GUIDE.md#let-claude-use-it).
 - **Fixed:**
+  - On phones, the navigation rail filled the whole screen and covered the page. It's now a tab bar along the bottom. On tablets, the rail shows the logo again.
   - Saving Settings → Libraries with every library ticked failed with an error.
   - `OfficialRating` and `ProductionYear` were requested as `Fields` values, which no Jellyfin version accepts.
   - Getting started showed a bare count beside each kind of collection ("Show franchises 27"), which read like titles found on your server. It now says what the number means: how many collections it can make, and that a franchise or universe collection needs at least 2 of its titles. The interface also no longer names Kometa where it isn't about Kometa.
