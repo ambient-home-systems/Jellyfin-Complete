@@ -132,14 +132,21 @@ describe('Letterboxd lookup cap', () => {
 });
 
 describe('MDBList lists', () => {
-  it('keeps the list number of external lists, with and without an API key', async () => {
+  it('reads external lists from their public JSON, with or without an API key (the API has no route for them)', async () => {
     const urls: string[] = [];
     const f = async (url: string) => { urls.push(url); return new Response(mdblistJson); };
     const spec = { type: 'mdblist_list', config: { url: 'https://mdblist.com/lists/k0meta/external/15110' } };
     expect((await resolveSource(ctxWith(f), spec)).items).toHaveLength(2);
-    expect((await resolveSource(ctxWith(f, { mdblistKey: 'k' }), { ...spec, config: { url: 'https://mdblist.com/lists/k0meta/external/46550/' } })).status).toBe('ok');
-    expect(urls[0]).toBe('https://mdblist.com/lists/k0meta/external/15110/json');
-    expect(urls[1]).toBe('https://api.mdblist.com/lists/k0meta/external/46550/items?apikey=k');
+    expect((await resolveSource(ctxWith(f, { mdblistKey: 'k' }), { ...spec, config: { url: 'https://mdblist.com/lists/k0meta/external/46550/' } })).items).toHaveLength(2);
+    expect(urls).toEqual(['https://mdblist.com/lists/k0meta/external/15110/json', 'https://mdblist.com/lists/k0meta/external/46550/json']);
+  });
+
+  it('falls back to a list\'s public JSON when the API answers 404', async () => {
+    const urls: string[] = [];
+    const f = async (url: string) => { urls.push(url); return url.includes('api.mdblist.com') ? new Response('not found', { status: 404 }) : new Response(mdblistJson); };
+    const r = await resolveSource(ctxWith(f, { mdblistKey: 'k' }), { type: 'mdblist_list', config: { url: 'https://mdblist.com/lists/someone/a-list' } });
+    expect(r.status).toBe('ok');
+    expect(urls).toEqual(['https://api.mdblist.com/lists/someone/a-list/items?apikey=k', 'https://mdblist.com/lists/someone/a-list/json']);
   });
 
   it('reads IDs from the API\'s nested ids and its tvdb_id field', async () => {

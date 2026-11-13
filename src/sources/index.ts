@@ -212,12 +212,21 @@ export const ADAPTERS: Record<string, Adapter> = {
       if (!path) throw new SourceError(`Not an MDBList list URL: ${url}`, 'BAD_INPUT');
       type Ids = { imdb?: string | null; tmdb?: number | string | null; tvdb?: number | string | null };
       type Row = { id?: number; imdb_id?: string; tvdbid?: number; tvdb_id?: number; ids?: Ids; mediatype?: string; title?: string; release_year?: number; rank?: number };
+      const publicJson = () => requestJson<Row[]>(ctx.fetch, `https://mdblist.com/lists/${path}/json`);
+      // External lists (lists MDBList imports from elsewhere) aren't served by the API's /lists/{user}/{slug} route,
+      // only by their public JSON, which needs no key. Any other list the API doesn't know falls back to it too.
+      const external = /\/external\/\d+$/.test(path);
       let rows: Row[];
-      if (ctx.mdblistKey) {
-        const r = await requestJson<Row[] | { movies?: Row[]; shows?: Row[] }>(ctx.fetch, `https://api.mdblist.com/lists/${path}/items?apikey=${encodeURIComponent(ctx.mdblistKey)}`);
-        rows = Array.isArray(r) ? r : [...(r.movies ?? []), ...(r.shows ?? [])];
+      if (ctx.mdblistKey && !external) {
+        try {
+          const r = await requestJson<Row[] | { movies?: Row[]; shows?: Row[] }>(ctx.fetch, `https://api.mdblist.com/lists/${path}/items?apikey=${encodeURIComponent(ctx.mdblistKey)}`);
+          rows = Array.isArray(r) ? r : [...(r.movies ?? []), ...(r.shows ?? [])];
+        } catch (e) {
+          if (!(e instanceof HttpError && e.status === 404)) throw e;
+          rows = await publicJson();
+        }
       } else {
-        rows = await requestJson<Row[]>(ctx.fetch, `https://mdblist.com/lists/${path}/json`);
+        rows = await publicJson();
       }
       const str = (v: unknown) => (v === null || v === undefined || v === '' || v === 0 ? undefined : String(v));
       return {
