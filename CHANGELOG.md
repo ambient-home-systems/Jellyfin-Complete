@@ -2,6 +2,16 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.6.0 — 13 Nov 2026
+
+- **Claude can change settings.** A new access level for Claude access tokens, **Full control**, lets Claude:
+  - change settings: dry run, timezone, plan-ahead days, action modes, Radarr/Sonarr limits, the IMDb route, libraries and home-screen rows
+  - change job schedules
+  - turn collections on or off
+
+  Every token can now read the settings. Connections and keys stay on the Settings page: Claude can't see or change them. Existing tokens keep their access; create a Full control token for this. See [Let Claude use it](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/docs/USER-GUIDE.md#let-claude-use-it).
+- **Releases can start from GitHub:** Actions → Release → Run workflow.
+
 ## 0.5.0 — 13 Nov 2026
 
 The first published release, so it also includes 0.1.0 to 0.4.0, which were never published (see the [changelog](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/CHANGELOG.md)). Install or update with the image `ghcr.io/ambient-home-systems/jellyfin-complete:latest` (amd64 and arm64); the [README](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/README.md) has Docker Compose and Portainer steps.

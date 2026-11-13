@@ -23,7 +23,7 @@ const text = (r: unknown) => ((r as { content: { type: string; text: string }[] 
 const json = (r: unknown) => JSON.parse(text(r));
 
 /** Signed-in admin who creates a token in Settings; returns the token as the page shows it once. */
-async function makeToken(t: ReturnType<typeof setup>, name: string, scope: 'read' | 'review') {
+async function makeToken(t: ReturnType<typeof setup>, name: string, scope: 'read' | 'review' | 'full') {
   const { cookie } = await signIn(t.web);
   const csrf = await csrfOf(t.web, cookie, '/settings');
   const res = await t.web.request('/settings/claude', { ...form({ _csrf: csrf, name, scope }), headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' } });
@@ -73,7 +73,7 @@ describe('Claude access (MCP)', () => {
     const { token } = await makeToken(t, 'Reader', 'read');
     const client = await connect(t.web, token);
     const names = (await client.listTools()).tools.map((x) => x.name).sort();
-    expect(names).toEqual(['get_collection', 'get_run', 'get_status', 'list_activity', 'list_collections', 'list_missing', 'list_review']);
+    expect(names).toEqual(['get_collection', 'get_run', 'get_settings', 'get_status', 'list_activity', 'list_collections', 'list_missing', 'list_review']);
     const status = json(await client.callTool({ name: 'get_status', arguments: {} }));
     expect(status.app.dryRun).toBe(true);
     expect(status.app.timezone).toBe('America/New_York');
@@ -85,7 +85,9 @@ describe('Claude access (MCP)', () => {
     const { token, cookie, csrf } = await makeToken(t, 'Laptop', 'review');
     await runPipeline(t.app, { job: 'manual', trigger: 'manual', index: true, now: Date.UTC(2026, 10, 17, 15) });
     const client = await connect(t.web, token);
-    expect((await client.listTools()).tools.map((x) => x.name)).toContain('approve_proposals');
+    const reviewTools = (await client.listTools()).tools.map((x) => x.name);
+    expect(reviewTools).toContain('approve_proposals');
+    expect(reviewTools).not.toContain('update_settings');
 
     const queue = json(await client.callTool({ name: 'list_review', arguments: {} }));
     expect(queue.total).toBe(3);
@@ -118,5 +120,41 @@ describe('Claude access (MCP)', () => {
     const res = await t.web.request(`/settings/claude/${id}/revoke`, { ...form({ _csrf: csrf }), headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' } });
     expect(flash(res)).toContain('Revoked “Laptop”');
     await expect(connect(t.web, token)).rejects.toThrow();
+  });
+
+  it('lets a full-control token change settings, schedules and collections, but never connections or keys', async () => {
+    const { token } = await makeToken(t, 'Desk', 'full');
+    const client = await connect(t.web, token);
+    const tools = (await client.listTools()).tools.map((x) => x.name);
+    expect(tools).toEqual(expect.arrayContaining(['update_settings', 'set_schedule', 'set_collection_enabled', 'approve_proposals']));
+
+    const before = json(await client.callTool({ name: 'get_settings', arguments: {} }));
+    expect(before.dryRun).toBe(true);
+    expect(before.connections.jellyfin.keySaved).toBe(true);
+    expect(JSON.stringify(before)).not.toContain(t.fake.apiKey);
+    expect(before.libraries.films.map((l: { name: string }) => l.name)).toContain('Animated Classics');
+
+    // Several settings at once; libraries by name; the result says what changed.
+    const saved = await client.callTool({ name: 'update_settings', arguments: { dryRun: false, timezone: 'Europe/London', planAheadDays: 7, actionModes: { 'collection.remove_items': 'auto' }, filmLibraries: ['Movies'] } });
+    expect(saved.isError).toBeFalsy();
+    expect(text(saved)).toContain('dryRun: true → false');
+    const s = t.app.settings();
+    expect(s).toMatchObject({ dryRun: false, timezone: 'Europe/London', leadDays: 7, movieLibraryIds: ['lib-movies'] });
+    expect(s.modes['collection.remove_items']).toBe('auto');
+
+    // Checked exactly as the Settings page checks, and nothing is saved when any part is wrong.
+    const bad = await client.callTool({ name: 'update_settings', arguments: { planAheadDays: 3, timezone: 'Mars/Olympus' } });
+    expect(bad.isError).toBe(true);
+    expect(text(bad)).toContain('Unknown timezone');
+    expect(t.app.settings().leadDays).toBe(7);
+    expect((await client.callTool({ name: 'update_settings', arguments: { filmLibraries: ['Nope'] } })).isError).toBe(true);
+
+    expect(text(await client.callTool({ name: 'set_schedule', arguments: { job: 'nightly-refresh', cron: '15 4 * * *' } }))).toContain('15 4 * * *, on');
+    expect((await client.callTool({ name: 'set_schedule', arguments: { job: 'nightly-refresh', cron: 'whenever' } })).isError).toBe(true);
+
+    const universe = json(await client.callTool({ name: 'list_collections', arguments: {} })).find((c: { kind: string; on: boolean }) => c.kind === 'Universes' && !c.on);
+    expect(text(await client.callTool({ name: 'set_collection_enabled', arguments: { id: universe.id, on: true } }))).toContain('is on');
+    expect(json(await client.callTool({ name: 'get_collection', arguments: { id: universe.id } })).on).toBe(true);
+    await client.close();
   });
 });

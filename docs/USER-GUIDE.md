@@ -104,6 +104,7 @@ Claude Code or Claude Desktop, on a computer on your home network, can use the a
 
 1. **Create a token** in Settings → Claude access. Name it after where you'll use it, and choose what it may do:
    - **Read, review and run**
+   - **Full control**
    - **Read only**
 
    The token is shown once, with the Claude Code command and the Claude Desktop config already filled in.
@@ -115,18 +116,21 @@ Claude Code or Claude Desktop, on a computer on your home network, can use the a
    - It uses the `mcp-remote` bridge, which needs Node.js on that computer.
    - Settings → Connectors won't work for this: it expects a server that's reachable from the internet.
 
-| Claude can | Read only | Read, review and run |
-|---|---|---|
-| See status, collections and their titles, Review, Missing, Activity and runs | ✓ | ✓ |
-| Approve, snooze or dismiss proposals in Review | | ✓ |
-| Start a run | | ✓ |
-| Change settings, keys or connections, or edit or turn collections on and off | | |
+| Claude can | Read only | Read, review and run | Full control |
+|---|---|---|---|
+| See status, settings, collections and their titles, Review, Missing, Activity and runs | ✓ | ✓ | ✓ |
+| Approve, snooze or dismiss proposals in Review | | ✓ | ✓ |
+| Start a run | | ✓ | ✓ |
+| Change settings and job schedules, and turn collections on or off | | | ✓ |
+| See or change connections and keys, or Claude access tokens | | | |
+
+Connections and keys stay on the Settings page. If Claude could change an address, someone with a leaked token could point it at their own server, and the app would send your saved key there.
 
 **Approving through Claude does the same as pressing Approve in Review:**
 - The change applies to Jellyfin straight away, even with dry run on.
 - Activity shows "Claude (*token name*)" as who approved it.
 
-Claude is told to show you each change and wait for your yes. Still, treat a review token like a password. Revoking it in Settings → Claude access stops it at once.
+Claude is told to show you each change and wait for your yes, and to ask before turning dry run off, setting a mode to auto, or turning a collection off. Still, treat a review token like a password. Revoking it in Settings → Claude access stops it at once.
 
 The Claude app on the web or on a phone can't connect: Claude would reach the app from Anthropic's servers, which can't see your home network.
 

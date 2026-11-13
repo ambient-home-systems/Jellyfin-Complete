@@ -281,7 +281,7 @@ export const apiToken = sqliteTable(
     name: text('name').notNull(),
     hash: text('hash').notNull(),
     hint: text('hint').notNull(),
-    scope: text('scope').$type<'read' | 'review'>().notNull(),
+    scope: text('scope').$type<'read' | 'review' | 'full'>().notNull(),
     createdBy: text('created_by').notNull(),
     createdAt: integer('created_at').notNull(),
     lastUsedAt: integer('last_used_at'),

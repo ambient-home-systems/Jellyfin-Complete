@@ -46,6 +46,7 @@ import { reviewVerdict, type SnoozeFor } from './review-actions.js';
 import { createToken, listTokens, revokeToken, SCOPE_LABEL, type TokenScope } from './api-tokens.js';
 import type { Reveal } from './pages/claude-access.js';
 import { mcpHandler } from './mcp.js';
+import { applySettings, setSchedule, setCollectionEnabled, SettingsError, MODE_KEYS, type ModeKey, type SettingsPatch } from './settings-actions.js';
 import { undoAction } from '../pipeline/undo.js';
 import { adoptionCandidates, adopt, deleteUnmanaged } from '../pipeline/adoption.js';
 import { loadDefinition, loadDefinitions } from '../domain/definitions.js';
@@ -75,6 +76,8 @@ const slugify = (name: string) => name.toLowerCase().normalize('NFKD').replace(/
 
 export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): Hono {
   const web = new Hono();
+  /** Schedules and the timezone drive the scheduler; restart it after either changes (when this process runs one). */
+  const restartScheduler = () => { if (opts.scheduler) startScheduler(app); };
 
   web.use('*', async (c, next) => {
     await next();
@@ -174,7 +177,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   });
 
   // ── MCP for Claude (ADR-032): its own bearer-token auth, so it sits before the session check ──
-  web.all('/mcp', mcpHandler(app));
+  web.all('/mcp', mcpHandler(app, { restartScheduler }));
 
   // ── everything below needs an admin session ──
   web.use('*', requireAuth(app));
@@ -281,12 +284,13 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   web.get('/collections', (c) => page(c, 'Collections', 'collections', <CollectionsList rows={collectionsModel(app)} tz={app.settings().timezone} csrf={userOf(c).csrf} />));
 
   web.post('/collections/:id/enabled', async (c) => {
-    const id = Number(c.req.param('id'));
-    const def = loadDefinition(app.db, id);
-    if (!def) return c.notFound();
     const on = (await c.req.parseBody()).enabled === '1';
-    app.db.update(definition).set({ enabled: on, updatedAt: Date.now() }).where(eq(definition.id, id)).run();
-    return back(c, '/collections', { ok: on ? `${def.name} is on. The next run fetches its sources and plans it.` : `${def.name} is off. The next run removes its box set, if it has one.` });
+    try {
+      return back(c, '/collections', { ok: setCollectionEnabled(app, Number(c.req.param('id')), on) });
+    } catch (e) {
+      if (e instanceof SettingsError) return c.notFound();
+      throw e;
+    }
   });
 
   web.get('/collections/new', (c) => page(c, 'New collection', 'collections', <NewCollection csrf={userOf(c).csrf} />));
@@ -601,7 +605,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   web.post('/settings/claude', async (c) => {
     const b = await c.req.parseBody();
     const name = String(b.name ?? '').trim().slice(0, 60);
-    const scope: TokenScope = b.scope === 'read' ? 'read' : 'review';
+    const scope: TokenScope = b.scope === 'read' || b.scope === 'full' ? b.scope : 'review';
     if (!name) return back(c, '/settings#claude', { err: 'Give the token a name, such as where it’s used.' });
     const { token } = createToken(app.db, name, scope, userOf(c).name);
     reveals.set(userOf(c).sessionId, { name, token, scope, expires: Date.now() + 10 * 60_000 });
@@ -680,38 +684,35 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     }
   });
 
+  // Settings forms go through settings-actions.ts, which the MCP endpoint uses too (ADR-033).
+  const save = (c: Context, anchor: string, patch: SettingsPatch, ok: string) => {
+    try {
+      const r = applySettings(app, patch);
+      if (r.timezoneChanged) restartScheduler();
+      return back(c, `/settings#${anchor}`, { ok });
+    } catch (e) {
+      if (e instanceof SettingsError) return back(c, `/settings#${anchor}`, { err: e.message });
+      throw e;
+    }
+  };
+
   web.post('/settings/general', async (c) => {
     const b = await c.req.parseBody();
-    const lead = Number(b.leadDays);
-    const cap = Number(b.arrCapPerRun);
-    const tz = String(b.timezone ?? '').trim();
-    try {
-      new Intl.DateTimeFormat('en', { timeZone: tz });
-    } catch {
-      return back(c, '/settings#run', { err: `Unknown timezone “${tz}”.` });
-    }
-    if (!Number.isInteger(lead) || lead < 0 || lead > 60) return back(c, '/settings#run', { err: 'Plan-ahead days must be 0–60.' });
-    if (!Number.isInteger(cap) || cap < 0 || cap > 200) return back(c, '/settings#run', { err: 'The add cap must be 0–200.' });
     const neighbours = String(b.neighbours ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
       const m = l.match(/^(.*?)\s+(\d{1,2}:\d{2})$/);
       return m ? { name: m[1]!.trim(), time: m[2]! } : { name: l, time: '' };
     });
     const snooze = ['window', '7d', '30d'].includes(String(b.defaultSnooze)) ? (String(b.defaultSnooze) as Settings['defaultSnooze']) : 'window';
-    const tzChanged = tz !== app.settings().timezone;
-    app.updateSettings({ dryRun: b.dryRun === '1', leadDays: lead, timezone: tz, neighbours, defaultSnooze: snooze, guardrails: { arrCapPerRun: cap, releasedOnly: b.releasedOnly === '1' } });
-    if (tzChanged && opts.scheduler) startScheduler(app);
-    return back(c, '/settings#run', { ok: 'Saved.' });
+    return save(c, 'run', { timezone: String(b.timezone ?? ''), leadDays: Number(b.leadDays), arrCapPerRun: Number(b.arrCapPerRun), dryRun: b.dryRun === '1', neighbours, defaultSnooze: snooze, releasedOnly: b.releasedOnly === '1' }, 'Saved.');
   });
 
   web.post('/settings/modes', async (c) => {
     const b = await c.req.parseBody();
-    const modes = { ...app.settings().modes };
+    const modes: Partial<Record<ModeKey, Mode>> = {};
     for (const [k, v] of Object.entries(b)) {
-      if (k.startsWith('mode:') && MODES.has(String(v))) modes[k.slice(5) as ActionType] = String(v) as Mode;
+      if (k.startsWith('mode:') && (MODE_KEYS as readonly string[]).includes(k.slice(5)) && MODES.has(String(v))) modes[k.slice(5) as ModeKey] = String(v) as Mode;
     }
-    modes['collection.delete'] = modes['collection.create'];
-    app.updateSettings({ modes });
-    return back(c, '/settings#modes', { ok: 'Modes saved.' });
+    return save(c, 'modes', { modes }, 'Modes saved.');
   });
 
   // The IMDb queries your collections need, for the snapshot job (docs/IMDB-SNAPSHOT.md).
@@ -724,14 +725,15 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
 
   web.post('/settings/imdb', async (c) => {
     const b = await c.req.parseBody();
-    const route = String(b.imdbRoute);
-    if (route !== 'direct' && route !== 'kometa_service' && route !== 'snapshot') return back(c, '/settings#imdb', { err: 'That route isn’t available.' });
-    const snapshotUrl = String(b.snapshotUrl ?? '').trim();
-    if (snapshotUrl && !/^https?:\/\/\S+$/.test(snapshotUrl)) return back(c, '/settings#imdb', { err: 'The snapshot URL must start with http:// or https://' });
-    if (route === 'snapshot' && !snapshotUrl) return back(c, '/settings#imdb', { err: 'The snapshot route needs a snapshot URL.' });
+    const route = String(b.imdbRoute) as SettingsPatch['imdbRoute'];
+    try {
+      applySettings(app, { imdbRoute: route, snapshotUrl: String(b.snapshotUrl ?? '') });
+    } catch (e) {
+      if (e instanceof SettingsError) return back(c, '/settings#imdb', { err: e.message });
+      throw e;
+    }
     const token = String(b.snapshotToken ?? '').trim();
     if (token) app.secrets.set('imdb.snapshotToken', token);
-    app.updateSettings({ imdbRoute: route, snapshotUrl });
     return back(c, '/settings#imdb', { ok: route === 'snapshot' ? 'IMDb route saved. The next run reads the snapshot.' : 'IMDb route saved.' });
   });
 
@@ -772,12 +774,9 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
 
   web.post('/settings/home', async (c) => {
     const b = await c.req.parseBody();
-    const order = Number(b.orderIndex ?? 2);
-    if (!Number.isInteger(order) || order < 0 || order > 99) return back(c, '/settings#home', { err: 'Position must be a whole number from 0 to 99.' });
-    const viewMode = (['Portrait', 'Landscape', 'Square', 'Small'] as const).find((v) => v === b.viewMode) ?? 'Portrait';
     const enabled = b.enabled === '1';
-    app.updateSettings({ homeRows: { enabled, orderIndex: order, viewMode } });
-    return back(c, '/settings#home', { ok: enabled ? 'Saved. Rows update on the next run, or press “Update rows in Jellyfin now”.' : 'Saved. Rows stay as they are in Jellyfin until you turn this back on.' });
+    const viewMode = (['Portrait', 'Landscape', 'Square', 'Small'] as const).find((v) => v === b.viewMode) ?? 'Portrait';
+    return save(c, 'home', { homeRows: { enabled, orderIndex: Number(b.orderIndex ?? 2), viewMode } }, enabled ? 'Saved. Rows update on the next run, or press “Update rows in Jellyfin now”.' : 'Saved. Rows stay as they are in Jellyfin until you turn this back on.');
   });
 
   web.post('/settings/home/sync', async (c) => {
@@ -793,30 +792,32 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
 
   web.post('/settings/libraries', async (c) => {
     const b = await c.req.parseBody({ all: true });
-    const pick = (field: string, type: string) => {
-      const ids = ([] as unknown[]).concat(b[field] ?? []).map(String);
-      const all = librariesModel(app).filter((l) => l.collectionType === type).map((l) => l.id);
-      return ids.length === all.length ? null : ids; // all ticked = every library, including ones added later
-    };
-    app.updateSettings({ movieLibraryIds: pick('movieLibraryIds', 'movies'), showLibraryIds: pick('showLibraryIds', 'tvshows') });
-    markDone('libraries');
+    const ids = (field: string) => ([] as unknown[]).concat(b[field] ?? []).map(String);
     const next = String(b.next ?? '');
-    if (next.startsWith('/start')) return back(c, next, { ok: 'Libraries saved.' }); // only ever back into the guide
-    return back(c, '/settings#libs', { ok: 'Libraries saved.' });
+    const to = next.startsWith('/start') ? next : '/settings#libs'; // only ever back into the guide
+    try {
+      applySettings(app, { movieLibraryIds: ids('movieLibraryIds'), showLibraryIds: ids('showLibraryIds') });
+    } catch (e) {
+      if (e instanceof SettingsError) return back(c, to, { err: e.message });
+      throw e;
+    }
+    markDone('libraries');
+    return back(c, to, { ok: 'Libraries saved.' });
   });
 
   web.post('/settings/schedules', async (c) => {
     const b = await c.req.parseBody();
-    for (const j of app.db.select().from(jobSchedule).all()) {
+    const jobs = app.db.select().from(jobSchedule).all();
+    for (const j of jobs) {
       const cron = String(b[`cron:${j.job}`] ?? j.cron).trim();
       try {
         new Cron(cron, { paused: true });
       } catch {
-        return back(c, '/settings#sched', { err: `“${cron}” isn’t a valid cron expression for ${j.job}.` });
+        return back(c, '/settings#sched', { err: `“${cron}” isn’t a valid cron expression for ${j.job}.` }); // nothing saved
       }
-      app.db.update(jobSchedule).set({ cron, enabled: b[`on:${j.job}`] === '1' }).where(eq(jobSchedule.job, j.job)).run();
     }
-    if (opts.scheduler) startScheduler(app);
+    for (const j of jobs) setSchedule(app, j.job, { cron: String(b[`cron:${j.job}`] ?? j.cron), enabled: b[`on:${j.job}`] === '1' });
+    restartScheduler();
     return back(c, '/settings#sched', { ok: 'Schedules saved.' });
   });
 

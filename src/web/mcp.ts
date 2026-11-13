@@ -8,25 +8,31 @@ import { z } from 'zod';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
 import { APP_VERSION } from '../config.js';
-import { action, libraryItem, managedCollection, run } from '../db/schema.js';
+import { action, jobSchedule, libraryItem, managedCollection, run } from '../db/schema.js';
 import type { WindowDef } from '../db/schema.js';
 import { loadDefinition, loadDefinitions, type LoadedDefinition } from '../domain/definitions.js';
 import { LibraryIndex, type LibRow } from '../domain/matching.js';
 import { FAMILY_LABEL, familyOf } from '../presets/index.js';
 import { currentRun, isRunning, runPipeline } from '../pipeline/run.js';
 import { log } from '../log.js';
-import { activityModel, collectionsModel, dashboardModel, reviewModel, shellModel } from './model.js';
+import { activityModel, collectionsModel, dashboardModel, librariesModel, reviewModel, shellModel } from './model.js';
 import { cachedPlan } from './plan-cache.js';
 import { missingFor } from './missing-model.js';
 import { TYPE_LABEL } from './pages/review.js';
 import { reviewVerdict, type SnoozeFor } from './review-actions.js';
 import { verifyToken, type ApiToken } from './api-tokens.js';
 import { AttemptLimiter, clientIp } from './security.js';
+import { applySettings, setCollectionEnabled, setSchedule, SettingsError, MODE_KEYS } from './settings-actions.js';
+import { CONNECTIONS } from './pages/settings.js';
+import { JOBS, type JobName } from '../jobs/schedules.js';
+import { nextRuns } from '../jobs/scheduler.js';
+import type { Settings } from '../settings.js';
 
 const INSTRUCTIONS = `Maverick Jellyfin Complete builds collections (box sets) in the user's Jellyfin media server: seasonal ones that appear and disappear on their dates, holiday episodes, film universes, TV franchises and the user's own.
 Each run plans changes. Changes set to Review, and every change while dry run is on, wait in Review until someone approves, snoozes or dismisses them.
 Approving applies the change to Jellyfin straight away (or when the collection's dates open), even while dry run is on: dry run only stops changes from applying without approval.
 Before approving, show the user exactly what will change (collection, action, titles) and get their go-ahead, especially for deletions and removals. Never approve on your own initiative.
+With a full-control token you can also change settings, job schedules and which collections are on. Ask the user before turning dry run off, setting a mode to auto, or turning a collection off: each of those can change Jellyfin without a further approval.
 Times are local to the app's timezone, given by get_status.`;
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
@@ -41,7 +47,7 @@ function windowText(w: WindowDef | null): string {
 }
 
 /** The MCP server for one request, with the tools this token may use. */
-export function buildServer(app: AppContext, token: ApiToken): McpServer {
+export function buildServer(app: AppContext, token: ApiToken, opts: { restartScheduler?: () => void } = {}): McpServer {
   const server = new McpServer({ name: 'maverick-jellyfin-complete', version: APP_VERSION }, { instructions: INSTRUCTIONS });
   const tz = () => app.settings().timezone;
   const at = (ms: number | null | undefined) => (ms ? new Intl.DateTimeFormat('sv-SE', { timeZone: tz(), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(ms) : null);
@@ -176,7 +182,30 @@ export function buildServer(app: AppContext, token: ApiToken): McpServer {
     return ok({ id: r.id, status: r.status, job: r.job, trigger: r.trigger, started: at(r.startedAt), finished: at(r.finishedAt), counts: r.stats, logTail: r.log.split('\n').slice(-40).join('\n') });
   });
 
-  if (token.scope !== 'review') return server;
+  server.registerTool('get_settings', {
+    title: 'Settings',
+    description: 'Every setting on the Settings page: dry run, timezone, plan-ahead days, action modes, Radarr/Sonarr guardrails and defaults, IMDb route, which libraries collections draw from, home-screen rows, job schedules, and which connections are set up (never the keys themselves).',
+    annotations: read,
+  }, async () => {
+    const s = app.settings();
+    const libs = librariesModel(app);
+    const libList = (type: string, chosen: string[] | null) => libs.filter((l) => l.collectionType === type).map((l) => ({ id: l.id, name: l.name, used: chosen === null || chosen.includes(l.id) }));
+    const runs = nextRuns(app);
+    return ok({
+      dryRun: s.dryRun, timezone: s.timezone, planAheadDays: s.leadDays, defaultSnooze: s.defaultSnooze,
+      actionModes: Object.fromEntries(MODE_KEYS.map((k) => [k, s.modes[k]])),
+      radarrSonarr: { capPerRun: s.guardrails.arrCapPerRun, releasedOnly: s.guardrails.releasedOnly, radarrDefaults: s.arr.radarr, sonarrDefaults: s.arr.sonarr },
+      imdb: { route: s.imdbRoute, snapshotUrl: s.snapshotUrl || null },
+      libraries: { films: libList('movies', s.movieLibraryIds), tv: libList('tvshows', s.showLibraryIds) },
+      homeRows: { enabled: s.homeRows.enabled, position: s.homeRows.orderIndex, view: s.homeRows.viewMode },
+      schedules: app.db.select().from(jobSchedule).all().map((j) => ({ job: j.job, what: JOBS[j.job as JobName]?.detail ?? null, cron: j.cron, on: j.enabled, next: at(runs.find((r) => r.job === j.job)?.next?.getTime()) })),
+      otherToolsSchedules: s.neighbours,
+      connections: Object.fromEntries(CONNECTIONS.map((x) => [x.key, { address: x.urlField ? s.connections[x.urlField] || null : undefined, keySaved: x.secret ? app.secrets.masked(x.secret).set : undefined }])),
+      whatThisTokenCanChange: token.scope === 'full' ? 'Everything here except connections and keys, which stay on the Settings page.' : 'Nothing: this token can read settings only.',
+    });
+  });
+
+  if (token.scope === 'read') return server;
 
   const ids = z.array(z.number().int().positive()).min(1).max(500).describe('Proposal ids, from list_review.');
   const decision = async (list: number[], verdict: 'approve' | 'dismiss' | 'snooze', snooze?: SnoozeFor) => {
@@ -219,11 +248,105 @@ export function buildServer(app: AppContext, token: ApiToken): McpServer {
     return ok({ started: true, run: p ? { id: p.runId, step: p.step } : null, dryRun: app.settings().dryRun });
   });
 
+  if (token.scope !== 'full') return server;
+
+  const mode = z.enum(['off', 'review', 'auto']);
+  const changeResult = (before: Settings, changed: (keyof Settings)[]) => {
+    const after = app.settings();
+    return changed.map((k) => `${k}: ${JSON.stringify(before[k])} → ${JSON.stringify(after[k])}`).join('\n') || 'Nothing changed.';
+  };
+  const libraryIds = (wanted: 'all' | string[] | undefined, type: 'movies' | 'tvshows'): string[] | null | undefined => {
+    if (wanted === undefined || wanted === 'all') return wanted === 'all' ? null : undefined;
+    const libs = librariesModel(app).filter((l) => l.collectionType === type);
+    return wanted.map((w) => libs.find((l) => l.id === w || l.name.toLowerCase() === w.trim().toLowerCase())?.id ?? w);
+  };
+
+  server.registerTool('update_settings', {
+    title: 'Change settings',
+    description: 'Change settings, as the Settings page does. Give only what should change. Connections and keys can\'t be changed here (they stay on the Settings page). Turning dry run off lets changes whose mode is auto apply on their own; setting a mode to auto does the same once dry run is off. Confirm those with the user first.',
+    inputSchema: {
+      dryRun: z.boolean().optional().describe('On: every change waits in Review. Off: changes whose mode is auto apply on their own.'),
+      timezone: z.string().optional().describe('IANA timezone, such as America/New_York. Collections open and close at midnight here.'),
+      planAheadDays: z.number().int().min(0).max(60).optional().describe('Days before a collection opens that its changes are proposed (0–60).'),
+      defaultSnooze: z.enum(['window', '7d', '30d']).optional().describe('Default snooze in Review: until the collection next opens, 7 days or 30 days.'),
+      actionModes: z.object({
+        'collection.create': mode.optional().describe('Create and delete box sets.'),
+        'collection.add_items': mode.optional(),
+        'collection.remove_items': mode.optional(),
+        'collection.update_metadata': mode.optional(),
+        'radarr.add_movie': mode.optional(),
+        'sonarr.add_series': mode.optional(),
+        'radarr.monitor_collection': mode.optional(),
+      }).optional().describe('Per kind of change: off, review (waits for approval) or auto (applies on its own when dry run is off).'),
+      radarrSonarrCapPerRun: z.number().int().min(0).max(200).optional().describe('Most titles sent to Radarr/Sonarr per run.'),
+      releasedOnly: z.boolean().optional().describe('Only send titles that are already released.'),
+      imdbRoute: z.enum(['direct', 'kometa_service', 'snapshot']).optional(),
+      snapshotUrl: z.string().optional().describe('For the snapshot IMDb route.'),
+      filmLibraries: z.union([z.literal('all'), z.array(z.string()).min(1)]).optional().describe('Film libraries that film collections draw from: "all", or names or ids from get_settings.'),
+      tvLibraries: z.union([z.literal('all'), z.array(z.string()).min(1)]).optional().describe('TV libraries that show and episode collections draw from: "all", or names or ids.'),
+      homeRows: z.object({ enabled: z.boolean().optional(), position: z.number().int().min(0).max(99).optional(), view: z.enum(['Portrait', 'Landscape', 'Square', 'Small']).optional() }).optional(),
+      otherToolsSchedules: z.array(z.object({ name: z.string(), time: z.string() })).optional().describe('Replaces the list of other tools\' run times shown beside this app\'s jobs, e.g. [{"name":"Kometa (Plex)","time":"05:00"}].'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  }, async (a) => {
+    const before = app.settings();
+    try {
+      const r = applySettings(app, {
+        dryRun: a.dryRun, timezone: a.timezone, leadDays: a.planAheadDays, defaultSnooze: a.defaultSnooze,
+        modes: a.actionModes, arrCapPerRun: a.radarrSonarrCapPerRun, releasedOnly: a.releasedOnly,
+        imdbRoute: a.imdbRoute, snapshotUrl: a.snapshotUrl,
+        movieLibraryIds: libraryIds(a.filmLibraries, 'movies'), showLibraryIds: libraryIds(a.tvLibraries, 'tvshows'),
+        homeRows: a.homeRows ? { enabled: a.homeRows.enabled, orderIndex: a.homeRows.position, viewMode: a.homeRows.view } : undefined,
+        neighbours: a.otherToolsSchedules,
+      });
+      if (r.timezoneChanged) opts.restartScheduler?.();
+      log.info(`Claude access: settings changed via token “${token.name}”: ${r.changed.join(', ') || 'nothing'}`);
+      return ok(`Saved.\n${changeResult(before, r.changed)}`);
+    } catch (e) {
+      if (e instanceof SettingsError) return fail(e.message);
+      throw e;
+    }
+  });
+
+  server.registerTool('set_schedule', {
+    title: 'Change a job\'s schedule',
+    description: 'Change when a job runs (a cron expression in the app\'s timezone) or turn it on or off. Jobs: window-check (opens and closes collections at midnight), nightly-refresh (library, sources and full plan), cache-cleanup.',
+    inputSchema: { job: z.enum(Object.keys(JOBS) as [JobName, ...JobName[]]), cron: z.string().optional().describe('For example "30 2 * * *" for 02:30 every day.'), on: z.boolean().optional() },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  }, async ({ job, cron, on }) => {
+    try {
+      setSchedule(app, job, { cron, enabled: on });
+      opts.restartScheduler?.();
+      log.info(`Claude access: schedule for ${job} changed via token “${token.name}”`);
+      const row = app.db.select().from(jobSchedule).where(eq(jobSchedule.job, job)).get()!;
+      return ok(`Saved. ${job}: ${row.cron}, ${row.enabled ? 'on' : 'off'}.`);
+    } catch (e) {
+      if (e instanceof SettingsError) return fail(e.message);
+      throw e;
+    }
+  });
+
+  server.registerTool('set_collection_enabled', {
+    title: 'Turn a collection on or off',
+    description: 'Turn a collection on or off, as its switch on the Collections page does. Turning one off means the next run removes its box set from Jellyfin (through Review unless deleting is set to auto and dry run is off). Confirm turning collections off with the user first.',
+    inputSchema: { id: z.number().int().positive().describe('Collection id, from list_collections.'), on: z.boolean() },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  }, async ({ id, on }) => {
+    try {
+      const msg = setCollectionEnabled(app, id, on);
+      log.info(`Claude access: collection ${id} turned ${on ? 'on' : 'off'} via token “${token.name}”`);
+      return ok(msg);
+    } catch (e) {
+      if (e instanceof SettingsError) return fail(e.message);
+      throw e;
+    }
+  });
+
   return server;
 }
 
 /** The /mcp route: bearer-token auth, then one stateless MCP exchange. */
-export function mcpHandler(app: AppContext) {
+export function mcpHandler(app: AppContext, opts: { restartScheduler?: () => void } = {}) {
   const limiter = new AttemptLimiter(10);
   return async (c: Context): Promise<Response> => {
     // A browser page on another site must not be able to talk to this endpoint (DNS rebinding); MCP clients send no Origin.
@@ -252,7 +375,7 @@ export function mcpHandler(app: AppContext) {
       return c.json({ error: 'An access token is required. Create one in Settings → Claude access.' }, 401);
     }
     limiter.succeed(keys);
-    const server = buildServer(app, token);
+    const server = buildServer(app, token, opts);
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     await server.connect(transport);
     try {

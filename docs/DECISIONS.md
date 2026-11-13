@@ -40,6 +40,7 @@ Each entry is a short ADR: context, options, recommendation, consequences.
 | 030 | Jellyfin client from the live 12.4.0 spec | Accepted |
 | 031 | Public release: what changes now and what waits | Accepted (2 Nov) |
 | 032 | Claude access through MCP, on the home network | **Decided** (13 Nov) |
+| 033 | Claude can change settings (Full control tokens) | **Decided** (13 Nov) |
 
 ---
 
@@ -477,6 +478,24 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - A new dependency, `@modelcontextprotocol/sdk`.
   - A new table, `api_token` (migration 0003).
   - Anyone holding a review token can change your Jellyfin through Review. Treat a token like a password, and revoke it when a computer is no longer yours.
+
+### ADR-033 Claude can change settings: Decided (13 Nov)
+- **Context.** You asked for Claude to change settings, not only read them. ADR-032 gave Claude no settings tools at all.
+- **Decision.**
+  - **Every token** can read the settings (`get_settings`). Connections show their address and whether a key is saved, never the key.
+  - **A third access level, Full control.** It does everything Read, review and run does, plus:
+    - `update_settings`: dry run, timezone, plan-ahead days, default snooze, action modes, the Radarr/Sonarr cap and released-only rule, the IMDb route, libraries, home-screen rows, and other tools' schedules
+    - `set_schedule`: a job's cron expression, or turning it on or off
+    - `set_collection_enabled`: turning a collection on or off
+  - **One set of rules.** The Settings and Collections pages and these tools check input with the same code (`src/web/settings-actions.ts`). A change that fails any check saves nothing.
+  - **Still page-only:**
+    - **Connections and keys.** Changing an address while its key stays saved would let a leaked token send that key to another server.
+    - **Claude access tokens,** so a token can't make itself a stronger one.
+    - **Radarr and Sonarr defaults,** which need live choices from those apps.
+  - **Claude asks first.** The tool and server descriptions tell Claude to ask before turning dry run off, setting a mode to auto, or turning a collection off.
+- **Consequences.**
+  - Existing tokens keep their level. For settings, create a Full control token.
+  - The settings forms now save through the shared module. Their checks and messages are unchanged.
 
 ---
 

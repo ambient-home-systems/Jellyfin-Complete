@@ -5,12 +5,13 @@ import { desc, eq } from 'drizzle-orm';
 import type { DB } from '../db/index.js';
 import { apiToken } from '../db/schema.js';
 
-export type TokenScope = 'read' | 'review';
+export type TokenScope = 'read' | 'review' | 'full';
 export type ApiToken = typeof apiToken.$inferSelect;
 
 export const SCOPE_LABEL: Record<TokenScope, string> = {
   read: 'Read only',
   review: 'Read, review and run',
+  full: 'Full control',
 };
 
 const PREFIX = 'mjc_';
