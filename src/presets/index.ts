@@ -8,7 +8,7 @@ import type { ActionType, WindowDef, Poster } from '../db/schema.js';
 import type { SourceSpec } from '../sources/index.js';
 import type { Mode } from '../settings.js';
 
-export type PresetFamily = 'seasonal' | 'holiday_episodes' | 'show_franchise' | 'universe';
+export type PresetFamily = 'seasonal' | 'holiday_episodes' | 'film_series' | 'show_franchise' | 'universe';
 
 export const FAMILY_LABEL: Record<PresetFamily | 'custom', string> = {
   seasonal: 'Seasonal',
@@ -16,6 +16,7 @@ export const FAMILY_LABEL: Record<PresetFamily | 'custom', string> = {
   custom: 'Your collections',
   universe: 'Universes',
   show_franchise: 'Show franchises',
+  film_series: 'Film series',
 };
 
 export type PresetDefinition = {
@@ -45,5 +46,5 @@ export const PRESETS: Preset[] = [
 /** "seasonal:christmas" → "seasonal"; custom collections have no preset key. */
 export function familyOf(presetKey: string | null): PresetFamily | 'custom' {
   const f = presetKey?.split(':')[0];
-  return f === 'seasonal' || f === 'holiday_episodes' || f === 'show_franchise' || f === 'universe' ? f : 'custom';
+  return f === 'seasonal' || f === 'holiday_episodes' || f === 'film_series' || f === 'show_franchise' || f === 'universe' ? f : 'custom';
 }

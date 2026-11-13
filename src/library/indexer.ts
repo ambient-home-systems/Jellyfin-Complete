@@ -54,6 +54,7 @@ export async function indexLibrary(db: DB, jf: JellyfinClient, onProgress?: (msg
             imdb: pid(it, 'Imdb'),
             tmdb: pid(it, 'Tmdb'),
             tvdb: pid(it, 'Tvdb'),
+            tmdbCollection: kind === 'movie' ? pid(it, 'TmdbCollection') : null,
             seriesJfId: it.SeriesId ?? null,
             season: it.ParentIndexNumber ?? null,
             episode: it.IndexNumber ?? null,

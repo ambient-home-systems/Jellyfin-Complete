@@ -53,9 +53,26 @@ The ready-made **presets** come in families. Turn single ones on or off under Co
 | Seasonal (19) | Kometa's seasonal collections | On |
 | Holiday episodes (3) | Christmas, Halloween and Thanksgiving episodes from your shows | On (additions wait for review) |
 | Universes (17) | Kometa's universe collections | Off |
+| Film series (one per series you own) | Kometa's movie franchise collections: every TMDb film series you have at least 2 films of | Off |
 | Show franchises (27) | Kometa's show franchise collections | Off |
 
 **New collection** makes your own: films, shows or episodes, always on or between two dates, from any sources.
+
+### Film series
+
+**What it makes.** Film series are the collections Jellyfin used to make itself from TMDb, Kometa-style:
+- one collection for each film series you have at least 2 films of
+- named from TMDb, without the word "Collection"
+- in release order, with TMDb's overview and poster
+- new series appear as you add films, and each collection updates as films arrive
+
+Kometa's additions apply, such as Prometheus in Alien and Hobbs & Shaw in The Fast and the Furious.
+
+**Turning it on.** Use Getting started (step 4) or ask Claude. It's one switch for every series, and the next run adds them. It needs a TMDb key. The minimum number of films is a setting (2 by default).
+
+**Your existing series box sets.** If Jellyfin already made them, open **Collections → Existing box sets** after that run. It lists Jellyfin's own series box sets; **Adopt all suggested** takes them over, keeping their ids and posters. They're then renamed without "Collection" and kept up to date.
+
+Which series a film belongs to comes from Jellyfin's TMDb metadata. If Jellyfin has recorded none, the app asks TMDb, a few hundred films per run, and remembers the answers.
 
 ### In the editor
 

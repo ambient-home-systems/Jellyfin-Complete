@@ -43,6 +43,8 @@ export const libraryItem = sqliteTable(
     imdb: text('imdb'),
     tmdb: text('tmdb'),
     tvdb: text('tvdb'),
+    /** Films only: the TMDb collection (film series) Jellyfin's TMDb metadata says it belongs to (ADR-035). */
+    tmdbCollection: text('tmdb_collection'),
     seriesJfId: text('series_jf_id'),
     season: integer('season'),
     episode: integer('episode'),
@@ -53,7 +55,7 @@ export const libraryItem = sqliteTable(
     dateAdded: integer('date_added'),
     seenAt: integer('seen_at').notNull(),
   },
-  (t) => [index('library_item_imdb').on(t.imdb), index('library_item_tmdb').on(t.tmdb), index('library_item_tvdb').on(t.tvdb), index('library_item_kind').on(t.kind)],
+  (t) => [index('library_item_imdb').on(t.imdb), index('library_item_tmdb').on(t.tmdb), index('library_item_tvdb').on(t.tvdb), index('library_item_kind').on(t.kind), index('library_item_tmdb_collection').on(t.tmdbCollection)],
 );
 
 export const tmdbCache = sqliteTable('tmdb_cache', {

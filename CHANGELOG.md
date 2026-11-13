@@ -2,6 +2,15 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.8.0 — 13 Nov 2026
+
+- **Film series.** One collection for each film series you own at least 2 films of (Toy Story, John Wick…), like Kometa's franchise collections.
+  - Named and illustrated from TMDb, in release order.
+  - New series appear as you add films.
+  - Turn it on in Getting started or through Claude.
+  - **Collections → Existing box sets** offers Jellyfin's own series box sets for adoption. **Adopt all suggested** takes them all over at once. See [Film series](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/docs/USER-GUIDE.md#film-series).
+- **Fixed:** external MDBList lists (In Association With Marvel, Middle Earth) still failed after 0.7.0, because MDBList's API has no route for them. They're now read from their public list address, which needs no key. Any list the API answers 404 for falls back to it too.
+
 ## 0.7.0 — 13 Nov 2026
 
 - **Full control is full.** The level is now called "Full control (except connections and keys)". With it, Claude can:

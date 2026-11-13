@@ -18,6 +18,7 @@ import { isOpen, localDay, opensWithin } from '../domain/windows.js';
 import type { Mode } from '../settings.js';
 import { proposeArrAdds, executeArrDue } from './arr.js';
 import { syncHomeRows } from '../homescreen/index.js';
+import { syncFilmSeries } from './film-series.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
 import { missingTitles } from '../domain/missing.js';
 import { getCached } from '../cache.js';
@@ -63,6 +64,18 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
       step('Indexing the Jellyfin library');
       const s = await indexLibrary(app.db, jf, step);
       Object.assign(stats, { indexedMovies: s.movies, indexedSeries: s.series, indexedEpisodes: s.episodes });
+    }
+
+    // Film series (ADR-035): one collection per TMDb film series you own enough of; new series appear as films arrive.
+    if (settings.filmSeries.enabled) {
+      step('Finding film series');
+      try {
+        const fs = await syncFilmSeries(app, { step });
+        Object.assign(stats, { filmSeries: fs.series, filmSeriesAdded: fs.created, filmSeriesLookups: fs.lookedUp });
+        if (fs.problem) log.warn(fs.problem);
+      } catch (e) {
+        log.warn(`Film series not updated: ${(e as Error).message}`);
+      }
     }
 
     const defs = loadDefinitions(app.db); // disabled ones too, so their box sets can be removed

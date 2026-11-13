@@ -30,6 +30,8 @@ export type Settings = {
   homeRows: { enabled: boolean; orderIndex: number; viewMode: 'Portrait' | 'Landscape' | 'Square' | 'Small' };
   /** The first-run guide (Phase 4): steps you've confirmed, and whether it's finished or skipped. */
   onboarding: { done: OnboardingStep[]; finished: boolean };
+  /** Film series (ADR-035): a collection for each TMDb film series you own at least `minimum` films of. Off until turned on. */
+  filmSeries: { enabled: boolean; minimum: number };
   /** The Jellyfin version seen at the last run (Phase 4 compatibility). */
   server: { version: string | null; seenAt: number | null };
 };
@@ -71,6 +73,7 @@ export function defaultSettings(timezone: string): Settings {
     },
     homeRows: { enabled: false, orderIndex: 2, viewMode: 'Portrait' },
     onboarding: { done: [], finished: false },
+    filmSeries: { enabled: false, minimum: 2 },
     server: { version: null, seenAt: null },
   };
 }

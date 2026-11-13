@@ -25,7 +25,8 @@ import { AttemptLimiter, clientIp } from './security.js';
 import { applySettings, setCollectionEnabled, setSchedule, SettingsError, MODE_KEYS } from './settings-actions.js';
 import { createCollection, updateCollection, addSource, removeSource, setSourceRole, setPin, deleteCollection, sendMissing, monitorInRadarr, saveArrDefaults } from './collection-actions.js';
 import { explainCollection } from './explain.js';
-import { adoptionCandidates, adopt, deleteUnmanaged } from '../pipeline/adoption.js';
+import { adoptionCandidates, adopt, adoptSuggested, deleteUnmanaged } from '../pipeline/adoption.js';
+import { setFilmSeries } from '../pipeline/film-series.js';
 import { undoAction } from '../pipeline/undo.js';
 import { arrOptions } from '../pipeline/arr.js';
 import { syncHomeRows } from '../homescreen/index.js';
@@ -246,6 +247,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       imdb: { route: s.imdbRoute, snapshotUrl: s.snapshotUrl || null },
       libraries: { films: libList('movies', s.movieLibraryIds), tv: libList('tvshows', s.showLibraryIds) },
       homeRows: { enabled: s.homeRows.enabled, position: s.homeRows.orderIndex, view: s.homeRows.viewMode },
+      filmSeries: s.filmSeries,
       schedules: app.db.select().from(jobSchedule).all().map((j) => ({ job: j.job, what: JOBS[j.job as JobName]?.detail ?? null, cron: j.cron, on: j.enabled, next: at(runs.find((r) => r.job === j.job)?.next?.getTime()) })),
       otherToolsSchedules: s.neighbours,
       connections: Object.fromEntries(CONNECTIONS.map((x) => [x.key, { address: x.urlField ? s.connections[x.urlField] || null : undefined, keySaved: x.secret ? app.secrets.masked(x.secret).set : undefined }])),
@@ -385,6 +387,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       tvLibraries: z.union([z.literal('all'), z.array(z.string()).min(1)]).optional().describe('TV libraries that show and episode collections draw from: "all", or names or ids.'),
       homeRows: z.object({ enabled: z.boolean().optional(), position: z.number().int().min(0).max(99).optional(), view: z.enum(['Portrait', 'Landscape', 'Square', 'Small']).optional() }).optional(),
       otherToolsSchedules: z.array(z.object({ name: z.string(), time: z.string() })).optional().describe('Replaces the list of other tools\' run times shown beside this app\'s jobs, e.g. [{"name":"Kometa (Plex)","time":"05:00"}].'),
+      filmSeries: z.object({ enabled: z.boolean(), minimum: z.number().int().min(2).max(20).optional() }).optional().describe('Film series: one collection for each TMDb film series with at least `minimum` (default 2) owned films. Turning it on or off also turns every film series collection on or off; the next run adds new series.'),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   }, async (a) => {
@@ -398,9 +401,10 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
         homeRows: a.homeRows ? { enabled: a.homeRows.enabled, orderIndex: a.homeRows.position, viewMode: a.homeRows.view } : undefined,
         neighbours: a.otherToolsSchedules,
       });
+      if (a.filmSeries) setFilmSeries(app, a.filmSeries.enabled, a.filmSeries.minimum);
       if (r.timezoneChanged) opts.restartScheduler?.();
       log.info(`Claude access: settings changed via token “${token.name}”: ${r.changed.join(', ') || 'nothing'}`);
-      return ok(`Saved.\n${changeResult(before, r.changed)}`);
+      return ok(`Saved.\n${changeResult(before, a.filmSeries ? [...r.changed, 'filmSeries'] : r.changed)}`);
     } catch (e) {
       if (e instanceof SettingsError) return fail(e.message);
       throw e;
@@ -555,6 +559,16 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
     await adopt(app, a.collectionId, a.boxSetId, by);
     return 'Adopted. The next run syncs its titles through Review.';
   }));
+
+  server.registerTool('adopt_suggested_box_sets', {
+    title: 'Adopt every suggested box set',
+    description: 'Adopt every box set list_existing_box_sets suggests adopting, in one go (for example Jellyfin\'s own film series collections once Film series is on).',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, async () => {
+    const r = await adoptSuggested(app, by);
+    log.info(`Claude access: ${r.adopted} box set(s) adopted via token “${token.name}”`);
+    return r.failed.length ? fail(`Adopted ${r.adopted}. Failed: ${r.failed.join('; ')}`) : ok(`Adopted ${r.adopted}. The next run syncs their titles through Review.`);
+  });
 
   server.registerTool('delete_box_set', {
     title: 'Delete an existing box set',

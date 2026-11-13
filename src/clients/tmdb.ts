@@ -19,6 +19,8 @@ const title = (x: PagedItem, media: 'movie' | 'tv'): TmdbTitle => {
   return { tmdb: String(x.id), media, title: x.title ?? x.name, year: date ? Number(date.slice(0, 4)) : undefined };
 };
 
+export type CollectionDetails = { name: string; overview: string | null; posterPath: string | null; parts: { tmdb: string; title: string; year: number | undefined }[] };
+
 export class TmdbClient {
   private limiter = new RateLimiter(35, 10_000);
   constructor(private db: DB, private apiKey: string, private f: FetchLike = fetch) {}
@@ -92,13 +94,34 @@ export class TmdbClient {
   }
 
   /** Films in a TMDb collection (e.g. Halloween's 10 collections). Cached for 7 days. */
-  collectionParts(id: number | string): Promise<{ tmdb: string; title: string; year: number | undefined }[]> {
-    return cached(this.db, `collection:${id}`, 7, async () => {
+  async collectionParts(id: number | string): Promise<{ tmdb: string; title: string; year: number | undefined }[]> {
+    return (await this.collectionDetails(id))?.parts ?? [];
+  }
+
+  /** A TMDb collection (a film series): its name, overview, poster and films. Null if TMDb has no such collection. */
+  collectionDetails(id: number | string): Promise<CollectionDetails | null> {
+    return cached(this.db, `collection-details:${id}`, 7, async () => {
       try {
-        const r = await this.get<{ parts: { id: number; title: string; release_date?: string }[] }>(`/collection/${id}`);
-        return r.parts.map((p) => ({ tmdb: String(p.id), title: p.title, year: p.release_date ? Number(p.release_date.slice(0, 4)) : undefined }));
+        const r = await this.get<{ name: string; overview?: string; poster_path?: string | null; parts: { id: number; title: string; release_date?: string }[] }>(`/collection/${id}`);
+        return {
+          name: r.name, overview: r.overview || null, posterPath: r.poster_path ?? null,
+          parts: r.parts.map((p) => ({ tmdb: String(p.id), title: p.title, year: p.release_date ? Number(p.release_date.slice(0, 4)) : undefined })),
+        };
       } catch (e) {
-        if (e instanceof HttpError && e.status === 404) return [];
+        if (e instanceof HttpError && e.status === 404) return null;
+        throw e;
+      }
+    });
+  }
+
+  /** The TMDb collection a film belongs to, for films Jellyfin hasn't recorded one for. Cached for 30 days. */
+  movieCollection(id: number | string): Promise<string | null> {
+    return cached(this.db, `movie-collection:${id}`, 30, async () => {
+      try {
+        const r = await this.get<{ belongs_to_collection?: { id: number } | null }>(`/movie/${id}`);
+        return r.belongs_to_collection ? String(r.belongs_to_collection.id) : null;
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) return null;
         throw e;
       }
     });

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import type { DB } from '../db/index.js';
 import { definition, definitionSource, definitionMode, pin } from '../db/schema.js';
 import type { ActionType } from '../db/schema.js';
-import { PRESETS } from '../presets/index.js';
+import { PRESETS, type PresetDefinition } from '../presets/index.js';
 import type { Mode } from '../settings.js';
 
 export type LoadedDefinition = typeof definition.$inferSelect & {
@@ -19,16 +19,22 @@ export function seedPresets(db: DB, now = Date.now()): number {
   for (const p of PRESETS) {
     const d = p.definition;
     if (db.select({ id: definition.id }).from(definition).where(eq(definition.slug, d.slug)).get()) continue;
-    const row = db.insert(definition).values({
-      slug: d.slug, name: d.name, target: d.target, enabled: p.enabledByDefault, homeRow: p.family === 'seasonal' || p.family === 'holiday_episodes', presetKey: d.presetKey, presetRev: d.presetRev,
-      window: d.window, filters: {}, libraryIds: null, minItems: d.minItems, syncMode: d.syncMode, sortBy: d.sortBy,
-      sortTitle: d.sortTitle, overview: d.overview, poster: d.poster, visibility: d.visibility, createdAt: now, updatedAt: now,
-    }).returning({ id: definition.id }).get();
-    d.sources.forEach((s, i) => db.insert(definitionSource).values({ definitionId: row.id, type: s.type, config: s.config, role: s.role ?? 'add', position: i }).run());
-    for (const [actionType, mode] of Object.entries(d.modes ?? {})) db.insert(definitionMode).values({ definitionId: row.id, actionType, mode }).run();
+    insertDefinition(db, d, { enabled: p.enabledByDefault, homeRow: p.family === 'seasonal' || p.family === 'holiday_episodes' }, now);
     added++;
   }
   return added;
+}
+
+/** Insert a preset-shaped definition with its sources and modes; returns its id. */
+export function insertDefinition(db: DB, d: PresetDefinition, opts: { enabled: boolean; homeRow: boolean }, now = Date.now()): number {
+  const row = db.insert(definition).values({
+    slug: d.slug, name: d.name, target: d.target, enabled: opts.enabled, homeRow: opts.homeRow, presetKey: d.presetKey, presetRev: d.presetRev,
+    window: d.window, filters: {}, libraryIds: null, minItems: d.minItems, syncMode: d.syncMode, sortBy: d.sortBy,
+    sortTitle: d.sortTitle, overview: d.overview, poster: d.poster, visibility: d.visibility, createdAt: now, updatedAt: now,
+  }).returning({ id: definition.id }).get();
+  d.sources.forEach((s, i) => db.insert(definitionSource).values({ definitionId: row.id, type: s.type, config: s.config, role: s.role ?? 'add', position: i }).run());
+  for (const [actionType, mode] of Object.entries(d.modes ?? {})) db.insert(definitionMode).values({ definitionId: row.id, actionType, mode }).run();
+  return row.id;
 }
 
 /**

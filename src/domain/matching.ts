@@ -11,6 +11,7 @@ export type LibRow = {
   imdb: string | null;
   tmdb: string | null;
   tvdb: string | null;
+  tmdbCollection?: string | null;
   seriesJfId: string | null;
   season: number | null;
   episode: number | null;

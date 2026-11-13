@@ -42,6 +42,7 @@ Each entry is a short ADR: context, options, recommendation, consequences.
 | 032 | Claude access through MCP, on the home network | **Decided** (13 Nov) |
 | 033 | Claude can change settings (Full control tokens) | **Decided** (13 Nov) |
 | 034 | Full control means everything except connections, keys and tokens | **Decided** (13 Nov) |
+| 035 | Film series: a collection per owned TMDb film series | **Decided** (13 Nov) |
 
 ---
 
@@ -515,6 +516,24 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - **One code path.** The collection editor, Missing and the Radarr/Sonarr defaults now save through `src/web/collection-actions.ts`, the same code the tools use.
   - **Filters,** which the planner already applied but no page set, can now be set by Claude and are shown by `get_collection`. A page for them can follow.
 - **Consequences.** `get_collection`'s titles include their ids (used by the pin and exclude tool).
+
+### ADR-035 Film series: Decided (13 Nov)
+- **Context.**
+  - You turned off Jellyfin's own TMDb collections, so its roughly 100 series box sets stopped picking up new films.
+  - Kometa's movie `franchise` default makes these dynamically. Our universe presets only cover a few curated universes.
+- **Decision.**
+  - **A dynamic family, Film series,** that follows Kometa's `defaults/movie/franchise.yml` (master, 13 Nov 2026):
+    - a collection for every TMDb collection the library has at least 2 films of (the minimum is a setting)
+    - "Collection" removed from the name, plus Kometa's title overrides
+    - sync mode, release order, and TMDb's overview and poster
+    - Kometa's add-on series folded in, and its extra films added
+  - **Membership** comes from Jellyfin's `TmdbCollection` provider ID, stored on the library index (migration 0004). If Jellyfin recorded none at all, TMDb `/movie/{id}` is asked instead: at most 300 uncached films per run, cached for 30 days.
+  - **Each run** creates collections for new series, enabled. Existing ones only gain IDs and are never rewritten, so edits stay.
+  - **One switch** in settings (`filmSeries`), set by Getting started or Claude. It turns every film series collection on or off.
+  - **Adoption.** Existing box sets match a film series by their TMDb provider ID (Jellyfin's own sets carry it) or by "<series> Collection". **Adopt all suggested** takes them over in one press.
+- **Consequences.**
+  - A library can get a hundred or more collections. They go through Review like any other change while dry run is on. Approving a create approves its titles.
+  - New series need a TMDb key; without one, the run logs which ones are waiting.
 
 ---
 

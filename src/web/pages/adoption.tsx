@@ -11,10 +11,16 @@ export const Adoption: FC<{ items: AdoptionCandidate[]; csrf: string; error?: st
     </header>
     <div class="content">
       <p class="muted" style="max-width:72ch">
-        These box sets already exist in Jellyfin with the same name as one of your collections (or an older name for it). The app never touches them unless you adopt them.
+        These box sets already exist in Jellyfin with the same name as one of your collections (or an older name for it), or are Jellyfin’s own collection for one of your film series. The app never touches them unless you adopt them.
         If Jellyfin-Auto-Collections manages one, remove its line from JAC’s config.yaml first, or JAC will keep rewriting it (ADR-009).
       </p>
       {error ? <p role="alert" style="color:var(--red)">{error}</p> : null}
+      {items.filter((b) => b.suggestion === 'adopt' && b.definitionId).length > 1 ? (
+        <form method="post" action="/adoption/adopt-all" class="inline-form">
+          <Csrf token={csrf} />
+          <button class="btn primary" type="submit">Adopt all {items.filter((b) => b.suggestion === 'adopt' && b.definitionId).length} suggested</button>
+        </form>
+      ) : null}
       {items.length === 0 ? (
         <div class="empty"><h3>No matching box sets</h3><p>Nothing in Jellyfin clashes with your collections.</p></div>
       ) : (

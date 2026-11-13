@@ -44,10 +44,11 @@ import { reviewVerdict, type SnoozeFor } from './review-actions.js';
 import { createToken, listTokens, revokeToken, SCOPE_LABEL, type TokenScope } from './api-tokens.js';
 import type { Reveal } from './pages/claude-access.js';
 import { mcpHandler } from './mcp.js';
+import { setFilmSeries } from '../pipeline/film-series.js';
 import { applySettings, setSchedule, setCollectionEnabled, SettingsError, MODE_KEYS, type ModeKey, type SettingsPatch } from './settings-actions.js';
 import { createCollection, updateCollection, addSource, removeSource, setSourceRole, setPin, deleteCollection, sendMissing, monitorInRadarr, saveArrDefaults, type CollectionPatch } from './collection-actions.js';
 import { undoAction } from '../pipeline/undo.js';
-import { adoptionCandidates, adopt, deleteUnmanaged } from '../pipeline/adoption.js';
+import { adoptionCandidates, adopt, adoptSuggested, deleteUnmanaged } from '../pipeline/adoption.js';
 import { loadDefinition, loadDefinitions } from '../domain/definitions.js';
 import { members as computeMembers } from '../pipeline/planner.js';
 import { syncLibraries } from '../library/indexer.js';
@@ -210,10 +211,13 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       holiday_episodes: (n) => `${n} collections of Christmas, Halloween and Thanksgiving episodes from your shows, on the same dates as the films.`,
       universe: (n) => `${n} film universes (Marvel, Star Wars, Middle Earth…), one collection each. A universe’s collection is made only when you have at least 2 of its films, and stays all year.`,
       show_franchise: (n) => `${n} TV franchises (Star Trek, NCIS, One Chicago…), one collection each. A franchise’s collection is made only when you have at least 2 of its shows, and stays all year.`,
+      film_series: (n) => `One collection for each film series you have at least ${s.filmSeries.minimum} films of (Toy Story, John Wick…), named and illustrated from TMDb, in release order. New series appear as you add films.${n ? ` ${n} so far.` : ''} Needs a TMDb key.`,
     };
-    const families = (['seasonal', 'holiday_episodes', 'universe', 'show_franchise'] as const).map((family) => {
+    const families = (['seasonal', 'holiday_episodes', 'film_series', 'universe', 'show_franchise'] as const).map((family) => {
       const mine = defs.filter((d) => familyOf(d.presetKey) === family);
-      return { family, on: mine.filter((d) => d.enabled).length, total: mine.length, note: NOTES[family](mine.length) };
+      // Film series is one switch, on before any series exists; the others count their collections.
+      const on = family === 'film_series' ? (s.filmSeries.enabled ? 1 : 0) : mine.filter((d) => d.enabled).length;
+      return { family, on, total: mine.length, note: NOTES[family](mine.length) };
     });
     const hasRun = Boolean(app.db.select({ id: run.id }).from(run).limit(1).get());
     return page(c, 'Getting started', 'dashboard', <Start m={{ s, libraries: librariesModel(app), tmdbSet: Boolean(app.secrets.get('tmdb.apiKey')), families, hasRun, csrf: userOf(c).csrf }} />);
@@ -243,9 +247,10 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   web.post('/start/families', async (c) => {
     const b = await c.req.parseBody({ all: true });
     const on = new Set(([] as unknown[]).concat(b.families ?? []).map(String));
+    if (on.has('film_series') !== app.settings().filmSeries.enabled) setFilmSeries(app, on.has('film_series'));
     for (const d of loadDefinitions(app.db)) {
       const f = familyOf(d.presetKey);
-      if (f === 'custom') continue;
+      if (f === 'custom' || f === 'film_series') continue;
       const want = on.has(f);
       if (want !== d.enabled) app.db.update(definition).set({ enabled: want, updatedAt: Date.now() }).where(eq(definition.id, d.id)).run();
     }
@@ -744,6 +749,14 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     try {
       await adopt(app, Number(b.definitionId), String(b.boxsetId), userOf(c).name);
       return back(c, '/adoption', { ok: 'Adopted. The next run syncs its members through Review.' });
+    } catch (e) {
+      return back(c, '/adoption', { err: (e as Error).message });
+    }
+  });
+  web.post('/adoption/adopt-all', async (c) => {
+    try {
+      const r = await adoptSuggested(app, userOf(c).name);
+      return back(c, '/adoption', r.failed.length ? { err: `Adopted ${r.adopted}. Failed: ${r.failed.join('; ')}` } : { ok: `Adopted ${r.adopted}. The next run syncs their titles through Review.` });
     } catch (e) {
       return back(c, '/adoption', { err: (e as Error).message });
     }

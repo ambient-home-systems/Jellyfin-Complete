@@ -75,6 +75,10 @@ describe('first-run guide (Phase 4)', () => {
     await post('/start/families', { families: ['seasonal', 'universe'] });
     const enabled = (prefix: string) => (t.app.db.$client.prepare(`select count(*) n from definition where preset_key like '${prefix}:%' and enabled = 1`).get() as { n: number }).n;
     expect([enabled('seasonal'), enabled('holiday_episodes'), enabled('universe'), enabled('show_franchise')]).toEqual([19, 0, 17, 0]);
+    expect(t.app.settings().filmSeries.enabled).toBe(false);
+    expect(page).toContain('One collection for each film series');
+    await post('/start/families', { families: ['seasonal', 'universe', 'film_series'] });
+    expect(t.app.settings().filmSeries.enabled).toBe(true); // one switch; the next run adds the series
     expect(t.app.settings().onboarding.done.sort()).toEqual(['families', 'libraries', 'timezone']);
     // Finish: the banner goes, and the next sign-in lands on the Dashboard.
     expect((await post('/start/finish', {})).headers.get('location')).toBe('/');

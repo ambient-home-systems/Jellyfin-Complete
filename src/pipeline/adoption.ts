@@ -2,9 +2,10 @@
 // Jellyfin-Auto-Collections manages, and let the person adopt or delete each. Nothing happens automatically.
 import { eq } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
-import { action, managedCollection, definition } from '../db/schema.js';
+import { action, managedCollection, definition, definitionSource } from '../db/schema.js';
 import { PRESETS } from '../presets/index.js';
 import { MANAGED_TAG } from './planner.js';
+import { SERIES_PREFIX } from '../presets/film-series.js';
 
 export const JAC_TAG = 'Jellyfin-Auto-Collections';
 const JAC_PLUGIN_TAGS = new Set(['imdb_chart', 'imdb_list', 'letterboxd', 'mdblist', 'tmdb', 'trakt', 'jellyfin_api', 'tvdb', 'anilist', 'musicbrainz', 'imdb', 'jellyseerr']);
@@ -31,7 +32,17 @@ export async function adoptionCandidates(app: AppContext): Promise<AdoptionCandi
     const d = defs.find((x) => x.presetKey === p.definition.presetKey);
     if (d) for (const n of p.deleteCollectionsNamed) oldNames.set(n, d.id);
   }
-  const boxsets = await jf.allItems({ IncludeItemTypes: 'BoxSet', Fields: 'Tags,ChildCount' });
+  // Film series (ADR-035): Jellyfin's own series box sets carry the TMDb collection ID, and are named "<series> Collection".
+  const seriesByTmdb = new Map<string, number>();
+  const seriesByName = new Map<string, number>();
+  const seriesDefs = defs.filter((x) => x.presetKey?.startsWith(SERIES_PREFIX));
+  const seriesIds = new Set(seriesDefs.map((d) => d.id));
+  for (const src of app.db.select().from(definitionSource).all()) {
+    if (src.type !== 'tmdb_collection' || !seriesIds.has(src.definitionId)) continue;
+    for (const id of ((src.config.ids ?? []) as unknown[])) seriesByTmdb.set(String(id), src.definitionId);
+  }
+  for (const d of seriesDefs) seriesByName.set(`${d.name} collection`.toLowerCase(), d.id);
+  const boxsets = await jf.allItems({ IncludeItemTypes: 'BoxSet', Fields: 'Tags,ChildCount,ProviderIds' });
   const out: AdoptionCandidate[] = [];
   for (const b of boxsets) {
     if (!b.Id || managed.has(b.Id)) continue;
@@ -41,12 +52,15 @@ export async function adoptionCandidates(app: AppContext): Promise<AdoptionCandi
     const exact = defs.find((d) => d.name === name);
     const old = oldNames.get(name);
     const orphan = jac && /^\{.*\}$/.test(name);
-    if (!exact && old === undefined && !orphan) continue;
-    const def = exact ?? defs.find((d) => d.id === old) ?? null;
+    const tmdbId = b.ProviderIds?.Tmdb ?? b.ProviderIds?.tmdb ?? null;
+    const series = (tmdbId ? seriesByTmdb.get(String(tmdbId)) : undefined) ?? seriesByName.get(name.toLowerCase());
+    if (!exact && old === undefined && !orphan && series === undefined) continue;
+    const def = exact ?? defs.find((d) => d.id === (old ?? series)) ?? null;
     let suggestion: AdoptionCandidate['suggestion'] = 'leave';
     let why = '';
     if (orphan) { suggestion = 'delete'; why = 'Left over from an older Jellyfin-Auto-Collections config; nothing updates it'; }
     else if (exact) { suggestion = 'adopt'; why = jac ? 'Same name as this preset; remove it from JAC’s config first (ADR-009)' : 'Same name as this preset'; }
+    else if (series !== undefined) { suggestion = 'adopt'; why = 'Jellyfin’s own collection for this film series; adopting keeps it and its poster'; }
     else { suggestion = 'delete'; why = 'An older name for this collection'; }
     out.push({ boxsetId: b.Id, name, jac, childCount: b.ChildCount ?? null, definitionId: def?.id ?? null, definitionName: def?.name ?? null, suggestion, why });
   }
@@ -68,6 +82,23 @@ export async function adopt(app: AppContext, definitionId: number, boxsetId: str
     type: 'collection.update_metadata', fingerprint: `adopt:${boxsetId}`, definitionId, mode: 'review', status: 'applied', reason: 'Adopted existing box set',
     before: { Tags: before.Tags }, after: { Tags: after.Tags, adopted: true }, decidedBy: by, decidedAt: now, appliedAt: now, createdAt: now, updatedAt: now,
   }).run();
+}
+
+/** Adopt every box set the adoption screen suggests adopting (one press for, say, a hundred film series). */
+export async function adoptSuggested(app: AppContext, by: string): Promise<{ adopted: number; failed: string[] }> {
+  const out = { adopted: 0, failed: [] as string[] };
+  const taken = new Set<number>();
+  for (const c of await adoptionCandidates(app)) {
+    if (c.suggestion !== 'adopt' || c.definitionId === null || taken.has(c.definitionId)) continue;
+    try {
+      await adopt(app, c.definitionId, c.boxsetId, by);
+      taken.add(c.definitionId); // one box set per collection
+      out.adopted++;
+    } catch (e) {
+      out.failed.push(`${c.name}: ${(e as Error).message}`);
+    }
+  }
+  return out;
 }
 
 /** Delete a box set this app doesn't manage, on an explicit click on the adoption screen. Its films stay. */
