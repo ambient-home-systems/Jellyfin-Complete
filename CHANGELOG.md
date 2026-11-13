@@ -2,6 +2,15 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.15.0 — 13 Nov 2026
+
+- **One-click on/off on the Collections page.** Each row has a switch.
+  - Clicking it turns the collection on or off in place, without the editor, a Save button, or a jump back to the top of the page.
+  - Keyboard focus stays on the switch.
+  - Screen readers hear what changed.
+  - The family's "on" count updates.
+- **All on / All off for each family.** For streaming services, All on picks only the services offered in your country.
+
 ## 0.14.0 — 13 Nov 2026
 
 - **Collection posters.** Each collection's editor has a **Poster** section:

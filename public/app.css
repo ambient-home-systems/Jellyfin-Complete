@@ -514,6 +514,31 @@ details.family > summary h2::before { content: "▸ "; }
 details.family[open] > summary h2::before { content: "▾ "; }
 details.family > summary .faint { font-size: var(--fs-sm); }
 td .inline-form { display: inline-block; margin-left: var(--s2); }
+.family .section-head .fam-switches { margin-left: auto; }
+.fam-switches { display: inline-flex; gap: 4px; }
+.fam-tools { display: flex; justify-content: flex-end; margin-bottom: var(--s2); }
+
+/* One-click on/off per collection. Off: an outlined track, knob left. On: yellow, knob right, ink edge and knob, so the
+   state reads by position and fill as well as colour, and the track clears 3:1 against the paper in both themes. */
+.tt td.sw, .tt th.sw { width: 60px; padding-right: 0; }
+.tt td.sw { padding-top: 5px; padding-bottom: 5px; }
+.tt td.sw .inline-form { margin-left: 0; }
+.switch {
+  all: unset; box-sizing: border-box; cursor: pointer; display: inline-block; position: relative; vertical-align: middle;
+  width: 44px; height: 24px; border-radius: 12px; border: 1.5px solid var(--rule-2); background: transparent;
+  transition: background-color .15s, border-color .15s;
+}
+.switch .knob {
+  position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%; background: var(--rule-2);
+  transition: left .15s, background-color .15s;
+}
+.switch:hover { border-color: var(--ink); }
+.switch:hover .knob { background: var(--ink-2); }
+.switch[aria-checked="true"] { background: var(--yellow); border-color: var(--ink); }
+.switch[aria-checked="true"] .knob { left: 23px; background: var(--yellow-ink); }
+.switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.htmx-request .switch, .switch.htmx-request { cursor: progress; opacity: .6; }
+@media (prefers-reduced-motion: reduce) { .switch, .switch .knob { transition: none; } }
 
 fieldset.plain { border: 0; padding: 0; margin: 0 0 var(--s3); display: grid; gap: var(--s2); }
 fieldset.plain > legend { padding: 0; margin-bottom: var(--s2); font-weight: 600; font-size: var(--fs-sm); }

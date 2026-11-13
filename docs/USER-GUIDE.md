@@ -48,6 +48,8 @@ Some rules hold whatever the modes say:
 
 The ready-made **presets** come in families. Turn single ones on or off under Collections.
 
+**Turning collections on and off.** Each row on the Collections page has a switch. One click turns that collection on or off, and the page stays where you are. **All on** and **All off** beside each family switch the whole family. For streaming services, All on picks only the services offered in your country. A collection you turn on is planned on the next run. One you turn off has its box set removed on the next run, if it has one. Both follow your dry-run setting and action modes, so with dry run on the change waits in Review. Runs happen at midnight and 2:30 am, or straight away with **Run now**.
+
 | Family | Comes from | Starts |
 |---|---|---|
 | Seasonal (19) | Kometa's seasonal collections | On |

@@ -15,29 +15,58 @@ const srcDot = (status: string) => (status === 'ok' ? 'ok' : status === 'stale' 
 
 const FAMILY_ORDER: (PresetFamily | 'custom')[] = ['seasonal', 'holiday_episodes', 'basic', 'custom', 'film_series', 'imdb_chart', 'streaming', 'universe', 'show_franchise'];
 
+/** One collection's row, with its on/off switch. Rendered alone when the switch is flipped (htmx swaps just the row). */
+export const CollectionRow: FC<{ r: Row; tz: string; csrf: string }> = ({ r, tz, csrf }) => {
+  const on = r.def.enabled;
+  const live = r.status.kind === 'live';
+  return (
+    <tr id={`c-${r.def.id}`} class={r.status.kind === 'off' ? 'faint' : ''}>
+      <td class="sw">
+        <form method="post" action={`/collections/${r.def.id}/enabled`} class="inline-form" hx-post={`/collections/${r.def.id}/enabled`} hx-target={`#c-${r.def.id}`} hx-swap="outerHTML">
+          <Csrf token={csrf} />
+          <input type="hidden" name="enabled" value={on ? '0' : '1'} />
+          {/* The id lets htmx put keyboard focus back on the new switch after the row is swapped. */}
+          <button type="submit" id={`sw-${r.def.id}`} class="switch" role="switch" aria-checked={on ? 'true' : 'false'} aria-label={r.def.name}
+            title={on ? (live ? 'Turn off. Its box set is removed on the next run (following the delete mode).' : 'Turn off') : 'Turn on. The next run plans it.'}><span class="knob"></span></button>
+        </form>
+      </td>
+      <td class="coll"><a href={`/collections/${r.def.id}`}>{r.def.name}</a>{r.pending ? <> <span class="chip">{r.pending} to review</span></> : null}</td>
+      <td class="hide-sm num nowrap">{r.def.window?.type === 'range' ? `${r.def.window.from}–${r.def.window.to}` : r.def.window ? 'rule' : 'always'}</td>
+      <td>{live ? <span class="chip solid">Live</span> : r.status.kind === 'scheduled' ? <span class="chip">Scheduled</span> : <span class="chip faint">{r.status.label}</span>}</td>
+      <td class="r num">{r.items ?? '—'}</td>
+      <td class="hide-md num">{r.next ? `${r.next.kind} ${fmtDate(r.next.at, tz)}` : '—'}</td>
+      <td class="hide-sm">{r.sources.map((s) => <span class="nowrap"><Dot state={srcDot(s.status)} label={s.status} /> {s.label} </span>)}</td>
+    </tr>
+  );
+};
+
 const CollectionsTable: FC<{ rows: Row[]; tz: string; csrf: string }> = ({ rows, tz, csrf }) => (
   <div class="table-wrap">
     <table class="tt">
-      <thead><tr><th scope="col">Collection</th><th scope="col" class="hide-sm">Window</th><th scope="col">Status</th><th scope="col" class="r">Items</th><th scope="col" class="hide-md">Next change</th><th scope="col" class="hide-sm">Sources</th></tr></thead>
+      <thead><tr><th scope="col" class="sw">On</th><th scope="col">Collection</th><th scope="col" class="hide-sm">Window</th><th scope="col">Status</th><th scope="col" class="r">Items</th><th scope="col" class="hide-md">Next change</th><th scope="col" class="hide-sm">Sources</th></tr></thead>
       <tbody>
-        {rows.map((r) => (
-          <tr class={r.status.kind === 'off' ? 'faint' : ''}>
-            <td class="coll"><a href={`/collections/${r.def.id}`}>{r.def.name}</a>{r.pending ? <> <span class="chip">{r.pending} to review</span></> : null}</td>
-            <td class="hide-sm num nowrap">{r.def.window?.type === 'range' ? `${r.def.window.from}–${r.def.window.to}` : r.def.window ? 'rule' : 'always'}</td>
-            <td>
-              {r.status.kind === 'live' ? <span class="chip solid">Live</span> : r.status.kind === 'scheduled' ? <span class="chip">Scheduled</span> : <span class="chip faint">{r.status.label}</span>}
-              {r.status.kind === 'off' && r.def.presetKey ? (
-                <form method="post" action={`/collections/${r.def.id}/enabled`} class="inline-form"><Csrf token={csrf} /><button class="btn sm" type="submit" name="enabled" value="1">Turn on</button></form>
-              ) : null}
-            </td>
-            <td class="r num">{r.items ?? '—'}</td>
-            <td class="hide-md num">{r.next ? `${r.next.kind} ${fmtDate(r.next.at, tz)}` : '—'}</td>
-            <td class="hide-sm">{r.sources.map((s) => <span class="nowrap"><Dot state={srcDot(s.status)} label={s.status} /> {s.label} </span>)}</td>
-          </tr>
-        ))}
+        {rows.map((r) => <CollectionRow r={r} tz={tz} csrf={csrf} />)}
       </tbody>
     </table>
   </div>
+);
+
+/** "3 of 41 on", with an id so flipping one row's switch can update it in place. */
+/** Where a one-click switch says what it did, for screen readers (the switch itself shows it). Filled in place, never replaced. */
+export const ToggleStatus: FC<{ text?: string; oob?: boolean }> = ({ text, oob }) => (
+  <div id="toggle-status" class="sr-only" role="status" hx-swap-oob={oob ? 'innerHTML' : undefined}>{text ?? ''}</div>
+);
+
+export const FamilyCount: FC<{ fam: string; on: number; total: number; oob?: boolean }> = ({ fam, on, total, oob }) => (
+  <span id={`fam-${fam}-count`} class="faint num" hx-swap-oob={oob ? 'true' : undefined}>{on} of {total} on</span>
+);
+
+/** All on / All off for a family: a plain form that comes back to the family. */
+const FamilySwitches: FC<{ fam: string; csrf: string }> = ({ fam, csrf }) => (
+  <span class="fam-switches">
+    <form method="post" action={`/collections/family/${fam}/enabled`} class="inline-form"><Csrf token={csrf} /><input type="hidden" name="enabled" value="1" /><button class="btn sm ghost" type="submit">All on</button></form>
+    <form method="post" action={`/collections/family/${fam}/enabled`} class="inline-form"><Csrf token={csrf} /><input type="hidden" name="enabled" value="0" /><button class="btn sm ghost" type="submit">All off</button></form>
+  </span>
 );
 
 export const CollectionsList: FC<{ rows: Row[]; tz: string; csrf: string }> = ({ rows, tz, csrf }) => (
@@ -47,21 +76,23 @@ export const CollectionsList: FC<{ rows: Row[]; tz: string; csrf: string }> = ({
       <div class="actions"><a class="btn" href="/adoption">Existing box sets</a><a class="btn primary" href="/collections/new"><Icon name="plus" /> New collection</a></div>
     </header>
     <div class="content">
+      <ToggleStatus />
       {FAMILY_ORDER.map((fam) => {
         const group = rows.filter((r) => familyOf(r.def.presetKey) === fam);
         if (!group.length) return null;
         const on = group.filter((r) => r.def.enabled).length;
         const id = `fam-${fam}`;
-        const title = <>{FAMILY_LABEL[fam]} <span class="faint num">{on} of {group.length} on</span></>;
+        const title = <>{FAMILY_LABEL[fam]} <FamilyCount fam={fam} on={on} total={group.length} /></>;
         // A family with nothing turned on folds away, so 44 optional presets don't crowd the page.
         return on === 0 && fam !== 'custom' ? (
           <details class="family" aria-labelledby={id}>
             <summary><h2 id={id}>{title}</h2><span class="faint">Ready-made collections. Turn on the ones you want; nothing is created until then.</span></summary>
+            <div class="fam-tools"><FamilySwitches fam={fam} csrf={csrf} /></div>
             <CollectionsTable rows={group} tz={tz} csrf={csrf} />
           </details>
         ) : (
           <section class="family" aria-labelledby={id}>
-            <div class="section-head"><h2 id={id}>{title}</h2></div>
+            <div class="section-head"><h2 id={id}>{title}</h2>{fam !== 'custom' ? <FamilySwitches fam={fam} csrf={csrf} /> : null}</div>
             <CollectionsTable rows={group} tz={tz} csrf={csrf} />
           </section>
         );

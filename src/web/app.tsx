@@ -20,7 +20,7 @@ import { AttemptLimiter, clientIp, isHttps, minutes, sameCode } from './security
 import { shellModel, dashboardModel, collectionsModel, reviewModel, activityModel, librariesModel, type ReviewTab } from './model.js';
 import { Dashboard } from './pages/dashboard.js';
 import { RunProgress } from './pages/run-progress.js';
-import { CollectionsList, CollectionEditor, NewCollection, Preview, ParityPanel, type PreviewItem } from './pages/collections.js';
+import { CollectionsList, CollectionEditor, CollectionRow, FamilyCount, ToggleStatus, NewCollection, Preview, ParityPanel, type PreviewItem } from './pages/collections.js';
 import { parity } from '../domain/parity.js';
 import { cachedPlan } from './plan-cache.js';
 import { Missing, ArrOptionsFields, parseArrOptions } from './pages/missing.js';
@@ -31,7 +31,7 @@ import { homeStatus, syncHomeRows } from '../homescreen/index.js';
 import { HomeRowsPanel } from './pages/home-rows.js';
 import { Start } from './pages/start.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
-import { familyOf, PRESET_FAMILIES, type PresetFamily } from '../presets/index.js';
+import { familyOf, FAMILY_LABEL, PRESET_FAMILIES, type PresetFamily } from '../presets/index.js';
 import { availableIn, serviceOfPreset } from '../presets/streaming.js';
 import type { OnboardingStep } from '../settings.js';
 import { Review } from './pages/review.js';
@@ -285,14 +285,43 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   // ── collections ──
   web.get('/collections', (c) => page(c, 'Collections', 'collections', <CollectionsList rows={collectionsModel(app)} tz={app.settings().timezone} csrf={userOf(c).csrf} />));
 
+  // On/off from the list (one click): htmx swaps just the row and the family's count; without htmx it comes back to the row.
   web.post('/collections/:id/enabled', async (c) => {
+    const id = Number(c.req.param('id'));
     const on = (await c.req.parseBody()).enabled === '1';
+    let msg: string;
     try {
-      return back(c, '/collections', { ok: setCollectionEnabled(app, Number(c.req.param('id')), on) });
+      msg = setCollectionEnabled(app, id, on);
     } catch (e) {
       if (e instanceof SettingsError) return c.notFound();
       throw e;
     }
+    if (c.req.header('hx-request')) {
+      const rows = collectionsModel(app);
+      const r = rows.find((x) => x.def.id === id)!;
+      const fam = familyOf(r.def.presetKey);
+      const group = rows.filter((x) => familyOf(x.def.presetKey) === fam);
+      return c.html(<><CollectionRow r={r} tz={app.settings().timezone} csrf={userOf(c).csrf} /><FamilyCount fam={fam} on={group.filter((x) => x.def.enabled).length} total={group.length} oob /><ToggleStatus text={msg} oob /></>);
+    }
+    return back(c, `/collections#c-${id}`, { ok: msg });
+  });
+  // All on / All off for a family. Streaming turns on only the services offered in your country.
+  web.post('/collections/family/:fam/enabled', async (c) => {
+    const fam = c.req.param('fam');
+    const on = (await c.req.parseBody()).enabled === '1';
+    const region = app.settings().streaming.region;
+    const defs = loadDefinitions(app.db).filter((d) => d.presetKey && familyOf(d.presetKey) === fam);
+    if (!defs.length) return c.notFound();
+    let changed = 0;
+    for (const d of defs) {
+      // All on skips services not offered in your country (one you turned on yourself stays on); All off turns off everything.
+      const service = fam === 'streaming' ? serviceOfPreset(d.presetKey) : undefined;
+      if (on && service && !availableIn(service, region)) continue;
+      if (on !== d.enabled) { setCollectionEnabled(app, d.id, on); changed++; }
+    }
+    if (fam === 'film_series' && app.settings().filmSeries.enabled !== on) setFilmSeries(app, on);
+    const label = FAMILY_LABEL[fam as PresetFamily] ?? fam;
+    return back(c, `/collections#fam-${fam}`, { ok: changed ? `${label}: ${changed} turned ${on ? 'on' : 'off'}. The next run ${on ? 'plans them' : 'removes their box sets'}.` : `${label}: nothing to change.` });
   });
 
   web.get('/collections/new', (c) => page(c, 'New collection', 'collections', <NewCollection csrf={userOf(c).csrf} />));
