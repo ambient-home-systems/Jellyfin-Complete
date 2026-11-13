@@ -2,6 +2,7 @@
 // (docs/VERIFIED.md): POST /Items/{id} is a full overwrite, LockData on a box set propagates to its
 // linked items, ForcedSortName is normalised, posters arrive as base64, deleting a box set keeps its items,
 // and BlockedTags hide tagged items for that user.
+import { createHash } from 'node:crypto';
 import { Hono } from 'hono';
 import type { FetchLike } from '../../src/clients/http.js';
 
@@ -59,6 +60,10 @@ export class FakeJellyfin {
     { Name: 'Collections', CollectionType: 'boxsets', ItemId: 'lib-collections' },
   ];
   apiKey = 'fake-api-key-123456';
+  /** Image files by "<itemId>/<type>"; an item's image tag is derived from its bytes, as Jellyfin's changes with the image. */
+  imageData = new Map<string, { bytes: Uint8Array; type: string }>();
+  /** Every image upload, in order. */
+  uploads: { id: string; type: string; bytes: Uint8Array }[] = [];
   calls: { method: string; path: string }[] = [];
   private seq = 1;
   tokens = new Map<string, string>(); // token -> userId
@@ -88,7 +93,18 @@ export class FakeJellyfin {
 
   private dto(item: FakeItem) {
     const { children, images, ...rest } = item;
-    return { ...rest, ChildCount: children?.length, ImageTags: images ? Object.fromEntries(Object.keys(images).map((k) => [k, 'tag'])) : {} };
+    const tag = (type: string) => {
+      const d = this.imageData.get(`${item.Id}/${type}`);
+      return d ? createHash('sha1').update(d.bytes).digest('hex').slice(0, 16) : 'tag';
+    };
+    return { ...rest, ChildCount: children?.length, ImageTags: images ? Object.fromEntries(Object.keys(images).map((k) => [k, tag(k)])) : {} };
+  }
+
+  /** Give an item a poster (as if Jellyfin had fetched one). */
+  setImage(id: string, bytes: Uint8Array, type = 'Primary', contentType = 'image/jpeg'): void {
+    const item = this.items.get(id)!;
+    item.images = { ...(item.images ?? {}), [type]: bytes.length };
+    this.imageData.set(`${id}/${type}`, { bytes, type: contentType });
   }
 
   app(): Hono {
@@ -242,7 +258,14 @@ export class FakeJellyfin {
       const bytes = Buffer.from(text, 'base64');
       if (!bytes.length || bytes.toString('base64') !== text.replace(/\s/g, '')) return c.text('Body must be base64', 400);
       item.images = { ...(item.images ?? {}), [c.req.param('type')]: bytes.length };
+      this.imageData.set(`${item.Id}/${c.req.param('type')}`, { bytes: new Uint8Array(bytes), type: c.req.header('content-type')! });
+      this.uploads.push({ id: item.Id, type: c.req.param('type'), bytes: new Uint8Array(bytes) });
       return c.body(null, 204);
+    });
+    app.get('/Items/:id/Images/:type', (c) => {
+      const d = this.imageData.get(`${c.req.param('id')}/${c.req.param('type')}`);
+      if (!d) return c.text('Not found', 404);
+      return c.body(Buffer.from(d.bytes), 200, { 'content-type': d.type });
     });
     return app;
   }

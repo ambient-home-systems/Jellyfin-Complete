@@ -1,6 +1,6 @@
 {
   "name": "maverick-jellyfin-complete",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Kometa-style seasonal collections for Jellyfin, with a plan → review → apply pipeline.",
   "license": "MIT",
   "private": true,
@@ -27,6 +27,7 @@
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.16",
     "htmx.org": "^2.0.11",
+    "sharp": "0.35.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {

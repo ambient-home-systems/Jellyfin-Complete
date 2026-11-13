@@ -1,6 +1,7 @@
 // Development only: serve the in-memory Jellyfin 12.4 fake on :8096 with a small sample library,
 // so the app can be run and looked at without a real server. Usage: npx tsx scripts/dev-fake-jellyfin.ts
 import { serve } from '@hono/node-server';
+import sharp from 'sharp';
 import { FakeJellyfin } from '../test/fakes/jellyfin.js';
 
 const fake = new FakeJellyfin();
@@ -22,4 +23,16 @@ const films: [string, string, number, string, string][] = [
 for (const [Name, Imdb, ProductionYear, Tmdb, ParentId] of films) fake.add({ Name, Type: 'Movie', ParentId, ProductionYear, ProviderIds: { Imdb, Tmdb } });
 fake.add({ Id: 'jac-xmas', Name: 'Christmas Movies', Type: 'BoxSet', ParentId: 'lib-collections', Tags: ['Jellyfin-Auto-Collections', 'mdblist'], children: [] });
 fake.add({ Id: 'jac-orphan', Name: "{'includeItemTypes': 'Movie', 'tags': 'christmas|santa claus'}", Type: 'BoxSet', ParentId: 'lib-collections', Tags: ['Jellyfin-Auto-Collections'], children: [] });
+// A few shows and posters, so Settings → Poster overlays has something to preview (ADR-039).
+const today = new Date();
+const daysAgo = (n: number) => new Date(today.getTime() - n * 86_400_000).toISOString();
+fake.add({ Id: 's-bluey', Name: 'Bluey', Type: 'Series', ParentId: 'lib-shows', Status: 'Continuing', ProviderIds: { Imdb: 'tt7678620' } } as Parameters<typeof fake.add>[0]);
+fake.add({ Id: 'e-bluey', Name: 'Ghostbasket', Type: 'Episode', SeriesId: 's-bluey', ParentIndexNumber: 3, IndexNumber: 9, PremiereDate: daysAgo(4) });
+fake.add({ Id: 's-bb', Name: 'Breaking Bad', Type: 'Series', ParentId: 'lib-shows', Status: 'Ended', ProviderIds: { Imdb: 'tt0903747' } } as Parameters<typeof fake.add>[0]);
+fake.add({ Id: 's-glee', Name: 'Glee', Type: 'Series', ParentId: 'lib-shows', Status: 'Continuing', ProviderIds: { Imdb: 'tt1327801' } } as Parameters<typeof fake.add>[0]);
+const colours: [string, string, string][] = [['s-bluey', '#2a6fdb', '#8fd3ff'], ['s-bb', '#1f3d2b', '#a7c957'], ['s-glee', '#c1121f', '#fdf0d5']];
+for (const [id, a, b] of colours) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="680" height="1000"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>`;
+  fake.setImage(id, new Uint8Array(await sharp(Buffer.from(svg)).jpeg({ quality: 88 }).toBuffer()));
+}
 serve({ fetch: fake.app().fetch, port: Number(process.env.FAKE_PORT ?? 8096) }, (i) => console.log(`fake Jellyfin on :${i.port} (admin / pw, key ${fake.apiKey})`));

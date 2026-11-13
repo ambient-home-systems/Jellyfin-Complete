@@ -550,3 +550,9 @@ fieldset.plain > legend { padding: 0; margin-bottom: var(--s2); font-weight: 600
 .logo .mark { width: 100%; height: 100%; display: block; }
 .auth-brand { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s3); }
 .auth-brand h1 { margin: 0; }
+
+/* Settings → Poster overlays: previews */
+.overlay-previews { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s3); }
+.overlay-previews figure { margin: 0; width: 140px; font-size: var(--fs-xs); }
+.overlay-previews img { display: block; width: 140px; height: auto; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; background: var(--rule); }
+.overlay-previews figcaption { margin-top: 6px; overflow-wrap: anywhere; }

@@ -34,6 +34,8 @@ import { getPlanSummary } from '../pipeline/summary.js';
 import { parity } from '../domain/parity.js';
 import { resolveSource, sourceKey, sourceLabel } from '../sources/index.js';
 import { SOURCE_INPUTS } from '../domain/source-input.js';
+import { startOverlayRun } from './overlay-actions.js';
+import { overlayCount } from '../overlays/sync.js';
 import { CONNECTIONS } from './pages/settings.js';
 import { JOBS, type JobName } from '../jobs/schedules.js';
 import { nextRuns } from '../jobs/scheduler.js';
@@ -43,7 +45,7 @@ const INSTRUCTIONS = `Maverick Jellyfin Complete builds collections (box sets) i
 Each run plans changes. Changes set to Review, and every change while dry run is on, wait in Review until someone approves, snoozes or dismisses them.
 Approving applies the change to Jellyfin straight away (or when the collection's dates open), even while dry run is on: dry run only stops changes from applying without approval.
 Before approving, show the user exactly what will change (collection, action, titles) and get their go-ahead, especially for deletions and removals. Never approve on your own initiative.
-With a full-control token you can do everything the app's pages can, except connections, keys and access tokens: change settings and schedules; create, edit, delete and turn collections on or off, with their dates, filters and sources; adopt or delete existing box sets; undo changes; send missing titles to Radarr/Sonarr. Ask the user before turning dry run off, setting a mode to auto, turning a collection off, deleting anything, or undoing a change: those change Jellyfin without a further approval.
+With a full-control token you can do everything the app's pages can, except connections, keys and access tokens: change settings and schedules; create, edit, delete and turn collections on or off, with their dates, filters and sources; adopt or delete existing box sets; undo changes; send missing titles to Radarr/Sonarr. Ask the user before turning dry run off, setting a mode to auto, turning a collection off, deleting anything, undoing a change, or applying or removing poster overlays: those change Jellyfin without a further approval.
 Times are local to the app's timezone, given by get_status.`;
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
@@ -234,7 +236,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('get_settings', {
     title: 'Settings',
-    description: 'Every setting on the Settings page: dry run, timezone, plan-ahead days, action modes, Radarr/Sonarr guardrails and defaults, IMDb route, which libraries collections draw from, home-screen rows, film series, the streaming country, job schedules, and which connections are set up (never the keys themselves).',
+    description: 'Every setting on the Settings page: dry run, timezone, plan-ahead days, action modes, Radarr/Sonarr guardrails and defaults, IMDb route, which libraries collections draw from, home-screen rows, film series, the streaming country, poster overlays, job schedules, and which connections are set up (never the keys themselves).',
     annotations: read,
   }, async () => {
     const s = app.settings();
@@ -250,6 +252,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       homeRows: { enabled: s.homeRows.enabled, position: s.homeRows.orderIndex, view: s.homeRows.viewMode },
       filmSeries: s.filmSeries,
       streamingCountry: s.streaming.region,
+      posterOverlays: { status: s.overlays.status, imdbTop250Ribbon: s.overlays.imdbTop250, postersWithOverlays: overlayCount(app) },
       schedules: app.db.select().from(jobSchedule).all().map((j) => ({ job: j.job, what: JOBS[j.job as JobName]?.detail ?? null, cron: j.cron, on: j.enabled, next: at(runs.find((r) => r.job === j.job)?.next?.getTime()) })),
       otherToolsSchedules: s.neighbours,
       connections: Object.fromEntries(CONNECTIONS.map((x) => [x.key, { address: x.urlField ? s.connections[x.urlField] || null : undefined, keySaved: x.secret ? app.secrets.masked(x.secret).set : undefined }])),
@@ -391,6 +394,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       otherToolsSchedules: z.array(z.object({ name: z.string(), time: z.string() })).optional().describe('Replaces the list of other tools\' run times shown beside this app\'s jobs, e.g. [{"name":"Kometa (Plex)","time":"05:00"}].'),
       filmSeries: z.object({ enabled: z.boolean(), minimum: z.number().int().min(2).max(20).optional() }).optional().describe('Film series: one collection for each TMDb film series with at least `minimum` (default 2) owned films. Turning it on or off also turns every film series collection on or off; the next run adds new series.'),
       streamingCountry: z.string().optional().describe('Two-letter country code (US, GB, CA…) whose streaming services the streaming collections (Netflix Movies and so on) count.'),
+      posterOverlays: z.object({ status: z.boolean().optional(), imdbTop250Ribbon: z.boolean().optional() }).optional().describe('Poster overlays: Kometa\'s status badge on shows (AIRING, RETURNING, CANCELED, ENDED) and its IMDb Top 250 ribbon. Runs change posters only while dry run is off; apply_poster_overlays does it now.'),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   }, async (a) => {
@@ -403,6 +407,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
         movieLibraryIds: libraryIds(a.filmLibraries, 'movies'), showLibraryIds: libraryIds(a.tvLibraries, 'tvshows'),
         homeRows: a.homeRows ? { enabled: a.homeRows.enabled, orderIndex: a.homeRows.position, viewMode: a.homeRows.view } : undefined,
         neighbours: a.otherToolsSchedules, streamingRegion: a.streamingCountry,
+        overlays: a.posterOverlays ? { status: a.posterOverlays.status, imdbTop250: a.posterOverlays.imdbTop250Ribbon } : undefined,
       });
       if (a.filmSeries) setFilmSeries(app, a.filmSeries.enabled, a.filmSeries.minimum);
       if (r.timezoneChanged) opts.restartScheduler?.();
@@ -651,6 +656,30 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
     saveArrDefaults(app, which, next);
     return `Saved ${which === 'radarr' ? 'Radarr' : 'Sonarr'} defaults: ${JSON.stringify(next)}`;
   }));
+
+  server.registerTool('apply_poster_overlays', {
+    title: 'Apply poster overlays now',
+    description: 'Start a run that puts the chosen poster overlays (update_settings posterOverlays) on posters in Jellyfin now, even while dry run is on, as Settings → Poster overlays → Apply now does. It changes posters in Jellyfin (originals are kept and can be put back with remove_poster_overlays); confirm with the user first. Follow it with get_status.',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+  }, async () => {
+    const s = app.settings();
+    if (!s.overlays.status && !s.overlays.imdbTop250 && !overlayCount(app)) return fail('No overlays are chosen. Choose some with update_settings posterOverlays first.');
+    const r = startOverlayRun(app, 'apply');
+    if (!r.ok) return fail(r.error);
+    log.info(`Claude access: poster overlays applied via token “${token.name}”`);
+    return ok('Run started: it updates poster overlays as it finishes. Follow it with get_status.');
+  });
+
+  server.registerTool('remove_poster_overlays', {
+    title: 'Remove all poster overlays',
+    description: 'Turn every poster overlay off and start a run that puts each original poster back in Jellyfin, as Settings → Poster overlays → Remove all overlays does. Confirm with the user first.',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+  }, async () => {
+    const r = startOverlayRun(app, 'remove');
+    if (!r.ok) return fail(r.error);
+    log.info(`Claude access: poster overlays removed via token “${token.name}”`);
+    return ok('Overlays turned off. Run started: it puts the original posters back. Follow it with get_status.');
+  });
 
   server.registerTool('sync_home_rows', {
     title: 'Update home-screen rows now',

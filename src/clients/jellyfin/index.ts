@@ -195,6 +195,23 @@ export class JellyfinClient {
     return this.allItems({ ParentId: collectionId, userId: await this.userId(), Recursive: false, Fields: 'ProviderIds' });
   }
 
+  /** An item's poster as stored, or null if it has none. */
+  async downloadPrimaryImage(id: string): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+    const res = await request(this.f, this.url(`/Items/${id}/Images/Primary`), { headers: { authorization: authHeader(this.opts.apiKey), accept: 'image/*' }, retries: 1 });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new HttpError(res.status, this.url(`/Items/${id}/Images/Primary`), (await res.text()).slice(0, 300));
+    return { bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get('content-type')?.split(';')[0] || 'image/jpeg' };
+  }
+
+  /** Each item's current poster tag (it changes whenever the poster does), 100 items a request. Missing items are left out. */
+  async posterTags(ids: string[]): Promise<Map<string, string | null>> {
+    const out = new Map<string, string | null>();
+    for (const batch of chunk(ids, 100)) {
+      for (const it of await this.allItems({ Ids: batch.join(',') })) if (it.Id) out.set(it.Id, it.ImageTags?.Primary ?? null);
+    }
+    return out;
+  }
+
   /** The server wraps the body in a base64 transform: send base64 text with an image/* content type. */
   async uploadPrimaryImage(id: string, bytes: Uint8Array, contentType = 'image/jpeg'): Promise<void> {
     const res = await request(this.f, this.url(`/Items/${id}/Images/Primary`), {

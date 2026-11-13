@@ -88,6 +88,7 @@ describe('Claude access (MCP)', () => {
     const reviewTools = (await client.listTools()).tools.map((x) => x.name);
     expect(reviewTools).toContain('approve_proposals');
     expect(reviewTools).not.toContain('update_settings');
+    expect(reviewTools).not.toContain('apply_poster_overlays');
 
     const queue = json(await client.callTool({ name: 'list_review', arguments: {} }));
     expect(queue.total).toBe(3);
@@ -148,6 +149,10 @@ describe('Claude access (MCP)', () => {
     expect(text(bad)).toContain('Unknown timezone');
     expect(t.app.settings().leadDays).toBe(7);
     expect((await client.callTool({ name: 'update_settings', arguments: { filmLibraries: ['Nope'] } })).isError).toBe(true);
+    // Poster overlays (ADR-039): chosen through update_settings, applied or removed with their own tools.
+    expect(text(await client.callTool({ name: 'update_settings', arguments: { posterOverlays: { status: true } } }))).toContain('"status":true');
+    expect(json(await client.callTool({ name: 'get_settings', arguments: {} })).posterOverlays).toEqual({ status: true, imdbTop250Ribbon: false, postersWithOverlays: 0 });
+    expect(tools).toEqual(expect.arrayContaining(['apply_poster_overlays', 'remove_poster_overlays']));
     // The streaming country (ADR-036).
     expect(text(await client.callTool({ name: 'update_settings', arguments: { streamingCountry: 'ca' } }))).toContain('"region":"CA"');
     expect(json(await client.callTool({ name: 'get_settings', arguments: {} })).streamingCountry).toBe('CA');

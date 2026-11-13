@@ -592,6 +592,31 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - **Recently Added Shows** goes by the newest episode's first-arrival date. A show with no episodes uses its own date.
 - **Consequences.** Upgrades no longer count as new, for films or episodes. When this first runs, a film added to Radarr before it downloaded in the last 30 days may be missed until it ages out.
 
+### ADR-039 Poster overlays: Decided (13 Nov)
+- **Context.** Last on your list of Kometa gaps: badges on posters, keeping the originals.
+  - Kometa's overlay defaults draw on each poster in Plex and keep the original so it can go back.
+  - Unlike everything else here, this changes titles' own posters, not just box sets the app made. So it has to be off until chosen, follow dry run, and be fully reversible.
+- **Decision.**
+  - **Two overlays to start, both from Kometa v2.5.3:**
+    - **Status** (`defaults/overlays/status.yml`), on shows: AIRING if an episode aired in the last 14 days, else RETURNING, CANCELED or ENDED from TMDb's status (`/tv/{id}`, kept a week, at most 300 lookups a run). Jellyfin's Continuing/Ended is used when TMDb has nothing. One status a show, Kometa's weights deciding.
+    - **IMDb Top 250 ribbon** (`defaults/overlays/ribbon.yml`), on films and shows in IMDb's Top 250, from the `imdb_chart` source (ADR-036).
+    - Kometa's geometry on its 1000-pixel-wide canvas, scaled to each poster's own width, so posters keep their size. Inter Medium (OFL) and Kometa's ribbon image (MIT) are bundled in `assets/overlays`.
+  - **Drawing:** sharp (libvips). It loads only when overlays are used, so the rest of the app runs even where it can't. The image carries both Linux builds, and its build draws a test overlay on each platform, so a broken image fails to build rather than ship.
+  - **Originals are safe:**
+    - Each original is saved to `/config/overlays/originals` before anything is uploaded, and a record (table `overlay`, migration 0007) is written before the upload.
+    - Overlays are always drawn on the saved original, never on an overlaid poster.
+    - The app knows its own images by the uploaded image's hash and an EXIF marker. One of its own is never taken for an original; a marked poster with no saved original is left alone.
+    - If Jellyfin's poster changes after an upload (a metadata refresh, or a poster you chose), the new poster becomes the original and the badges go back on.
+    - Taking a badge off uploads the saved original and deletes the copy. If IMDb's chart can't be read, ribbons stay as they are.
+  - **When posters change:**
+    - Runs change posters only while dry run is off, at most 500 a run.
+    - With dry run on, a run only reports how many would change. **Apply now** in Settings (or Claude's `apply_poster_overlays`) is the approval: it starts a run that changes them.
+    - **Remove all overlays** turns them off and puts every original back.
+  - **Scope:** only titles in the libraries collections draw from. The Settings section previews up to four posters drawn on their originals, without changing anything.
+- **Consequences.**
+  - `/config` must be backed up with `overlays/originals`: those files are the only copies of the original posters until the overlays come off.
+  - Kometa's other overlays (resolution, audio, ratings, streaming logos…) can be added on the same machinery.
+
 ---
 
 ## Open questions

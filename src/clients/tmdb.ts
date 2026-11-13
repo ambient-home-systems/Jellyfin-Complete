@@ -130,6 +130,16 @@ export class TmdbClient {
     }
   }
 
+  /** A show's status on TMDb (Returning Series, Ended, Canceled, In Production, Planned, Pilot). Not cached here: the overlay step keeps it for a week. */
+  async tvStatus(id: string): Promise<string | null> {
+    try {
+      return (await this.get<{ status?: string }>(`/tv/${encodeURIComponent(id)}`)).status ?? null;
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
   /** The TMDb collection a film belongs to, for films Jellyfin hasn't recorded one for. Cached for 30 days. */
   movieCollection(id: number | string): Promise<string | null> {
     return cached(this.db, `movie-collection:${id}`, 30, async () => {

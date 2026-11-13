@@ -14,6 +14,7 @@ export const JELLYFIN_CALLS: { method: 'get' | 'post' | 'delete'; path: string; 
   { method: 'get', path: '/Items/{itemId}', query: ['userId'] },
   { method: 'post', path: '/Items/{itemId}' },
   { method: 'delete', path: '/Items/{itemId}' },
+  { method: 'get', path: '/Items/{itemId}/Images/{imageType}' },
   { method: 'post', path: '/Items/{itemId}/Images/{imageType}' },
   { method: 'post', path: '/Collections', query: ['name', 'ids', 'isLocked'] },
   { method: 'post', path: '/Collections/{collectionId}/Items', query: ['ids'] },
@@ -26,7 +27,7 @@ export const JELLYFIN_CALLS: { method: 'get' | 'post' | 'delete'; path: string; 
 /** BaseItemDto properties the app reads or writes back (POST /Items/{id} sends the whole DTO; ADR-019). */
 export const ITEM_PROPERTIES = [
   'Id', 'Name', 'ForcedSortName', 'SortName', 'Overview', 'Tags', 'LockData', 'LockedFields', 'ProviderIds', 'ImageTags',
-  'ChildCount', 'DisplayOrder', 'SeriesId', 'ParentIndexNumber', 'IndexNumber', 'ProductionYear', 'OfficialRating', 'Genres', 'Studios', 'DateCreated', 'PremiereDate', 'Type',
+  'ChildCount', 'DisplayOrder', 'SeriesId', 'ParentIndexNumber', 'IndexNumber', 'ProductionYear', 'OfficialRating', 'Genres', 'Studios', 'DateCreated', 'PremiereDate', 'Status', 'Type',
 ];
 export const POLICY_PROPERTIES = ['IsAdministrator', 'BlockedTags'];
 export const ENUM_VALUES: Record<string, string[]> = {

@@ -57,10 +57,28 @@ export const libraryItem = sqliteTable(
     premiereDate: integer('premiere_date'),
     /** When this title first arrived, remembered across replaced files (title_added); falls back to dateAdded. ADR-038. */
     firstAdded: integer('first_added'),
+    /** Series only: Jellyfin's status (Continuing, Ended), the fallback for status overlays when TMDb has none. ADR-039. */
+    status: text('status'),
     seenAt: integer('seen_at').notNull(),
   },
   (t) => [index('library_item_imdb').on(t.imdb), index('library_item_tmdb').on(t.tmdb), index('library_item_tvdb').on(t.tvdb), index('library_item_kind').on(t.kind), index('library_item_tmdb_collection').on(t.tmdbCollection)],
 );
+
+/**
+ * Posters this app has put overlays on (ADR-039). The original is kept in /config/overlays/originals/<file> until the
+ * overlays come off. appliedTag is Jellyfin's image tag after the upload (null while one is in flight); appliedHash is
+ * the uploaded image's SHA-256, so the app can always tell its own image from a new poster.
+ */
+export const overlay = sqliteTable('overlay', {
+  jfId: text('jf_id').primaryKey(),
+  badges: json<string[]>('badges').notNull(),
+  file: text('file').notNull(),
+  contentType: text('content_type').notNull(),
+  originalTag: text('original_tag'),
+  appliedTag: text('applied_tag'),
+  appliedHash: text('applied_hash').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
 
 /**
  * When each film or episode first arrived in the library, by a stable key (TMDb, IMDb or TVDB ID; season and episode

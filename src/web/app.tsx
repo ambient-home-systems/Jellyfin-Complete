@@ -59,6 +59,8 @@ import { getPlanSummary } from '../pipeline/summary.js';
 import { startScheduler, nextRuns, lastHeartbeat } from '../jobs/scheduler.js';
 import { log } from '../log.js';
 import type { Mode, Settings } from '../settings.js';
+import { overlaysModel, overlayPreview, startOverlayRun } from './overlay-actions.js';
+import { OverlaysPanel } from './pages/overlays.js';
 
 const MODES = new Set(['off', 'review', 'auto']);
 
@@ -691,6 +693,30 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   });
 
   // ── home-screen rows (Phase 3, ADR-025) ──
+  // ── Poster overlays (ADR-039) ──
+  web.get('/settings/overlays', async (c) => c.html(<OverlaysPanel m={await overlaysModel(app)} csrf={userOf(c).csrf} />));
+  web.post('/settings/overlays', async (c) => {
+    const b = await c.req.parseBody();
+    return save(c, 'overlays', { overlays: { status: b.status === '1', imdbTop250: b.imdbTop250 === '1' } }, 'Saved. Use Apply now to change posters straight away.');
+  });
+  web.post('/settings/overlays/apply', (c) => {
+    const r = startOverlayRun(app, 'apply');
+    return back(c, r.ok ? '/' : '/settings#overlays', r.ok ? { ok: 'Updating poster overlays: follow the run here.' } : { err: r.error });
+  });
+  web.post('/settings/overlays/remove', (c) => {
+    const r = startOverlayRun(app, 'remove');
+    return back(c, r.ok ? '/' : '/settings#overlays', r.ok ? { ok: 'Putting the original posters back: follow the run here.' } : { err: r.error });
+  });
+  web.get('/settings/overlays/preview/:id', async (c) => {
+    try {
+      const img = await overlayPreview(app, c.req.param('id'));
+      if (!img) return c.text('No overlays for this title', 404);
+      return c.body(Buffer.from(img), 200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=60' });
+    } catch (e) {
+      return c.text(`Preview failed: ${(e as Error).message}`, 502);
+    }
+  });
+
   web.get('/settings/home', async (c) => c.html(<HomeRowsPanel st={await homeStatus(app)} s={app.settings()} csrf={userOf(c).csrf} />));
 
   web.post('/settings/home', async (c) => {

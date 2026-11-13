@@ -2,6 +2,17 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.11.0 — 13 Nov 2026
+
+- **Poster overlays.** Kometa's badges on your posters, off until you choose them in Settings → Poster overlays:
+  - status on shows: AIRING (an episode in the last 14 days), RETURNING, CANCELED or ENDED, from TMDb or Jellyfin
+  - the IMDb Top 250 ribbon on films and shows in IMDb's Top 250
+
+  The section shows how many posters would change, with previews. **Apply now** changes them, even in dry run; after that, runs keep them up to date while dry run is off. The badges go on a copy of each poster: the original is kept in `/config/overlays/originals` and goes back when you turn a badge off or press **Remove all overlays**. If Jellyfin gets a new poster, the badges go on the new one. Claude can choose, apply and remove them too. See [Poster overlays](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/docs/USER-GUIDE.md#poster-overlays).
+- **Fixed:**
+  - Recently Added Shows went by when the series was first added, so a show with new episodes didn't come back. It now goes by its newest episode, as in Plex and Kometa.
+  - Recently Added Movies counted replaced files, such as Radarr upgrades, as newly added. The app now remembers when each film and episode first arrived. The first time, films already in your library use Radarr's added date if that's earlier; after that, a film you added to Radarr before release still shows as new when it downloads.
+
 ## 0.10.0 — 13 Nov 2026
 
 - **New and recent.** Five collections that follow your library, like Kometa's basic collections:

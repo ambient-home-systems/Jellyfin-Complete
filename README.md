@@ -16,6 +16,7 @@ Kometa-style collections for Jellyfin: seasonal box sets that appear and disappe
 - **Streaming services and IMDb charts.** "Netflix Movies", "Disney+ Shows" and 39 more: the titles you own that stream on each service in your country. And the titles you own from IMDb's Top 250, Most Popular and Lowest Rated charts. Like Kometa's streaming and chart collections.
 - **Your own collections**, from IMDb lists or keywords, MDBList, TMDb collections, keywords or lists, Letterboxd, Plex collections, or your own Jellyfin tags and genres.
 - **Plan → review → apply.** Choose which kinds of change happen on their own and which wait for you. A failing source never empties a collection, and any change can be undone.
+- **Poster overlays.** Kometa's status badges on shows (AIRING, RETURNING, CANCELED, ENDED) and its IMDb Top 250 ribbon, drawn on copies of your posters. The originals are kept and go back when you turn them off.
 - **Optional extras:**
   - send missing titles to Radarr or Sonarr
   - compare collections with what Kometa built in Plex

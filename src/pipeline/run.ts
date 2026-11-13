@@ -21,12 +21,17 @@ import { proposeArrAdds, executeArrDue } from './arr.js';
 import { syncHomeRows } from '../homescreen/index.js';
 import { syncFilmSeries } from './film-series.js';
 import { refreshWatchProviders, type ProviderKind } from '../sources/watch-providers.js';
+import { overlayCount, syncOverlays } from '../overlays/sync.js';
 import { adoptionCandidates } from './adoption.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
 import { missingTitles } from '../domain/missing.js';
 import { getCached } from '../cache.js';
 
-export type RunOptions = { job: string; trigger: 'schedule' | 'startup' | 'manual'; index: boolean; forceSources?: boolean; now?: number };
+export type RunOptions = {
+  job: string; trigger: 'schedule' | 'startup' | 'manual'; index: boolean; forceSources?: boolean; now?: number;
+  /** Change poster overlays even while dry run is on (Settings → Poster overlays → Apply now): the approval. */
+  applyOverlays?: boolean;
+};
 export type Progress = { runId: number; job: string; step: string; startedAt: number; finishedAt?: number; status: 'running' | 'ok' | 'failed'; error?: string };
 export type RunSummary = { runId: number; status: 'ok' | 'failed'; stats: Record<string, number>; error?: string };
 
@@ -230,6 +235,20 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
     const exec: ExecStats = await executeDue(app.db, jf, app.fetch, now);
     const arrExec = await executeArrDue(app, now);
     Object.assign(stats, { applied: exec.applied + arrExec.applied, failed: exec.failed + arrExec.failed.length, waiting: exec.waiting, arrSkipped: arrExec.skipped.length });
+
+    // Poster overlays (ADR-039): changed by runs while dry run is off, or when asked to (Apply now). Never fails the run.
+    if (settings.overlays.status || settings.overlays.imdbTop250 || overlayCount(app)) {
+      const apply = !settings.dryRun || Boolean(opts.applyOverlays);
+      step(apply ? 'Updating poster overlays' : 'Checking poster overlays');
+      try {
+        const o = await syncOverlays(app, { now, apply, ctx, step });
+        Object.assign(stats, { overlaysAdded: o.added, overlaysUpdated: o.updated + o.replaced, overlaysRemoved: o.removed, overlaysFailed: o.failed, overlaysWaiting: o.waiting, postersWithOverlays: o.withOverlays });
+        if (!apply && o.toChange) log.info(`Poster overlays: ${o.toChange} posters would change. Dry run is on, so use Settings → Poster overlays → Apply now.`);
+        if (o.waiting) log.info(`Poster overlays: ${o.waiting} more posters to change on the next run`);
+      } catch (e) {
+        log.warn(`Poster overlays not updated: ${(e as Error).message}`);
+      }
+    }
 
     // Tag-gate upkeep (ADR-010): a user added since the last hide would otherwise see every hidden box set.
     if (app.db.select().from(managedCollection).all().some((m) => m.state === 'hidden')) {

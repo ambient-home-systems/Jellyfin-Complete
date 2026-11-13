@@ -35,7 +35,7 @@ export const SettingsPage: FC<{
       <div class="settings">
         <nav class="subnav" aria-label="Settings sections">
           <a href="#conn" aria-current="true">Connections</a><a href="#run">Run and review</a><a href="#modes">Action modes</a>
-          <a href="#imdb">IMDb route</a><a href="#libs">Libraries</a><a href="#sched">Schedules</a><a href="#claude">Claude access</a>
+          <a href="#imdb">IMDb route</a><a href="#libs">Libraries</a><a href="#overlays">Poster overlays</a><a href="#sched">Schedules</a><a href="#claude">Claude access</a>
         </nav>
         <div>
           <section class="form-sec" id="conn" aria-labelledby="conn-h">
@@ -141,6 +141,11 @@ export const SettingsPage: FC<{
           <section class="form-sec" id="home" aria-labelledby="home-h">
             <div class="section-head"><h2 id="home-h">Home-screen rows</h2><span class="aside">Home Screen Sections + Collection Sections</span></div>
             <div hx-get="/settings/home" hx-trigger="load" hx-swap="innerHTML"><p class="muted">Checking Jellyfin’s plugins…</p></div>
+          </section>
+
+          <section class="form-sec" id="overlays" aria-labelledby="overlays-h">
+            <div class="section-head"><h2 id="overlays-h">Poster overlays</h2><span class="aside">badges on posters, originals kept</span></div>
+            <div hx-get="/settings/overlays" hx-trigger="load" hx-swap="innerHTML"><p class="muted">Working out which posters get badges…</p></div>
           </section>
 
           <section class="form-sec" id="arr" aria-labelledby="arr-h">

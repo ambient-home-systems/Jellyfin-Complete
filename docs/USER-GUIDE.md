@@ -145,6 +145,27 @@ If another tool builds the same collections, remove them from that tool first so
 
 Choose the defaults (quality profile, root folder, tags and so on) in Settings → Radarr and Sonarr.
 
+## Poster overlays
+
+Kometa-style badges on your posters, off until you choose them in **Settings → Poster overlays**:
+
+- **Status on shows:** AIRING (an episode in the last 14 days), RETURNING, CANCELED or ENDED, top left. The status comes from TMDb, or from Jellyfin when TMDb has none.
+- **IMDb Top 250 ribbon:** on films and shows in IMDb's Top 250, bottom right.
+
+**Before anything changes,** the section shows how many posters would change and previews a few, drawn on their own posters.
+
+- **Apply now** changes them, even while dry run is on.
+- After that, each run keeps them up to date while dry run is off. With dry run on, runs only report what would change.
+- **Remove all overlays** puts every original back.
+
+**Your originals are kept.**
+- The badges go on a copy at the poster's own size. The original is saved in `/config/overlays/originals`, and goes back when you turn a badge off or remove them all.
+- If Jellyfin gets a new poster (a metadata refresh, or one you picked), the new one becomes the original and the badges go back on it.
+- Back up `/config` with that folder in it.
+- If Jellyfin saves artwork into your media folders, the badged poster is saved there too, and removing the overlays puts the original back there as well.
+
+Only titles in the libraries chosen under Settings → Libraries get overlays.
+
 ## Home-screen rows
 
 With the Home Screen Sections and Collection Sections plugins installed in Jellyfin, each live collection that asks for one gets a row on the home screen while it's live. Turn this on in Settings → Home-screen rows. See [PHASE3.md](PHASE3.md) for how it works and its limits.
@@ -209,6 +230,7 @@ Everything lives in `/config`:
 
 - the database
 - `secret.key`, which decrypts the saved API keys
+- `overlays/originals`, the original posters while poster overlays are on
 - logs
 
 Back up the whole folder, and keep `secret.key` with the database. To move to a new machine, copy `/config` and start the same image there.

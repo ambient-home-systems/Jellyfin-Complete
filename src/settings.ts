@@ -34,6 +34,8 @@ export type Settings = {
   filmSeries: { enabled: boolean; minimum: number };
   /** Streaming-service collections (ADR-036): the country whose services count, as a two-letter code. */
   streaming: { region: string };
+  /** Poster overlays (ADR-039): Kometa's status badges on shows, and its IMDb Top 250 ribbon. Off until turned on. */
+  overlays: { status: boolean; imdbTop250: boolean };
   /** The Jellyfin version seen at the last run (Phase 4 compatibility). */
   server: { version: string | null; seenAt: number | null };
 };
@@ -77,6 +79,7 @@ export function defaultSettings(timezone: string): Settings {
     onboarding: { done: [], finished: false },
     filmSeries: { enabled: false, minimum: 2 },
     streaming: { region: 'US' },
+    overlays: { status: false, imdbTop250: false },
     server: { version: null, seenAt: null },
   };
 }

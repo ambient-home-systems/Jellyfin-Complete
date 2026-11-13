@@ -31,6 +31,8 @@ export type SettingsPatch = {
   homeRows?: Partial<Settings['homeRows']>;
   /** Two-letter country code for streaming collections. */
   streamingRegion?: string;
+  /** Which poster overlays (ADR-039). */
+  overlays?: Partial<Settings['overlays']>;
 };
 
 /** Check the whole patch, then save it. Throws SettingsError with a message for people. */
@@ -102,6 +104,7 @@ export function applySettings(app: AppContext, patch: SettingsPatch): { changed:
     if (!/^[A-Z]{2}$/.test(region)) throw new SettingsError('The streaming country must be a two-letter code, such as US, GB or CA.');
     next.streaming = { ...s.streaming, region };
   }
+  if (patch.overlays) next.overlays = { ...s.overlays, ...Object.fromEntries(Object.entries(patch.overlays).filter(([, v]) => v !== undefined)) };
   app.updateSettings(next);
   return { changed: Object.keys(next) as (keyof Settings)[], timezoneChanged: next.timezone !== undefined && next.timezone !== s.timezone };
 }

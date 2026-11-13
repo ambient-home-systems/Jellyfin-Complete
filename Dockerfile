@@ -15,7 +15,16 @@ COPY scripts ./scripts
 COPY src ./src
 COPY drizzle ./drizzle
 COPY public ./public
+COPY assets ./assets
 RUN npm run build && npm prune --omit=dev --ignore-scripts --no-audit --no-fund
+# sharp (poster overlays) loads a prebuilt library for the machine it runs on, and npm installed only the build
+# machine's. Add both Linux builds (amd64, arm64) at the versions sharp asks for, and drop the musl and WebAssembly
+# builds this glibc image never uses. The runtime stage checks the one it loads.
+RUN node -e "const o=require('./node_modules/sharp/package.json').optionalDependencies;console.log(['linux-x64','linux-arm64'].flatMap(a=>['@img/sharp-'+a,'@img/sharp-libvips-'+a]).map(p=>p+'@'+o[p]).join(' '))" > /tmp/sharp-pkgs \
+ && cd /tmp && npm pack --silent $(cat /tmp/sharp-pkgs) \
+ && for t in img-sharp-*.tgz; do n=${t#img-}; n=${n%-[0-9]*.tgz}; mkdir -p /app/node_modules/@img/$n && tar -xzf $t -C /app/node_modules/@img/$n --strip-components=1; done \
+ && rm -f /tmp/img-sharp-*.tgz /tmp/sharp-pkgs \
+ && rm -rf /app/node_modules/@img/sharp-linuxmusl-* /app/node_modules/@img/sharp-libvips-linuxmusl-* /app/node_modules/@img/sharp-wasm32
 
 FROM node:22-bookworm-slim
 ARG VERSION=dev
@@ -33,7 +42,11 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/drizzle ./drizzle
 COPY --from=build /app/public ./public
+COPY --from=build /app/assets ./assets
 COPY package.json LICENSE NOTICE.md ./
+# Self-test on this platform: draw a status badge and the ribbon, so an image whose sharp can't load fails here, not in use.
+RUN node --input-type=module -e "const m = await import('/app/dist/overlays/render.js'); const s = await m.loadSharp(); const p = await s({ create: { width: 200, height: 300, channels: 3, background: '#336' } }).jpeg().toBuffer(); const out = await m.renderOverlay(p, ['status:ended', 'ribbon:imdb_top_250']); if (!(await m.hasMarker(out))) throw new Error('overlay self-test failed'); console.log('poster overlays ok on ' + process.arch);" \
+ && rm -rf /tmp/maverick-fontconfig
 # Runs as the image's unprivileged "node" user (uid 1000). A bind-mounted /config must be writable by uid 1000.
 RUN mkdir -p /config && chown node:node /config
 USER node
