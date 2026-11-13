@@ -35,6 +35,15 @@ export const SHOW_FRANCHISES: ShowFranchise[] = [
   { key: '41956', name: 'Death in Paradise (2011)', addons: ['205072', '244978'] },
 ];
 
+/**
+ * Spin-offs newer than Kometa's list (still missing from Kometa's master branch on 13 Nov 2026), added here. TMDb IDs
+ * checked on themoviedb.org. Existing installs get them through upgradePresets(), which only ever adds IDs.
+ */
+export const EXTRA_ADDONS: Record<string, string[]> = {
+  '75219': ['284838'], // 9-1-1: 9-1-1: Nashville (2025)
+  '73586': ['299167', '225891'], // Yellowstone: Dutton Ranch (2026), The Madison (2026)
+};
+
 /** Kometa v2.5.3 points at a poster that doesn't exist in Default-Images; this is the file that does (checked 2 Nov 2026). */
 const POSTER_FILE_OVERRIDES: Record<string, string> = { '61511': 'Father Brown' };
 
@@ -46,7 +55,7 @@ export const pyQuote = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, 
  * The file sets no collection_section, so Kometa drops the sort title and so do we.
  */
 export function showFranchiseDefinition(p: ShowFranchise) {
-  const sources: SourceSpec[] = [{ type: 'tmdb_show', config: { ids: [p.key, ...p.addons] } }];
+  const sources: SourceSpec[] = [{ type: 'tmdb_show', config: { ids: [p.key, ...p.addons, ...(EXTRA_ADDONS[p.key] ?? [])] } }];
   return {
     slug: `franchise-show-${p.key}`,
     name: p.name,

@@ -206,20 +206,23 @@ export const ADAPTERS: Record<string, Adapter> = {
   mdblist_list: {
     label: (c) => `MDBList ${String(c.url ?? '').replace(/^https?:\/\/mdblist\.com\/lists\//, '')}`,
     async resolve(c, ctx) {
-      const url = String(c.url ?? '').replace(/\/$/, '');
-      const m = url.match(/mdblist\.com\/lists\/([^/]+)\/([^/]+)/);
-      if (!m) throw new SourceError(`Not an MDBList list URL: ${url}`, 'BAD_INPUT');
-      type Row = { id?: number; imdb_id?: string; tvdbid?: number; mediatype?: string; title?: string; release_year?: number; rank?: number };
+      const url = String(c.url ?? '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+      // The whole path after /lists/: "user/list-name", or "user/external/15110" for lists MDBList imports from elsewhere.
+      const path = url.match(/mdblist\.com\/lists\/([^/]+\/[^/]+(?:\/[^/]+)?)$/)?.[1];
+      if (!path) throw new SourceError(`Not an MDBList list URL: ${url}`, 'BAD_INPUT');
+      type Ids = { imdb?: string | null; tmdb?: number | string | null; tvdb?: number | string | null };
+      type Row = { id?: number; imdb_id?: string; tvdbid?: number; tvdb_id?: number; ids?: Ids; mediatype?: string; title?: string; release_year?: number; rank?: number };
       let rows: Row[];
       if (ctx.mdblistKey) {
-        const r = await requestJson<Row[] | { movies?: Row[]; shows?: Row[] }>(ctx.fetch, `https://api.mdblist.com/lists/${m[1]}/${m[2]}/items?apikey=${encodeURIComponent(ctx.mdblistKey)}`);
+        const r = await requestJson<Row[] | { movies?: Row[]; shows?: Row[] }>(ctx.fetch, `https://api.mdblist.com/lists/${path}/items?apikey=${encodeURIComponent(ctx.mdblistKey)}`);
         rows = Array.isArray(r) ? r : [...(r.movies ?? []), ...(r.shows ?? [])];
       } else {
-        rows = await requestJson<Row[]>(ctx.fetch, `${url}/json`);
+        rows = await requestJson<Row[]>(ctx.fetch, `https://mdblist.com/lists/${path}/json`);
       }
+      const str = (v: unknown) => (v === null || v === undefined || v === '' || v === 0 ? undefined : String(v));
       return {
         items: rows.map((x, i) => ({
-          imdb: x.imdb_id || undefined, tmdb: x.id ? String(x.id) : undefined, tvdb: x.tvdbid ? String(x.tvdbid) : undefined,
+          imdb: str(x.ids?.imdb ?? x.imdb_id), tmdb: str(x.ids?.tmdb ?? x.id), tvdb: str(x.ids?.tvdb ?? x.tvdb_id ?? x.tvdbid),
           kind: x.mediatype === 'show' ? 'show' : 'movie', rank: x.rank ?? i + 1, title: x.title, year: x.release_year,
         })),
       };

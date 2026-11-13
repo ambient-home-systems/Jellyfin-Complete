@@ -31,6 +31,33 @@ export function seedPresets(db: DB, now = Date.now()): number {
   return added;
 }
 
+/**
+ * Bring existing presets up to date where it's safe: add IDs the code's preset lists now have (such as new spin-offs)
+ * to the matching source. Only adds, never removes or changes anything else, so your edits stay. Returns how many
+ * sources changed.
+ */
+export function upgradePresets(db: DB, now = Date.now()): number {
+  let changed = 0;
+  for (const p of PRESETS) {
+    const row = db.select({ id: definition.id }).from(definition).where(eq(definition.slug, p.definition.slug)).get();
+    if (!row) continue;
+    const mine = db.select().from(definitionSource).where(eq(definitionSource.definitionId, row.id)).all();
+    for (const want of p.definition.sources) {
+      const wantIds = (want.config as { ids?: unknown }).ids;
+      if (!Array.isArray(wantIds)) continue;
+      const src = mine.find((s) => s.type === want.type && Array.isArray((s.config as { ids?: unknown }).ids));
+      if (!src) continue;
+      const have = ((src.config as { ids: unknown[] }).ids).map(String);
+      const add = wantIds.map(String).filter((id) => !have.includes(id));
+      if (!add.length) continue;
+      db.update(definitionSource).set({ config: { ...(src.config as object), ids: [...have, ...add] } }).where(eq(definitionSource.id, src.id)).run();
+      db.update(definition).set({ updatedAt: now }).where(eq(definition.id, row.id)).run();
+      changed++;
+    }
+  }
+  return changed;
+}
+
 export function loadDefinitions(db: DB, opts: { enabledOnly?: boolean } = {}): LoadedDefinition[] {
   const defs = db.select().from(definition).all().filter((d) => !opts.enabledOnly || d.enabled);
   const sources = db.select().from(definitionSource).all();

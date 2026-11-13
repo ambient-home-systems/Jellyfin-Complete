@@ -63,9 +63,9 @@ export function fingerprint(...parts: (string | number | null | undefined)[]): s
 }
 
 const itemRef = (r: LibRow) => r.imdb ?? (r.tmdb ? `tmdb:${r.tmdb}` : r.tvdb ? `tvdb:${r.tvdb}` : `jf:${r.jfId}`);
-const RATING_ORDER = ['G', 'TV-Y', 'TV-Y7', 'TV-G', 'PG', 'TV-PG', 'PG-13', 'TV-14', 'R', 'TV-MA', 'NC-17'];
+export const RATING_ORDER = ['G', 'TV-Y', 'TV-Y7', 'TV-G', 'PG', 'TV-PG', 'PG-13', 'TV-14', 'R', 'TV-MA', 'NC-17'];
 
-function passesFilters(row: LibRow, def: LoadedDefinition): boolean {
+export function passesFilters(row: LibRow, def: LoadedDefinition): boolean {
   const f = def.filters ?? {};
   if (f.yearFrom && (row.year ?? 0) < f.yearFrom) return false;
   if (f.yearTo && (row.year ?? 9999) > f.yearTo) return false;
@@ -173,7 +173,8 @@ export function plan(input: PlanInput): { actions: PlannedAction[]; plans: Defin
           }
           if (def.syncMode === 'sync' && !blocked) {
             for (const jfId of live.children) {
-              if (mem.has(jfId) || !input.index.get(jfId)) continue;
+              // A suggestion you accepted stays while a source still suggests it; only titles no source lists any more go.
+              if (mem.has(jfId) || suggestions.has(jfId) || !input.index.get(jfId)) continue;
               actions.push({ type: 'collection.remove_items', definitionId: def.id, fingerprint: fingerprint('collection.remove_items', def.slug, ref(jfId)), applyAt: null, reason: 'No longer on any source (sources healthy)', item: item(jfId, { sources: [], match: 'current member' }) });
             }
           }
@@ -186,6 +187,7 @@ export function plan(input: PlanInput): { actions: PlannedAction[]; plans: Defin
           }
         }
         for (const [jfId, prov] of suggestions) {
+          if (live?.children.has(jfId)) continue; // already in the box set: nothing to suggest
           actions.push({ type: 'collection.add_items', definitionId: def.id, fingerprint: fingerprint('collection.add_items', def.slug, ref(jfId)), applyAt: live ? null : applyAt, reason: `Suggested by ${prov.sources.map((s) => s.label).join(', ')}`, suggested: true, item: item(jfId, prov) });
         }
       } else if (live && open && !blocked) {

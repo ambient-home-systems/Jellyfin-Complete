@@ -78,5 +78,12 @@ describe('Christmas Episodes (ADR-017)', () => {
     const box = fake.boxSets().find((b) => b.Name === 'Christmas Episodes')!;
     expect(box.children!.sort()).toEqual(['e-bluey-santa', 'e-bluey-swim', 'e-glee']);
     expect(box.ForcedSortName).toBe('!00_Christmas Episodes');
+
+    // An accepted suggestion stays: the next run neither proposes removing it nor suggests it again (it used to flip-flop).
+    await runPipeline(app, { job: 'nightly-refresh', trigger: 'schedule', index: false, now: ET(2026, 12, 3, 2, 30) });
+    const later = app.db.select().from(action).where(eq(action.definitionId, defId)).all().filter((a) => a.status === 'proposed');
+    expect(later.filter((a) => a.type === 'collection.remove_items')).toEqual([]);
+    expect(later.filter((a) => a.type === 'collection.add_items')).toEqual([]);
+    expect(fake.boxSets().find((b) => b.Name === 'Christmas Episodes')!.children).toContain('e-bluey-swim');
   });
 });

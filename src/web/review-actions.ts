@@ -1,6 +1,6 @@
 // Approve, dismiss or snooze proposals in Review. Shared by the Review page and the MCP endpoint (ADR-032), so a
 // decision made by Claude does exactly what the same button does.
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
 import { action } from '../db/schema.js';
 import { decide } from '../pipeline/store.js';
@@ -15,17 +15,26 @@ export type VerdictResult = { ok: boolean; message: string; decided: number };
 export async function reviewVerdict(app: AppContext, ids: number[], verdict: Verdict, by: string, opts: { snooze?: SnoozeFor } = {}): Promise<VerdictResult> {
   if (!ids.length) return { ok: false, message: 'Select at least one proposal first.', decided: 0 };
   if (verdict === 'approve') {
-    const decided = decide(app.db, ids, 'approve', by);
-    const due = app.db.select().from(action).where(inArray(action.id, ids)).all().filter((a) => a.status === 'approved' && (a.applyAt === null || a.applyAt <= Date.now())).map((a) => a.id);
+    // Approving "Create box set" also approves that collection's pending titles and metadata (not suggestions), so the
+    // box set is created and filled in one step instead of waiting for each title.
+    const creating = app.db.select().from(action).where(and(inArray(action.id, ids), eq(action.type, 'collection.create'), eq(action.status, 'proposed'))).all();
+    const companions = creating.length
+      ? app.db.select().from(action).where(and(inArray(action.definitionId, creating.map((a) => a.definitionId!).filter((x) => x !== null)), eq(action.status, 'proposed'), inArray(action.type, ['collection.add_items', 'collection.update_metadata']))).all()
+        .filter((a) => !ids.includes(a.id) && !(a.payload as { suggested?: boolean } | null)?.suggested).map((a) => a.id)
+      : [];
+    const all = [...ids, ...companions];
+    const decided = decide(app.db, all, 'approve', by);
+    const also = companions.length ? ` (including ${companions.length} title and metadata change${companions.length === 1 ? '' : 's'} for the new box set${creating.length === 1 ? '' : 's'})` : '';
+    const due = app.db.select().from(action).where(inArray(action.id, all)).all().filter((a) => a.status === 'approved' && (a.applyAt === null || a.applyAt <= Date.now())).map((a) => a.id);
     if (due.length) {
       try {
         const r = await applyNow(app, due);
-        return { ok: true, decided, message: `Approved ${decided}. Applied ${r.applied}${r.waiting ? `, ${r.waiting} waiting for other approvals (a box set is created only with members)` : ''}${r.failed ? `, ${r.failed} failed (see Activity)` : ''}.` };
+        return { ok: true, decided, message: `Approved ${decided}${also}. Applied ${r.applied}${r.waiting ? `, ${r.waiting} waiting for other approvals (a box set is created only with members)` : ''}${r.failed ? `, ${r.failed} failed (see Activity)` : ''}.` };
       } catch (e) {
         return { ok: false, decided, message: `Approved, but applying failed: ${(e as Error).message}` };
       }
     }
-    return { ok: true, decided, message: decided ? `Approved ${decided}. They apply when the window opens.` : 'Nothing to approve: those proposals aren’t pending.' };
+    return { ok: true, decided, message: decided ? `Approved ${decided}${also}. They apply when the window opens.` : 'Nothing to approve: those proposals aren’t pending.' };
   }
   if (verdict === 'dismiss') {
     const decided = decide(app.db, ids, 'dismiss', by);

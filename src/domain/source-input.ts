@@ -44,7 +44,8 @@ export const SOURCE_INPUTS: SourceInput[] = [
   },
   {
     key: 'mdblist_list', label: 'MDBList list', placeholder: 'https://mdblist.com/lists/user/list-name',
-    parse: (v) => (/^https:\/\/mdblist\.com\/lists\/[^/\s]+\/[^/\s]+\/?$/.test(v.trim()) ? { type: 'mdblist_list', config: { url: v.trim().replace(/\/$/, '') } } : 'Enter an MDBList list URL, like https://mdblist.com/lists/user/list-name.'),
+    // Also external lists MDBList imports from elsewhere: https://mdblist.com/lists/user/external/15110
+    parse: (v) => (/^https:\/\/mdblist\.com\/lists\/[^/\s]+\/[^/\s]+(\/[^/\s]+)?\/?$/.test(v.trim()) ? { type: 'mdblist_list', config: { url: v.trim().replace(/\/$/, '') } } : 'Enter an MDBList list URL, like https://mdblist.com/lists/user/list-name.'),
   },
   {
     key: 'letterboxd_list', label: 'Letterboxd list', placeholder: 'https://letterboxd.com/user/list/list-name/',

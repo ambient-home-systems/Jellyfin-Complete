@@ -130,3 +130,21 @@ describe('Letterboxd lookup cap', () => {
     expect(third.meta).toMatchObject({ partial: false });
   });
 });
+
+describe('MDBList lists', () => {
+  it('keeps the list number of external lists, with and without an API key', async () => {
+    const urls: string[] = [];
+    const f = async (url: string) => { urls.push(url); return new Response(mdblistJson); };
+    const spec = { type: 'mdblist_list', config: { url: 'https://mdblist.com/lists/k0meta/external/15110' } };
+    expect((await resolveSource(ctxWith(f), spec)).items).toHaveLength(2);
+    expect((await resolveSource(ctxWith(f, { mdblistKey: 'k' }), { ...spec, config: { url: 'https://mdblist.com/lists/k0meta/external/46550/' } })).status).toBe('ok');
+    expect(urls[0]).toBe('https://mdblist.com/lists/k0meta/external/15110/json');
+    expect(urls[1]).toBe('https://api.mdblist.com/lists/k0meta/external/46550/items?apikey=k');
+  });
+
+  it('reads IDs from the API\'s nested ids and its tvdb_id field', async () => {
+    const body = JSON.stringify({ movies: [{ id: 99, mediatype: 'movie', title: 'Elf', ids: { imdb: 'tt0319343', tmdb: 10719, tvdb: null } }], shows: [{ id: 5, mediatype: 'show', title: 'Bluey', imdb_id: 'tt7678620', tvdb_id: 353546 }] });
+    const r = await resolveSource(ctxWith(async () => new Response(body), { mdblistKey: 'k' }), { type: 'mdblist_list', config: { url: 'https://mdblist.com/lists/someone/mixed' } });
+    expect(r.items.map((i) => [i.imdb, i.tmdb, i.tvdb, i.kind])).toEqual([['tt0319343', '10719', undefined, 'movie'], ['tt7678620', '5', '353546', 'show']]);
+  });
+});
