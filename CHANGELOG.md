@@ -2,6 +2,18 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.14.0 — 13 Nov 2026
+
+- **Collection posters.** Each collection's editor has a **Poster** section:
+  - an image address, an image you upload (JPEG, PNG or WebP, up to 10 MB), the preset's own poster, or none
+  - saving puts it on the box set in Jellyfin straight away; uploads are kept in `/config/posters`
+  - your own collections can have a poster again, which the nightly check keeps instead of removing
+  - Claude can set a poster by address too.
+- **Library health has its own menu item and dashboard.**
+  - The menu item shows how many files need review.
+  - The page shows how much of the library has been checked, what needs review (by length or title tag) and what's been reviewed, by library.
+  - Reviewed files list who marked each fine and when. **Review again** puts one back.
+
 ## 0.13.0 — 13 Nov 2026
 
 - **Library health.** The app checks each film and episode against its title, and lists the ones that may not be what they say on a new **Library health** page, counted on the Dashboard:

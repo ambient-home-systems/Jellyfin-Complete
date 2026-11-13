@@ -26,7 +26,7 @@ import { cachedPlan } from './plan-cache.js';
 import { Missing, ArrOptionsFields, parseArrOptions } from './pages/missing.js';
 import { missingModel } from './missing-model.js';
 import { fingerprint } from '../pipeline/planner.js';
-import { definitionArr, run } from '../db/schema.js';
+import { definitionArr, run, posterKey } from '../db/schema.js';
 import { homeStatus, syncHomeRows } from '../homescreen/index.js';
 import { HomeRowsPanel } from './pages/home-rows.js';
 import { Start } from './pages/start.js';
@@ -47,7 +47,8 @@ import type { Reveal } from './pages/claude-access.js';
 import { mcpHandler } from './mcp.js';
 import { setFilmSeries } from '../pipeline/film-series.js';
 import { applySettings, setSchedule, setCollectionEnabled, SettingsError, MODE_KEYS, type ModeKey, type SettingsPatch } from './settings-actions.js';
-import { createCollection, updateCollection, addSource, removeSource, setSourceRole, setPin, deleteCollection, sendMissing, monitorInRadarr, saveArrDefaults, type CollectionPatch } from './collection-actions.js';
+import { createCollection, updateCollection, addSource, removeSource, setSourceRole, setPin, deleteCollection, sendMissing, monitorInRadarr, saveArrDefaults, setPoster, type CollectionPatch, type PosterChoice } from './collection-actions.js';
+import { defaultPoster, postersDir, readPoster } from '../domain/posters.js';
 import { undoAction } from '../pipeline/undo.js';
 import { adoptionCandidates, adopt, adoptSuggested, deleteUnmanaged } from '../pipeline/adoption.js';
 import { loadDefinition, loadDefinitions } from '../domain/definitions.js';
@@ -62,7 +63,7 @@ import type { Mode, Settings } from '../settings.js';
 import { overlaysModel, overlayPreview, startOverlayRun } from './overlay-actions.js';
 import { OverlaysPanel } from './pages/overlays.js';
 import { HealthPage } from './pages/health.js';
-import { dismissFinding, healthRows } from '../library/health.js';
+import { dismissFinding, healthDashboard, reopenFinding } from '../library/health.js';
 
 const MODES = new Set(['off', 'review', 'auto']);
 
@@ -325,7 +326,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const state = app.db.select().from(managedCollection).where(eq(managedCollection.definitionId, def.id)).get()?.state;
     const live = state === 'live' || state === 'hidden';
     const arr = { addMissing: app.db.select().from(definitionArr).where(eq(definitionArr.definitionId, def.id)).get()?.addMissing ?? false, radarr: Boolean(app.radarr()), sonarr: Boolean(app.sonarr()), cap: app.settings().guardrails.arrCapPerRun };
-    return page(c, def.name, 'collections', <CollectionEditor def={def} tz={app.settings().timezone} csrf={userOf(c).csrf} live={live} globalModes={app.settings().modes} sources={sources} arr={arr} />);
+    return page(c, def.name, 'collections', <CollectionEditor def={def} tz={app.settings().timezone} csrf={userOf(c).csrf} live={live} globalModes={app.settings().modes} sources={sources} arr={arr} posterDefault={(() => { const d = defaultPoster(app, def.presetKey); return d ? posterKey(d) : null; })()} />);
   });
 
   web.post('/collections/:id', async (c) => {
@@ -353,6 +354,33 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       throw e;
     }
     return back(c, `/collections/${id}`, { ok: 'Saved. The next run plans with these settings.' });
+  });
+
+  // ── Posters (ADR-042): set from the editor; shown through the app so any address works under the page's CSP. ──
+  web.post('/collections/:id/poster', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!loadDefinition(app.db, id)) return c.notFound();
+    const b = await c.req.parseBody();
+    const file = b.posterFile instanceof File && b.posterFile.size ? new Uint8Array(await b.posterFile.arrayBuffer()) : null;
+    const kind = String(b.poster ?? (file ? 'upload' : 'url'));
+    const choice: PosterChoice = kind === 'none' ? { kind: 'none' } : kind === 'default' ? { kind: 'default' } : kind === 'upload' ? { kind: 'upload', bytes: file ?? new Uint8Array() } : { kind: 'url', url: String(b.posterUrl ?? '') };
+    try {
+      return back(c, `/collections/${id}`, { ok: await setPoster(app, id, choice) });
+    } catch (e) {
+      if (e instanceof SettingsError) return back(c, `/collections/${id}`, { err: e.message });
+      throw e;
+    }
+  });
+  web.get('/collections/:id/poster', async (c) => {
+    const def = loadDefinition(app.db, Number(c.req.param('id')));
+    if (!def) return c.notFound();
+    try {
+      const img = await readPoster(def.poster, { fetch: app.fetch, postersDir: postersDir(app.config.configDir) });
+      if (!img) return c.text('No poster', 404);
+      return c.body(Buffer.from(img.bytes), 200, { 'content-type': img.type, 'cache-control': 'private, max-age=300' });
+    } catch (e) {
+      return c.text(`Poster unavailable: ${(e as Error).message}`, 502);
+    }
   });
 
   const cachedMembers = (def: LoadedDefinition) => cachedPlan(app, def);
@@ -433,12 +461,17 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
 
   // ── missing (Phase 2): what collections list that you don't own; send to Radarr/Sonarr ──
   // ── Library health (ADR-041) ──
-  web.get('/health', (c) => page(c, 'Library health', 'dashboard', <HealthPage rows={healthRows(app)} dismissed={healthRows(app, { dismissed: true })} showDismissed={c.req.query('dismissed') === '1'} enabled={app.settings().health.enabled} tz={app.settings().timezone} csrf={userOf(c).csrf} />));
+  web.get('/health', (c) => page(c, 'Library health', 'health', <HealthPage m={healthDashboard(app)} tz={app.settings().timezone} csrf={userOf(c).csrf} />));
   web.post('/health/dismiss', async (c) => {
     const b = await c.req.parseBody();
     const kind = b.kind === 'title' ? 'title' : 'runtime';
     const ok = dismissFinding(app, String(b.jfId ?? ''), kind, userOf(c).name);
     return back(c, '/health', ok ? { ok: 'Marked as fine. It comes back if the file changes.' } : { err: 'That finding is gone.' });
+  });
+  web.post('/health/reopen', async (c) => {
+    const b = await c.req.parseBody();
+    const ok = reopenFinding(app, String(b.jfId ?? ''), b.kind === 'title' ? 'title' : 'runtime');
+    return back(c, '/health', ok ? { ok: 'Back in Needs review.' } : { err: 'That finding is gone.' });
   });
 
   web.get('/missing', async (c) => {

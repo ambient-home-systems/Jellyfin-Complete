@@ -2,7 +2,7 @@
 // (ARCHITECTURE §3 step 7). Only box sets this app manages are ever touched (ADR-009).
 import { and, eq, inArray, isNull, lte, or } from 'drizzle-orm';
 import type { DB } from '../db/index.js';
-import { action, managedCollection, membership, definition } from '../db/schema.js';
+import { action, managedCollection, membership, definition, posterKey } from '../db/schema.js';
 import type { JellyfinClient } from '../clients/jellyfin/index.js';
 import type { FetchLike } from '../clients/http.js';
 import { MANAGED_TAG, GATE_TAG } from './planner.js';
@@ -14,9 +14,9 @@ const ORDER = ['collection.delete', 'collection.hide', 'collection.create', 'col
 
 export type ExecStats = { applied: number; failed: number; waiting: number; superseded: number };
 
-export async function executeDue(db: DB, jf: JellyfinClient, f: FetchLike, now = Date.now(), onlyIds?: number[]): Promise<ExecStats> {
+export async function executeDue(db: DB, jf: JellyfinClient, f: FetchLike, now = Date.now(), onlyIds?: number[], postersDir = ''): Promise<ExecStats> {
   const stats: ExecStats = { applied: 0, failed: 0, waiting: 0, superseded: 0 };
-  const x: IdentityCtx = { db, jf, fetch: f };
+  const x: IdentityCtx = { db, jf, fetch: f, postersDir };
   /** Box sets created this pass, checked again once Jellyfin has had time to attach anything (ADR-040). */
   const created: { def: typeof definition.$inferSelect; boxsetId: string }[] = [];
   const due = db.select().from(action)
@@ -51,7 +51,7 @@ export async function executeDue(db: DB, jf: JellyfinClient, f: FetchLike, now =
         if (!id) { mark(a, 'superseded'); continue; }
         const before = await jf.getItem(id);
         const members = (await jf.collectionChildren(id)).map((c) => c.Id).filter(Boolean) as string[];
-        const saved = { name: before?.Name ?? def.name, sortTitle: before?.ForcedSortName ?? def.sortTitle, overview: before?.Overview ?? def.overview, posterUrl: def.poster.kind === 'url' ? def.poster.url : null };
+        const saved = { name: before?.Name ?? def.name, sortTitle: before?.ForcedSortName ?? def.sortTitle, overview: before?.Overview ?? def.overview, posterUrl: posterKey(def.poster) };
         await jf.deleteItem(id);
         db.update(managedCollection).set({ state: 'absent', jfBoxsetId: null, savedMeta: saved, updatedAt: Date.now() }).where(eq(managedCollection.definitionId, defId)).run();
         db.delete(membership).where(eq(membership.definitionId, defId)).run();
@@ -110,7 +110,7 @@ export async function executeDue(db: DB, jf: JellyfinClient, f: FetchLike, now =
         }));
         // Provider IDs and every image: the app's poster or none, nothing else (ADR-040).
         const artwork = await secureArtwork(x, def, id, { restoreText: false }); // its name and overview were just written
-        const poster = artwork.some((d) => d.includes('poster')) ? (def.poster.kind === 'url' ? def.poster.url : null) : null;
+        const poster = artwork.some((d) => d.includes('poster')) ? posterKey(def.poster) : null;
         mark(a, 'applied', {
           before: { Name: before.Name, ForcedSortName: before.ForcedSortName, Overview: before.Overview, Tags: before.Tags, LockedFields: before.LockedFields },
           after: { Name: after.Name, ForcedSortName: after.ForcedSortName, SortName: after.SortName, Overview: after.Overview, Tags: after.Tags, LockedFields: after.LockedFields, poster },

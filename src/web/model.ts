@@ -1,5 +1,5 @@
 // View models: everything the pages need, computed from the database (no Jellyfin calls on page load).
-import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
 import { action, run, sourceResult, imdbHash, managedCollection, membership, definition, library, integrityEvent, healthFinding } from '../db/schema.js';
 import type { WindowDef } from '../db/schema.js';
@@ -15,9 +15,11 @@ export function shellModel(app: AppContext) {
   const pending = app.db.select({ n: sql<number>`count(*)` }).from(action).where(eq(action.status, 'proposed')).get()?.n ?? 0;
   const last = app.db.select().from(run).where(sql`${run.status} != 'running'`).orderBy(desc(run.startedAt)).limit(1).get();
   const s = app.settings();
+  const healthOpen = app.db.select({ n: sql<number>`count(*)` }).from(healthFinding).where(isNull(healthFinding.dismissedAt)).get()?.n ?? 0;
   return {
     dryRun: s.dryRun,
     pending,
+    healthOpen,
     lastRun: last ? `Last run ${fmtTime(last.startedAt, s.timezone)}${last.status === 'failed' ? ' (failed)' : ''}` : 'No runs yet',
   };
 }

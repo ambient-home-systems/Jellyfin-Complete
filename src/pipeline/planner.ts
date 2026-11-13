@@ -1,6 +1,7 @@
 // Planner: desired state vs Jellyfin → candidate actions (ARCHITECTURE §3 steps 4–5). Pure: no I/O.
 import { createHash } from 'node:crypto';
 import type { ActionType, Provenance, SavedMeta } from '../db/schema.js';
+import { posterKey } from '../db/schema.js';
 import type { LoadedDefinition } from '../domain/definitions.js';
 import type { ResolvedSource } from '../sources/index.js';
 import { LibraryIndex, mergeProvenance, type LibRow, type Match } from '../domain/matching.js';
@@ -87,7 +88,7 @@ export function passesFilters(row: LibRow, def: LoadedDefinition): boolean {
 type MetaDef = Pick<LoadedDefinition, 'slug' | 'name' | 'sortTitle' | 'overview' | 'poster'>;
 
 export function desiredMeta(def: MetaDef) {
-  return { name: def.name, forcedSortName: def.sortTitle ?? null, overview: def.overview ?? null, posterUrl: def.poster.kind === 'url' ? def.poster.url : null };
+  return { name: def.name, forcedSortName: def.sortTitle ?? null, overview: def.overview ?? null, posterUrl: posterKey(def.poster) };
 }
 
 /** Fingerprint of "fix metadata drift" for the current definition; stable until the definition's metadata changes. */

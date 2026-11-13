@@ -24,6 +24,7 @@ import { refreshWatchProviders, type ProviderKind } from '../sources/watch-provi
 import { overlayCount, syncOverlays } from '../overlays/sync.js';
 import { checkIntegrity, identityCtx } from './boxset-identity.js';
 import { checkLibraryHealth } from '../library/health.js';
+import { postersDir } from '../domain/posters.js';
 import { adoptionCandidates } from './adoption.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
 import { missingTitles } from '../domain/missing.js';
@@ -243,7 +244,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
     Object.assign(stats, { planned: actions.length, dropped: dropped.length, newProposals: persisted.inserted, superseded: persisted.superseded });
 
     step('Applying approved actions');
-    const exec: ExecStats = await executeDue(app.db, jf, app.fetch, now);
+    const exec: ExecStats = await executeDue(app.db, jf, app.fetch, now, undefined, postersDir(app.config.configDir));
     const arrExec = await executeArrDue(app, now);
     Object.assign(stats, { applied: exec.applied + arrExec.applied, failed: exec.failed + arrExec.failed.length, waiting: exec.waiting, arrSkipped: arrExec.skipped.length });
 
@@ -290,7 +291,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
       step('Checking files against their titles');
       try {
         const h = await checkLibraryHealth(app, { now, step });
-        Object.assign(stats, { healthFilesChecked: h.probed, healthOpen: h.open, healthFound: h.found });
+        Object.assign(stats, { healthFilesChecked: h.probed, healthOpen: h.open, healthFound: h.found, healthCompared: h.compared });
         if (h.found) log.warn(`Library health: ${h.found} new ${h.found === 1 ? 'file' : 'files'} may not be what ${h.found === 1 ? 'it says' : 'they say'} (Library health page)`);
       } catch (e) {
         log.warn(`Library health not checked: ${(e as Error).message}`);
@@ -328,7 +329,7 @@ export async function applyNow(app: AppContext, ids: number[]): Promise<ExecStat
     ? app.db.select({ id: action.id, applyAt: action.applyAt }).from(action).where(and(inArray(action.definitionId, defIds), eq(action.status, 'approved'))).all().filter((a) => a.applyAt === null || a.applyAt <= now).map((a) => a.id)
     : [];
   const all = [...new Set([...ids, ...companions])];
-  const exec = await executeDue(app.db, jf, app.fetch, now, all);
+  const exec = await executeDue(app.db, jf, app.fetch, now, all, postersDir(app.config.configDir));
   const arr = await executeArrDue(app, now, ids);
   // An approval can create or delete a box set; bring the home-screen rows along straight away.
   if (app.settings().homeRows.enabled && exec.applied) {

@@ -4,7 +4,7 @@
 import { identityCtx, secureArtwork } from './boxset-identity.js';
 import { and, eq } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
-import { action, decision, definition, managedCollection, membership, type ActionType, type SavedMeta } from '../db/schema.js';
+import { action, decision, definition, managedCollection, membership, type ActionType, type SavedMeta, posterKey } from '../db/schema.js';
 import { MANAGED_TAG, GATE_TAG, driftFingerprint } from './planner.js';
 import { log } from '../log.js';
 
@@ -56,7 +56,7 @@ export async function undoAction(app: AppContext, actionId: number, by: string):
       const created = (a.after as { id?: string } | null)?.id;
       if (!liveId || liveId !== created) throw new Error('That box set is no longer the live one, so there is nothing to undo');
       const before = await jf.getItem(liveId);
-      const saved: SavedMeta = { name: before?.Name ?? def?.name ?? '', sortTitle: before?.ForcedSortName ?? def?.sortTitle ?? null, overview: before?.Overview ?? def?.overview ?? null, posterUrl: def?.poster.kind === 'url' ? def.poster.url : null };
+      const saved: SavedMeta = { name: before?.Name ?? def?.name ?? '', sortTitle: before?.ForcedSortName ?? def?.sortTitle ?? null, overview: before?.Overview ?? def?.overview ?? null, posterUrl: def ? posterKey(def.poster) : null };
       await jf.deleteItem(liveId);
       app.db.update(managedCollection).set({ state: 'absent', jfBoxsetId: null, savedMeta: saved, updatedAt: now }).where(eq(managedCollection.definitionId, defId)).run();
       app.db.delete(membership).where(eq(membership.definitionId, defId)).run();

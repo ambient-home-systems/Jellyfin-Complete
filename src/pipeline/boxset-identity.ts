@@ -10,8 +10,9 @@ import { eq } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
 import type { DB } from '../db/index.js';
 import type { BaseItemDto, JellyfinClient } from '../clients/jellyfin/index.js';
-import { request, HttpError, type FetchLike } from '../clients/http.js';
-import { integrityEvent, managedCollection, type ArtworkState } from '../db/schema.js';
+import type { FetchLike } from '../clients/http.js';
+import { integrityEvent, managedCollection, posterKey, type ArtworkState } from '../db/schema.js';
+import { postersDir, readPoster } from '../domain/posters.js';
 import type { LoadedDefinition } from '../domain/definitions.js';
 import { SERIES_PREFIX } from '../presets/film-series.js';
 import { desiredMeta, GATE_TAG, LOCKED_FIELDS, MANAGED_TAG } from './planner.js';
@@ -21,11 +22,11 @@ import { log } from '../log.js';
 export const IDENTITY_TIMING = { recheckMs: 4000 };
 
 /** What these functions need: the database, the Jellyfin client and fetch (for posters). */
-export type IdentityCtx = { db: DB; jf: JellyfinClient; fetch: FetchLike };
+export type IdentityCtx = { db: DB; jf: JellyfinClient; fetch: FetchLike; /** Where uploaded posters are kept (ADR-042). */ postersDir: string };
 export function identityCtx(app: AppContext): IdentityCtx {
   const jf = app.jellyfin();
   if (!jf) throw new Error('Jellyfin is not connected');
-  return { db: app.db, jf, fetch: app.fetch };
+  return { db: app.db, jf, fetch: app.fetch, postersDir: postersDir(app.config.configDir) };
 }
 
 type Def = Pick<LoadedDefinition, 'id' | 'name' | 'presetKey' | 'poster' | 'sortTitle' | 'overview' | 'sortBy'>;
@@ -35,7 +36,8 @@ export function expectedProviderIds(def: Pick<Def, 'presetKey'>): Record<string,
   return def.presetKey?.startsWith(SERIES_PREFIX) ? { Tmdb: def.presetKey.slice(SERIES_PREFIX.length) } : {};
 }
 
-const posterUrlOf = (def: Pick<Def, 'poster'>) => (def.poster.kind === 'url' ? def.poster.url : null);
+/** A drift that isn't a repair: the poster was changed in the app (editor or Claude), and goes on the box set now. */
+export const POSTER_SETTING = 'its poster was changed in the app';
 const cleanIds = (ids: Record<string, string | null | undefined> | null | undefined): Record<string, string> =>
   Object.fromEntries(Object.entries(ids ?? {}).filter(([, v]) => v !== null && v !== undefined && v !== '').map(([k, v]) => [k.toLowerCase(), String(v)]));
 const sameIds = (a: Record<string, string | null | undefined> | null | undefined, b: Record<string, string>) => {
@@ -60,10 +62,15 @@ export function identityDrift(item: BaseItemDto, def: Def, state: ArtworkState |
   const extras = Object.keys(item.ImageTags ?? {}).filter((t) => t !== 'Primary');
   if (extras.length) out.push(`${extras.join(', ')} ${extras.length === 1 ? 'image' : 'images'} the app didn’t add`);
   const primary = item.ImageTags?.Primary ?? null;
-  const url = posterUrlOf(def);
-  if (url && !primary) out.push('no poster');
-  else if (url && primary && (!state || state.primaryTag !== primary || state.posterUrl !== url)) out.push('a poster the app didn’t upload');
-  else if (!url && primary && (!state || state.primaryTag !== primary)) out.push('a poster the app doesn’t supply');
+  const key = posterKey(def.poster);
+  const ours = Boolean(primary && state && state.primaryTag === primary);
+  if (key) {
+    if (!primary) out.push('no poster');
+    else if (!ours) out.push('a poster the app didn’t upload');
+    else if (state!.posterUrl !== key) out.push(POSTER_SETTING);
+  } else if (primary) {
+    out.push(ours && state!.posterUrl ? POSTER_SETTING : 'a poster the app doesn’t supply');
+  }
   return out;
 }
 
@@ -97,25 +104,24 @@ export async function secureArtwork(x: IdentityCtx, def: Def, boxsetId: string, 
   if (extras.length) done.push(`removed ${extras.join(', ')}`);
 
   const state = stateOf(x.db, def.id);
-  const url = posterUrlOf(def);
+  const key = posterKey(def.poster);
   const primary = item.ImageTags?.Primary ?? null;
-  const ours = Boolean(primary && state && state.primaryTag === primary && state.posterUrl === url);
-  let posterUrl: string | null = ours ? url : null;
-  if (url && !ours) {
+  const ours = Boolean(primary && state && state.primaryTag === primary);
+  let posterUrl: string | null = ours && state!.posterUrl === key ? key : null;
+  if (key && !posterUrl) {
     try {
-      const res = await request(x.fetch, url, { retries: 1 });
-      if (!res.ok) throw new HttpError(res.status, url, '');
-      const type = res.headers.get('content-type')?.startsWith('image/') ? res.headers.get('content-type')! : 'image/jpeg';
-      await jf.uploadPrimaryImage(boxsetId, new Uint8Array(await res.arrayBuffer()), type);
-      posterUrl = url;
-      done.push(primary ? 'replaced a poster the app didn’t upload' : 'uploaded its poster');
+      const img = (await readPoster(def.poster, x))!;
+      await jf.uploadPrimaryImage(boxsetId, img.bytes, img.type);
+      posterUrl = key;
+      done.push(!primary ? 'uploaded its poster' : ours ? 'put on its new poster' : 'replaced a poster the app didn’t upload');
     } catch (e) {
-      // The app's poster can't be fetched now: don't keep one it can't vouch for. The next run tries again.
-      if (primary) { await jf.deleteImage(boxsetId, 'Primary'); done.push(`removed a poster the app didn’t upload (its own couldn’t be fetched: ${(e as Error).message})`); }
+      // The app's poster can't be read now: don't keep one it can't vouch for. The next run tries again.
+      if (primary && !ours) { await jf.deleteImage(boxsetId, 'Primary'); done.push(`removed a poster the app didn’t upload (its own couldn’t be read: ${(e as Error).message})`); }
+      else if (primary) { posterUrl = state!.posterUrl; done.push(`kept its current poster (the new one couldn’t be read: ${(e as Error).message})`); }
     }
-  } else if (!url && primary && !(state && state.primaryTag === primary)) {
+  } else if (!key && primary) {
     await jf.deleteImage(boxsetId, 'Primary');
-    done.push('removed a poster the app doesn’t supply');
+    done.push(ours ? 'removed its poster' : 'removed a poster the app doesn’t supply');
   }
   const after = await jf.getItem(boxsetId);
   const artwork: ArtworkState = { providerIds: want, posterUrl, primaryTag: after?.ImageTags?.Primary ?? null, at: Date.now(), name: after?.Name ?? null, overview: after?.Overview ?? '' };
@@ -205,7 +211,7 @@ export async function checkIntegrity(x: IdentityCtx, defs: Def[], now = Date.now
       if (!item) continue; // gone: the run forgets it and plans it again
       const drift = identityDrift(item, def, m.artwork);
       if (!drift.length) continue;
-      const notable = m.artwork ? drift : drift.filter((d) => !POSTER_DRIFT.has(d));
+      const notable = (m.artwork ? drift : drift.filter((d) => !POSTER_DRIFT.has(d))).filter((d) => d !== POSTER_SETTING);
       let done: string[];
       if (!item.LockData) {
         const newId = await rebuildBoxSet(x, def, m.jfBoxsetId, { hidden: m.state === 'hidden' });

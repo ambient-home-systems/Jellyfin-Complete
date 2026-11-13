@@ -122,7 +122,7 @@ Jellyfin fills in an unlocked box set by searching TMDb for its name, and can pi
 
 Some things follow from that:
 - A box set found unlocked is replaced by a fresh locked one with the same titles. Locking it in place would lock every title in it.
-- Your own collections have no poster in this app, so a poster added in Jellyfin is removed.
+- The poster is whatever the collection's **Poster** section says (in its editor): an image address, an image you upload, the preset's own, or none. A poster added in Jellyfin instead is removed.
 - If "Automatically add to collection" is on for a Jellyfin library, the Dashboard warns you: Jellyfin makes unlocked box sets of its own. Turn it off in Jellyfin: Dashboard → Libraries, open the library's menu → Manage library.
 
 ### In the editor
@@ -137,6 +137,7 @@ Some things follow from that:
   - **Home-screen row.**
 - **When the window is closed.** Either delete the box set (Kometa's way; the poster and sort title come back next season), or keep it hidden with a blocked tag. Hiding keeps the same box set with its titles, but adds a tag to every Jellyfin user's blocked tags.
 - **Plex parity.** If Plex is connected, compares the collection with the one Kometa built in Plex and explains each difference.
+- **Poster.** An image address, an image you upload (JPEG, PNG or WebP, up to 10 MB), the preset's own poster, or none. Saving puts it on the box set in Jellyfin straight away. Uploads are kept in `/config/posters`.
 
 ### Box sets you already have
 
@@ -150,12 +151,17 @@ If another tool builds the same collections, remove them from that tool first so
 
 ## Library health
 
-The app checks each film and episode against its title, and lists the ones that may not be what they say on **Library health** (linked from the Dashboard when there are any, and from Settings → Run and review):
+The app checks each film and episode against its title. **Library health** in the menu (with a count of files needing review) shows how much of the library has been checked, what needs review and what's been reviewed, by library. It flags a file for:
 
 - **Length:** the file runs more than 12 minutes or 15% (whichever is larger) longer or shorter than TMDb's runtime. A two-hour film has to be 18 minutes out; an episode, 12.
 - **Title tags:** a title tag inside the file names another title, for example "Bewitched (2005)" on *Black Panther: Wakanda Forever*. A tag with the same year is treated as a translated title and left alone.
 
-Each finding shows the library, the rating and the file's path. Check it by playing it. **It's fine** hides it until the file changes; a finding that's no longer true goes away by itself. The app never moves, deletes or hides files.
+Each finding shows the library, the rating and the file's path. Check it by playing it.
+- **It's fine** moves it to Reviewed, with who marked it and when, until the file changes.
+- **Review again** puts it back.
+- A finding that's no longer true goes away by itself.
+
+The app never moves, deletes or hides files.
 
 Each file is checked once, and again when it changes, a few thousand a night, so a big library is covered over a few nights. Extended editions much longer than TMDb's runtime show up too: mark them fine once. Turn the check off in Settings → Run and review.
 
@@ -256,6 +262,7 @@ Everything lives in `/config`:
 - the database
 - `secret.key`, which decrypts the saved API keys
 - `overlays/originals`, the original posters while poster overlays are on
+- `posters`, the posters you uploaded for collections
 - logs
 
 Back up the whole folder, and keep `secret.key` with the database. To move to a new machine, copy `/config` and start the same image there.

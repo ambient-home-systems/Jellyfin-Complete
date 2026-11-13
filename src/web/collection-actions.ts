@@ -1,6 +1,9 @@
 // Collections, Missing and Radarr/Sonarr defaults: create and edit collections, their sources and pinned or excluded
 // titles, delete them, and send missing titles. Shared by the pages and the MCP endpoint (ADR-034), so both check input
 // and record decisions the same way.
+import type { Poster } from '../db/schema.js';
+import { checkPosterUrl, defaultPoster, PosterError, removePosterFile, savePosterFile } from '../domain/posters.js';
+import { identityCtx, secureArtwork } from '../pipeline/boxset-identity.js';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
 import { action, definition, definitionArr, definitionMode, definitionSource, libraryItem, managedCollection, membership, pin, type ActionType, type ArrOptions, type Filters, type WindowDef } from '../db/schema.js';
@@ -178,6 +181,48 @@ export function setPin(app: AppContext, id: number, jfId: string, kind: 'pin' | 
 }
 
 /** Delete one of your own collections (not a preset), once its box set is gone. */
+export type PosterChoice = { kind: 'default' } | { kind: 'none' } | { kind: 'url'; url: string } | { kind: 'upload'; bytes: Uint8Array };
+
+/**
+ * Set a collection's poster (ADR-042): an image address, an uploaded image, the preset's own, or none. Choosing it is
+ * the approval, so a live box set gets it straight away; otherwise it goes on when the box set is created.
+ */
+export async function setPoster(app: AppContext, id: number, choice: PosterChoice): Promise<string> {
+  const def = mustLoad(app, id);
+  let poster: Poster;
+  try {
+    if (choice.kind === 'none') poster = { kind: 'none' };
+    else if (choice.kind === 'default') {
+      const d = defaultPoster(app, def.presetKey);
+      if (!d) throw new SettingsError('This collection has no poster of its own to go back to.');
+      poster = d;
+    } else if (choice.kind === 'url') {
+      const url = choice.url.trim();
+      await checkPosterUrl(app.fetch, url);
+      poster = { kind: 'url', url };
+    } else {
+      if (!choice.bytes.length) throw new SettingsError('Choose an image to upload.');
+      poster = await savePosterFile(app.config.configDir, id, choice.bytes);
+    }
+  } catch (e) {
+    if (e instanceof PosterError) throw new SettingsError(e.message);
+    throw e;
+  }
+  const old = def.poster;
+  app.db.update(definition).set({ poster, updatedAt: Date.now() }).where(eq(definition.id, id)).run();
+  if (old.kind === 'file' && !(poster.kind === 'file' && poster.file === old.file)) removePosterFile(app.config.configDir, old);
+  const m = app.db.select().from(managedCollection).where(eq(managedCollection.definitionId, id)).get();
+  if (m?.jfBoxsetId && (m.state === 'live' || m.state === 'hidden') && app.jellyfin()) {
+    try {
+      await secureArtwork(identityCtx(app), { ...def, poster }, m.jfBoxsetId);
+      return poster.kind === 'none' ? 'Poster removed, from its box set in Jellyfin too.' : 'Poster saved and put on its box set in Jellyfin.';
+    } catch (e) {
+      return `Poster saved. Putting it on the box set in Jellyfin failed (${(e as Error).message}); the next run tries again.`;
+    }
+  }
+  return poster.kind === 'none' ? 'Poster removed.' : 'Poster saved. It goes on the box set when the collection is next created.';
+}
+
 export function deleteCollection(app: AppContext, id: number): string {
   const def = mustLoad(app, id);
   if (def.presetKey) throw new SettingsError('Presets can’t be deleted; turn it off instead.');
@@ -192,6 +237,7 @@ export function deleteCollection(app: AppContext, id: number): string {
     tx.update(action).set({ status: 'superseded', updatedAt: Date.now() }).where(and(eq(action.definitionId, id), inArray(action.status, ['proposed', 'approved', 'snoozed']))).run();
     tx.delete(definition).where(eq(definition.id, id)).run();
   });
+  removePosterFile(app.config.configDir, def.poster);
   return `Deleted ${def.name}.`;
 }
 

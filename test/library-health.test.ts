@@ -170,7 +170,20 @@ describe('Library health page and Claude', () => {
     expect(page).toContain('/movies/odd.mkv');
     const res = await t.web.request('/health/dismiss', { ...form({ _csrf: csrf, jfId: 'm-odd', kind: 'title' }), headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' } });
     expect(flash(res)).toContain('Marked as fine');
-    expect(await (await t.web.request('/health', { headers: { cookie } })).text()).toContain('1 marked as fine');
     expect(t.app.db.select().from(healthFinding).where(eq(healthFinding.jfId, 'm-odd')).get()!.dismissedBy).toBe('admin');
+    // The dashboard: nothing left to review, one reviewed (by whom), and how much of the library is checked.
+    const after = await (await t.web.request('/health', { headers: { cookie } })).text();
+    expect(after).toMatch(/<b class="num big">0<\/b> files/);
+    expect(after).toMatch(/<b class="num big">1<\/b> marked fine/);
+    expect(after).toContain('100%</b> of 2 files');
+    expect(after).toMatch(/Odd Film \(2020\)[\s\S]*admin[\s\S]*Review again/);
+    expect(after).toContain('aria-current="page"'); // its own menu item, current
+    expect(after).toMatch(/href="\/health"[^>]*aria-current="page"/);
+    // Review again puts it back.
+    const again = await t.web.request('/health/reopen', { ...form({ _csrf: csrf, jfId: 'm-odd', kind: 'title' }), headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' } });
+    expect(flash(again)).toContain('Back in Needs review');
+    expect(await (await t.web.request('/health', { headers: { cookie } })).text()).toMatch(/<b class="num big bad">1<\/b> file/);
+    // The menu item counts what needs review, on every page.
+    expect(await (await t.web.request('/', { headers: { cookie } })).text()).toMatch(/href="\/health"[\s\S]{0,600}aria-label="1 to review"/);
   });
 });

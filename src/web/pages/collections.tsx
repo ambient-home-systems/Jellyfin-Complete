@@ -1,4 +1,5 @@
 /** @jsxImportSource hono/jsx */
+import { posterKey } from '../../db/schema.js';
 import type { FC } from 'hono/jsx';
 import { Icon, Dot, Seg, Csrf, fmtDate, fmtTime, fmtAgo } from '../ui.js';
 import type { collectionsModel } from '../model.js';
@@ -80,7 +81,9 @@ export const CollectionEditor: FC<{
   def: LoadedDefinition; tz: string; csrf: string; live: boolean; globalModes: Record<string, string>;
   sources: { id: number; label: string; status: string; error: string | null; listed: number; matched: number; role: string; fetchedAt: number | null }[];
   arr: { addMissing: boolean; radarr: boolean; sonarr: boolean; cap: number };
-}> = ({ def, tz, csrf, live, globalModes, sources, arr }) => {
+  /** The preset's own poster (its key), when the collection is a preset with one to go back to (ADR-042). */
+  posterDefault?: string | null;
+}> = ({ def, tz, csrf, live, globalModes, sources, arr, posterDefault }) => {
   const arrApp = def.target === 'movies' ? 'Radarr' : def.target === 'shows' ? 'Sonarr' : def.target === 'both' ? 'Radarr and Sonarr' : null;
   const today = localDay(Date.now(), tz);
   const next = def.window ? transitions(def.window, today, 3) : [];
@@ -195,6 +198,25 @@ export const CollectionEditor: FC<{
               </table>
             </section>
           </form>
+          <section class="form-sec" aria-labelledby="poster-h">
+            <div class="section-head"><h2 id="poster-h">Poster</h2><span class="aside">the only image its box set carries</span></div>
+            <div class="poster-edit">
+              {def.poster.kind !== 'none'
+                ? <img src={`/collections/${def.id}/poster?v=${encodeURIComponent(def.poster.kind === 'url' ? def.poster.url : def.poster.file)}`} alt={`${def.name}’s poster`} width={120} height={180} />
+                : <div class="poster-none" role="img" aria-label="No poster">No poster</div>}
+              <form method="post" action={`/collections/${def.id}/poster`} enctype="multipart/form-data" class="form">
+                <Csrf token={csrf} />
+                <label class="check"><input type="radio" name="poster" value="url" checked={def.poster.kind === 'url' && posterKey(def.poster) !== posterDefault} /> Image address</label>
+                <input type="url" name="posterUrl" placeholder="https://…/poster.jpg" value={def.poster.kind === 'url' ? def.poster.url : ''} aria-label="Image address" />
+                <label class="check"><input type="radio" name="poster" value="upload" checked={def.poster.kind === 'file'} /> Upload an image</label>
+                <input type="file" name="posterFile" accept="image/jpeg,image/png,image/webp" aria-label="Image to upload" />
+                {posterDefault ? <label class="check"><input type="radio" name="poster" value="default" checked={posterKey(def.poster) === posterDefault} /> The preset’s own poster</label> : null}
+                <label class="check"><input type="radio" name="poster" value="none" checked={def.poster.kind === 'none'} /> No poster</label>
+                <p class="hint">JPEG, PNG or WebP, up to 10 MB. Saving puts it on the box set in Jellyfin straight away. Uploads are kept in <code>/config/posters</code>.</p>
+                <div class="actions-row"><button class="btn" type="submit">Save poster</button></div>
+              </form>
+            </div>
+          </section>
           <form id="src-form" method="post" action={`/collections/${def.id}/sources`} hidden><Csrf token={csrf} /></form>
           <form id="src-rows" method="post" action={`/collections/${def.id}/sources`} hidden><Csrf token={csrf} /></form>
           {!def.presetKey ? (

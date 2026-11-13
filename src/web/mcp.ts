@@ -23,7 +23,7 @@ import { reviewVerdict, type SnoozeFor } from './review-actions.js';
 import { verifyToken, type ApiToken } from './api-tokens.js';
 import { AttemptLimiter, clientIp } from './security.js';
 import { applySettings, setCollectionEnabled, setSchedule, SettingsError, MODE_KEYS } from './settings-actions.js';
-import { createCollection, updateCollection, addSource, removeSource, setSourceRole, setPin, deleteCollection, sendMissing, monitorInRadarr, saveArrDefaults } from './collection-actions.js';
+import { createCollection, updateCollection, addSource, removeSource, setSourceRole, setPin, deleteCollection, sendMissing, monitorInRadarr, saveArrDefaults, setPoster } from './collection-actions.js';
 import { explainCollection } from './explain.js';
 import { adoptionCandidates, adopt, adoptSuggested, deleteUnmanaged } from '../pipeline/adoption.js';
 import { setFilmSeries } from '../pipeline/film-series.js';
@@ -512,7 +512,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('update_collection', {
     title: 'Change a collection',
-    description: 'Change a collection, as its editor does: name, dates, minimum titles, filters, overview, sort title, sync or append, what happens when it closes, its home-screen row, sending missing titles to Radarr/Sonarr, and per-collection modes. Give only what should change. Sources have their own tools. The next run plans with the new settings.',
+    description: 'Change a collection, as its editor does: name, dates, minimum titles, filters, overview, sort title, poster, sync or append, what happens when it closes, its home-screen row, sending missing titles to Radarr/Sonarr, and per-collection modes. Give only what should change. Sources have their own tools. The next run plans with the new settings.',
     inputSchema: {
       id: z.number().int().positive(), name: z.string().optional(), on: z.boolean().optional(),
       dates: dates.optional().describe('{"from":"MM/DD","to":"MM/DD"} or "all year". Not for collections whose dates follow a rule, such as Easter.'),
@@ -522,20 +522,24 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       syncMode: z.enum(['sync', 'append']).optional().describe('sync: remove titles no source lists any more. append: only ever add.'),
       whenClosed: z.enum(['delete', 'hide']).optional().describe('delete the box set when its dates end, or hide it and keep it for next time.'),
       homeRow: z.boolean().optional(), sendMissingToRadarrSonarr: z.boolean().optional(),
+      poster: z.string().optional().describe('The collection\'s poster: an image address (https://…, a JPEG, PNG or WebP up to 10 MB), "none", or "default" for a preset\'s own poster. It goes on the box set in Jellyfin straight away. Uploading a file is only on the editor page.'),
       actionModes: z.object({
         'collection.create': modeOrDefault.optional(), 'collection.add_items': modeOrDefault.optional(), 'collection.remove_items': modeOrDefault.optional(),
         'collection.update_metadata': modeOrDefault.optional(), 'radarr.add_movie': modeOrDefault.optional(), 'sonarr.add_series': modeOrDefault.optional(), 'radarr.monitor_collection': modeOrDefault.optional(),
       }).optional().describe('This collection\'s own modes; "default" follows Settings.'),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-  }, async (a) => attempt(`collection ${a.id} changed`, () => {
+  }, async (a) => attempt(`collection ${a.id} changed`, async () => {
     updateCollection(app, a.id, {
       name: a.name, enabled: a.on, dates: a.dates === undefined ? undefined : a.dates === 'all year' ? null : a.dates, minItems: a.minimumTitles,
       filters: a.filters, overview: a.overview, sortTitle: a.sortTitle, syncMode: a.syncMode,
       visibility: a.whenClosed === undefined ? undefined : a.whenClosed === 'hide' ? 'tag_gate' : 'delete',
       homeRow: a.homeRow, addMissing: a.sendMissingToRadarrSonarr, modes: a.actionModes,
     });
-    return 'Saved. The next run plans with these settings.';
+    if (a.poster === undefined) return 'Saved. The next run plans with these settings.';
+    const p = a.poster.trim();
+    const poster = await setPoster(app, a.id, p === 'none' ? { kind: 'none' } : p === 'default' ? { kind: 'default' } : { kind: 'url', url: p });
+    return `Saved. ${poster}`;
   }));
 
   server.registerTool('add_collection_source', {

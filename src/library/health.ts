@@ -72,11 +72,11 @@ export function titleVerdict(tags: string[], item: { names: string[]; year: numb
   return null;
 }
 
-export type HealthStats = { probed: number; lookedUp: number; open: number; found: number };
+export type HealthStats = { probed: number; lookedUp: number; open: number; found: number; compared: number };
 
 /** Probe files not yet checked, look up runtimes, and record what disagrees. Never fails the run. */
 export async function checkLibraryHealth(app: AppContext, opts: { now: number; step?: (s: string) => void }): Promise<HealthStats> {
-  const out: HealthStats = { probed: 0, lookedUp: 0, open: 0, found: 0 };
+  const out: HealthStats = { probed: 0, lookedUp: 0, open: 0, found: 0, compared: 0 };
   const jf = app.jellyfin();
   if (!jf) return out;
   const rows = app.db.select().from(libraryItem).where(inArray(libraryItem.kind, ['movie', 'episode'])).all();
@@ -128,6 +128,7 @@ export async function checkLibraryHealth(app: AppContext, opts: { now: number; s
     }
   }
   out.lookedUp = films + seasons;
+  out.compared = runtimeOf.size;
 
   // 3. Findings: what disagrees now. A dismissal lasts until the file changes; findings that no longer hold go.
   const now = new Map<string, { kind: 'runtime' | 'title'; detail: string; sig: string }>();
@@ -167,7 +168,7 @@ export async function checkLibraryHealth(app: AppContext, opts: { now: number; s
 }
 
 export type HealthRow = {
-  jfId: string; kind: 'runtime' | 'title'; detail: string; firstSeen: number; dismissedAt: number | null;
+  jfId: string; kind: 'runtime' | 'title'; detail: string; firstSeen: number; dismissedAt: number | null; dismissedBy: string | null;
   title: string; library: string | null; rating: string | null; path: string | null;
 };
 
@@ -189,14 +190,77 @@ export function healthRows(app: AppContext, opts: { dismissed?: boolean } = {}):
       : `${r.name}${r.year ? ` (${r.year})` : ''}`;
     const libId = r?.kind === 'episode' ? show?.libraryId : r?.libraryId;
     return {
-      jfId: f.jfId, kind: f.kind, detail: f.detail, firstSeen: f.firstSeen, dismissedAt: f.dismissedAt ?? null,
+      jfId: f.jfId, kind: f.kind, detail: f.detail, firstSeen: f.firstSeen, dismissedAt: f.dismissedAt ?? null, dismissedBy: f.dismissedBy ?? null,
       title, library: libId ? libs.get(libId) ?? null : null, rating: r?.officialRating ?? show?.officialRating ?? null, path: checks.get(f.jfId)?.path ?? null,
     };
-  }).sort((a, b) => b.firstSeen - a.firstSeen || a.title.localeCompare(b.title));
+  }).sort((a, b) => (opts.dismissed ? (b.dismissedAt ?? 0) - (a.dismissedAt ?? 0) : b.firstSeen - a.firstSeen) || a.title.localeCompare(b.title));
 }
 
 /** Mark a finding as checked and fine. It comes back if the file changes. */
 export function dismissFinding(app: AppContext, jfId: string, kind: 'runtime' | 'title', by: string): boolean {
   const r = app.db.update(healthFinding).set({ dismissedAt: Date.now(), dismissedBy: by }).where(and(eq(healthFinding.jfId, jfId), eq(healthFinding.kind, kind))).run();
   return r.changes > 0;
+}
+
+/** Put a finding marked fine back up for review. */
+export function reopenFinding(app: AppContext, jfId: string, kind: 'runtime' | 'title'): boolean {
+  const r = app.db.update(healthFinding).set({ dismissedAt: null, dismissedBy: null }).where(and(eq(healthFinding.jfId, jfId), eq(healthFinding.kind, kind))).run();
+  return r.changes > 0;
+}
+
+export type HealthDashboard = {
+  enabled: boolean;
+  /** Films and episodes in the library, how many have been checked (as they are now), and how many wait. */
+  files: number; checked: number; waiting: number;
+  /** Checked files with a TMDb runtime to compare their length with (the rest are checked by title tags only). */
+  compared: number | null;
+  needsReview: number; reviewed: number;
+  byKind: { runtime: number; title: number };
+  byLibrary: { library: string; files: number; checked: number; needsReview: number; reviewed: number }[];
+  lastChecked: number | null;
+  open: HealthRow[]; done: HealthRow[];
+};
+
+/** Everything the Library health page shows. */
+export function healthDashboard(app: AppContext): HealthDashboard {
+  const rows = app.db.select().from(libraryItem).where(inArray(libraryItem.kind, ['movie', 'episode', 'series'])).all();
+  const seriesLib = new Map(rows.filter((r) => r.kind === 'series').map((r) => [r.jfId, r.libraryId]));
+  const files = rows.filter((r) => r.kind !== 'series');
+  const libOf = (r: (typeof rows)[number]) => (r.kind === 'episode' ? seriesLib.get(r.seriesJfId ?? '') : r.libraryId) ?? null;
+  const checks = new Map(app.db.select({ jfId: mediaCheck.jfId, sig: mediaCheck.sig, at: mediaCheck.checkedAt }).from(mediaCheck).all().map((c) => [c.jfId, c]));
+  const isChecked = (r: (typeof rows)[number]) => checks.get(r.jfId)?.sig === String(r.dateAdded ?? 0);
+  const findings = app.db.select().from(healthFinding).all();
+  const libNames = new Map(app.db.$client.prepare('select id, name from library').all().map((l) => [(l as { id: string }).id, (l as { name: string }).name]));
+  const per = new Map<string, { library: string; files: number; checked: number; needsReview: number; reviewed: number }>();
+  const bucket = (lib: string | null) => {
+    const name = (lib && libNames.get(lib)) ?? 'Other';
+    if (!per.has(name)) per.set(name, { library: name, files: 0, checked: 0, needsReview: 0, reviewed: 0 });
+    return per.get(name)!;
+  };
+  const byId = new Map(files.map((r) => [r.jfId, r]));
+  let checked = 0;
+  for (const r of files) {
+    const b = bucket(libOf(r));
+    b.files++;
+    if (isChecked(r)) { b.checked++; checked++; }
+  }
+  for (const f of findings) {
+    const r = byId.get(f.jfId);
+    const b = bucket(r ? libOf(r) : null);
+    if (f.dismissedAt) b.reviewed++; else b.needsReview++;
+  }
+  const open = findings.filter((f) => !f.dismissedAt);
+  // The latest run's count of files compared with a TMDb runtime.
+  const runs = app.db.$client.prepare("select stats from run where status = 'ok' order by started_at desc limit 20").all() as { stats: string }[];
+  const compared = runs.map((r) => (JSON.parse(r.stats) as { healthCompared?: number }).healthCompared).find((n) => n !== undefined) ?? null;
+  const last = [...checks.values()].reduce((m, c) => Math.max(m, c.at), 0);
+  return {
+    enabled: app.settings().health.enabled,
+    files: files.length, checked, waiting: files.length - checked, compared,
+    needsReview: open.length, reviewed: findings.length - open.length,
+    byKind: { runtime: open.filter((f) => f.kind === 'runtime').length, title: open.filter((f) => f.kind === 'title').length },
+    byLibrary: [...per.values()].filter((b) => b.files || b.needsReview || b.reviewed).sort((a, b) => b.needsReview - a.needsReview || a.library.localeCompare(b.library)),
+    lastChecked: last || null,
+    open: healthRows(app), done: healthRows(app, { dismissed: true }),
+  };
 }

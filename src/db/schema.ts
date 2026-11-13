@@ -112,7 +112,11 @@ export type Filters = {
   yearTo?: number | null;
 };
 
-export type Poster = { kind: 'url'; url: string } | { kind: 'none' };
+/** A collection's poster: an image address, an image uploaded to /config/posters (ADR-042), or none. */
+export type Poster = { kind: 'url'; url: string } | { kind: 'file'; file: string } | { kind: 'none' };
+
+/** A stable name for where a poster comes from: its address, or "file:<name>" for an uploaded one; null for none. */
+export const posterKey = (p: Poster): string | null => (p.kind === 'url' ? p.url : p.kind === 'file' ? `file:${p.file}` : null);
 
 export const definition = sqliteTable(
   'definition',

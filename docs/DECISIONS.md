@@ -674,6 +674,22 @@ Each entry is a short ADR: context, options, recommendation, consequences.
 - **Consequences.**
   - Extended editions far longer than TMDb's runtime will be flagged; mark them fine once.
   - Where TMDb has no runtime (common for episodes), only the title tags are checked.
+  - **Its own page and menu item** (added in 0.14.0, at your request):
+    - "Library health" sits in the menu, with a count of files needing review.
+    - The page is a dashboard: needs review (by length or by title tag), reviewed, and how much of the library has been checked (with how many could be compared with a TMDb runtime).
+    - A by-library table, the files needing review, and the reviewed ones, with who marked each fine and when. **Review again** puts one back.
+
+### ADR-042 Collection posters: Decided (13 Nov)
+- **Context.** Since ADR-040 the app supplies the only image a managed box set carries. Collections of your own had no poster setting, so a poster added in Jellyfin was removed; you asked for a poster field.
+- **Decision.**
+  - **A Poster section in the collection editor:** an image address, an uploaded image, the preset's own poster (presets only), or none.
+    - Uploads are kept in `/config/posters`, named after the collection, and deleted when replaced or when the collection is deleted.
+    - Addresses and uploads are checked before saving: JPEG, PNG or WebP, at most 10 MB, at least 100 × 100, and an image that actually decodes.
+  - **Saving is the approval:** a live box set gets the new poster straight away, with the same ADR-040 code that owns its artwork. Otherwise it goes on when the box set is created.
+  - **The integrity check knows the difference** between the app's poster being changed in the app (applied quietly) and something else changing the box set's poster (a repair).
+  - **Claude:** `update_collection` takes `poster` (an address, `none` or `default`). Uploading a file is only on the page.
+  - The editor shows the poster through the app, so any address works under the page's content security policy.
+- **Consequences.** Back up `/config/posters` with the rest of `/config`.
 
 ---
 
