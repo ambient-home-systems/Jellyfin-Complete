@@ -53,6 +53,8 @@ export const libraryItem = sqliteTable(
     tags: json<string[]>('tags').notNull().default([]),
     studios: json<string[]>('studios').notNull().default([]),
     dateAdded: integer('date_added'),
+    /** Release date (films), first air date (series) or air date (episodes), from Jellyfin's PremiereDate; ADR-037. */
+    premiereDate: integer('premiere_date'),
     seenAt: integer('seen_at').notNull(),
   },
   (t) => [index('library_item_imdb').on(t.imdb), index('library_item_tmdb').on(t.tmdb), index('library_item_tvdb').on(t.tvdb), index('library_item_kind').on(t.kind), index('library_item_tmdb_collection').on(t.tmdbCollection)],

@@ -66,6 +66,15 @@ export const SOURCE_INPUTS: SourceInput[] = [
       return { type: 'tmdb_watch_provider', config: { service: service.key, kind: target === 'shows' ? 'show' : 'movie' } };
     },
   },
+  ...([['recent_released', 'Released in the last … days', 'premiere'], ['recent_added', 'Added in the last … days', 'added']] as const).map(([key, label, field]): SourceInput => ({
+    key, label, placeholder: field === 'premiere' ? '90 (for episodes: aired)' : '30',
+    parse: (v, target) => {
+      const days = Number(v.trim());
+      if (!Number.isInteger(days) || days < 1 || days > 3650) return 'Enter a number of days from 1 to 3650.';
+      if (target === 'both') return 'This source needs a collection of films, shows or episodes.';
+      return { type: 'jellyfin_recent', config: { field, days, kind: target === 'movies' ? 'movie' : target === 'shows' ? 'series' : 'episode' } };
+    },
+  })),
   {
     key: 'mdblist_list', label: 'MDBList list', placeholder: 'https://mdblist.com/lists/user/list-name',
     // Also external lists MDBList imports from elsewhere: https://mdblist.com/lists/user/external/15110

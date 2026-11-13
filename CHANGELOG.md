@@ -2,6 +2,17 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.10.0 — 13 Nov 2026
+
+- **New and recent.** Five collections that follow your library, like Kometa's basic collections:
+  - Newly Released Movies and Shows: released or first aired in the last 90 days
+  - New Episodes: aired in the last 7 days
+  - Recently Added Movies and Shows: added to Jellyfin in the last 30 days
+
+  They change every night. Titles that have aged out are taken out without waiting for review (unless dry run is on); you can change that, or the number of days, per collection. They're off until you turn them on, in Getting started, under Collections or through Claude. They start after the next nightly refresh or a manual run, once the app has read each title's release date.
+- **Collection editor:** two new sources, **Released in the last … days** and **Added in the last … days**, for films, shows or episodes.
+- See [New and recent](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/docs/USER-GUIDE.md#new-and-recent).
+
 ## 0.9.0 — 13 Nov 2026
 
 - **Streaming services.** A collection for each service, such as "Netflix Movies" or "Disney+ Shows", holding the titles you own that stream on it in your country. Like Kometa's streaming collections, with its 22 services and posters.

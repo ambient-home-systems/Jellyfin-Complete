@@ -63,6 +63,7 @@ export async function indexLibrary(db: DB, jf: JellyfinClient, onProgress?: (msg
             tags: it.Tags ?? [],
             studios: (it.Studios ?? []).map((s) => s.Name ?? '').filter(Boolean),
             dateAdded: it.DateCreated ? Date.parse(it.DateCreated) : null,
+            premiereDate: it.PremiereDate ? Date.parse(it.PremiereDate) : null,
             seenAt: startedAt,
           };
           tx.insert(libraryItem).values({ jfId: it.Id, ...row }).onConflictDoUpdate({ target: libraryItem.jfId, set: row }).run();

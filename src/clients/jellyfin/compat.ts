@@ -26,7 +26,7 @@ export const JELLYFIN_CALLS: { method: 'get' | 'post' | 'delete'; path: string; 
 /** BaseItemDto properties the app reads or writes back (POST /Items/{id} sends the whole DTO; ADR-019). */
 export const ITEM_PROPERTIES = [
   'Id', 'Name', 'ForcedSortName', 'SortName', 'Overview', 'Tags', 'LockData', 'LockedFields', 'ProviderIds', 'ImageTags',
-  'ChildCount', 'DisplayOrder', 'SeriesId', 'ParentIndexNumber', 'IndexNumber', 'ProductionYear', 'OfficialRating', 'Genres', 'Studios', 'DateCreated', 'Type',
+  'ChildCount', 'DisplayOrder', 'SeriesId', 'ParentIndexNumber', 'IndexNumber', 'ProductionYear', 'OfficialRating', 'Genres', 'Studios', 'DateCreated', 'PremiereDate', 'Type',
 ];
 export const POLICY_PROPERTIES = ['IsAdministrator', 'BlockedTags'];
 export const ENUM_VALUES: Record<string, string[]> = {

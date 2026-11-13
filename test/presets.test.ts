@@ -138,11 +138,12 @@ describe('universe presets vs Kometa v2.5.3 defaults/both/universe.yml', () => {
 });
 
 describe('preset registry', () => {
-  it('seeds 112 presets: seasonal films and holiday episodes on, universes, show franchises, charts and streaming off', () => {
-    expect(PRESETS).toHaveLength(19 + 3 + 17 + 27 + 5 + 41);
-    // Chart and streaming names clash with nothing (Star Trek and Arrowverse are both a universe and a show franchise, as in Kometa).
-    const added = PRESETS.filter((p) => p.family === 'imdb_chart' || p.family === 'streaming').map((p) => p.definition.name);
-    const others = new Set(PRESETS.filter((p) => p.family !== 'imdb_chart' && p.family !== 'streaming').map((p) => p.definition.name));
+  it('seeds 117 presets: seasonal films and holiday episodes on; new and recent, universes, show franchises, charts and streaming off', () => {
+    expect(PRESETS).toHaveLength(19 + 3 + 5 + 17 + 27 + 5 + 41);
+    // New and recent, chart and streaming names clash with nothing (Star Trek and Arrowverse are both a universe and a show franchise, as in Kometa).
+    const late = ['basic', 'imdb_chart', 'streaming'];
+    const added = PRESETS.filter((p) => late.includes(p.family)).map((p) => p.definition.name);
+    const others = new Set(PRESETS.filter((p) => !late.includes(p.family)).map((p) => p.definition.name));
     expect(new Set(added).size).toBe(added.length);
     expect(added.filter((n) => others.has(n))).toEqual([]);
     expect(new Set(PRESETS.map((p) => p.definition.slug)).size).toBe(PRESETS.length);

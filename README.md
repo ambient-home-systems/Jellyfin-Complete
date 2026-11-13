@@ -11,6 +11,7 @@ Kometa-style collections for Jellyfin: seasonal box sets that appear and disappe
 
 - **Kometa's seasonal collections.** All 19, including Christmas, Halloween, Valentine's and the awareness months, built from the same lists and searches as Kometa. Each opens at local midnight on its first day and goes away after its last.
 - **Holiday episodes.** Christmas, Halloween and Thanksgiving episodes from the shows you own.
+- **New and recent.** Newly Released Movies and Shows, New Episodes and Recently Added, kept up to date every night, like Kometa's basic collections.
 - **Film series.** One collection for each film series you own (Toy Story, John Wick…), from TMDb, kept up to date as you add films, like Kometa's franchise collections.
 - **Streaming services and IMDb charts.** "Netflix Movies", "Disney+ Shows" and 39 more: the titles you own that stream on each service in your country. And the titles you own from IMDb's Top 250, Most Popular and Lowest Rated charts. Like Kometa's streaming and chart collections.
 - **Your own collections**, from IMDb lists or keywords, MDBList, TMDb collections, keywords or lists, Letterboxd, Plex collections, or your own Jellyfin tags and genres.

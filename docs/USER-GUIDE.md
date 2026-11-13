@@ -52,6 +52,7 @@ The ready-made **presets** come in families. Turn single ones on or off under Co
 |---|---|---|
 | Seasonal (19) | Kometa's seasonal collections | On |
 | Holiday episodes (3) | Christmas, Halloween and Thanksgiving episodes from your shows | On (additions wait for review) |
+| New and recent (5) | Kometa's basic collections, Newly Released and New Episodes, plus Recently Added | Off |
 | Universes (17) | Kometa's universe collections | Off |
 | Film series (one per series you own) | Kometa's movie franchise collections: every TMDb film series you have at least 2 films of | Off |
 | Show franchises (27) | Kometa's show franchise collections | Off |
@@ -59,6 +60,23 @@ The ready-made **presets** come in families. Turn single ones on or off under Co
 | Streaming services (41) | Kometa's streaming collections: the titles you own that stream on Netflix, Disney+ and 20 more services in your country | Off |
 
 **New collection** makes your own: films, shows or episodes, always on or between two dates, from any sources.
+
+### New and recent
+
+Five collections that follow your library's own dates:
+
+| Collection | Holds |
+|---|---|
+| Newly Released Movies | Films released in the last 90 days |
+| Newly Released Shows | Shows that first aired in the last 90 days |
+| New Episodes | Episodes that aired in the last 7 days |
+| Recently Added Movies | Films added to Jellyfin in the last 30 days |
+| Recently Added Shows | Shows added to Jellyfin in the last 30 days |
+
+- Days are whole days, today included. A release date still to come doesn't count.
+- They change every night: titles that have aged out are taken out without waiting for review (unless dry run is on). You can change that, or the number of days, per collection.
+- A collection with nothing in it is deleted, and made again when something qualifies.
+- After updating to 0.10.0, they start after the next nightly refresh (or a manual run), when the app has read each title's release date.
 
 ### Film series
 
@@ -95,7 +113,7 @@ Streaming data comes from JustWatch, through TMDb.
 ### In the editor
 
 - **Schedule.** Always on, or between two dates each year. A range can wrap past New Year.
-- **Sources.** Paste an ID, a URL or keywords. An **IMDb chart** source takes top, popular or lowest; a **Streaming service** source takes a service's name (for a collection of films or of shows). A source can **add** titles directly or only **suggest** them for Review. A source the app hasn't fetched yet is fetched on the next run.
+- **Sources.** Paste an ID, a URL or keywords. **Released in the last … days** and **Added in the last … days** take a number of days (for an episode collection, released means aired). An **IMDb chart** source takes top, popular or lowest; a **Streaming service** source takes a service's name (for a collection of films or of shows). A source can **add** titles directly or only **suggest** them for Review. A source the app hasn't fetched yet is fetched on the next run.
 - **Live preview.** What the collection would hold right now, with the reason each title is in. **Pin** a title to keep it whatever the sources say; **exclude** one to keep it out.
 - **Output in Jellyfin:**
   - **Minimum items:** below this, the box set isn't created, or it's deleted.

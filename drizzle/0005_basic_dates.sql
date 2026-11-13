@@ -1,0 +1,1 @@
+ALTER TABLE `library_item` ADD `premiere_date` integer;

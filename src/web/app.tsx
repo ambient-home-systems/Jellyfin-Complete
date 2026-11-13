@@ -213,6 +213,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       universe: (n) => `${n} film universes (Marvel, Star Wars, Middle Earth…), one collection each. A universe’s collection is made only when you have at least 2 of its films, and stays all year.`,
       show_franchise: (n) => `${n} TV franchises (Star Trek, NCIS, One Chicago…), one collection each. A franchise’s collection is made only when you have at least 2 of its shows, and stays all year.`,
       film_series: (n) => `One collection for each film series you have at least ${s.filmSeries.minimum} films of (Toy Story, John Wick…), named and illustrated from TMDb, in release order. New series appear as you add films.${n ? ` ${n} so far.` : ''} Needs a TMDb key.`,
+      basic: (n) => `${n} collections that follow your library: Newly Released Movies and Shows (the last 90 days), New Episodes (aired in the last 7 days), and Recently Added Movies and Shows (the last 30 days). They change every night.`,
       imdb_chart: (n) => `${n} collections of the titles you own from IMDb’s charts: the Top 250 and Most Popular films and shows, and the Lowest Rated films. They follow the charts and stay all year.`,
       streaming: (n) => `${n} collections of the titles you own that stream on a service in your country (${s.streaming.region}; change it in Settings): Netflix Movies, Disney+ Shows and so on. Turning this on turns on the services offered there. Needs a TMDb key; a big library fills in over a few nights.`,
     };

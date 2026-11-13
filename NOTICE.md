@@ -6,11 +6,12 @@ Maverick Jellyfin Complete is MIT-licensed (see `LICENSE`). It builds on work fr
 
 <https://github.com/Kometa-Team/Kometa>, MIT License, Copyright (c) 2026 meisnate12.
 
-- **Preset definitions.** The seasonal, show franchise, universe, IMDb chart and streaming presets (`src/presets/`) are ported from Kometa v2.5.3:
+- **Preset definitions.** The seasonal, show franchise, universe, new and recent, IMDb chart and streaming presets (`src/presets/`) are ported from Kometa v2.5.3:
   - `defaults/movie/seasonal.yml`
   - `defaults/show/franchise.yml`
   - `defaults/both/universe.yml`
   - `defaults/chart/imdb.yml` (kept as `imdb-chart.yml`)
+  - `defaults/chart/basic.yml` (kept as `basic-chart.yml`)
   - `defaults/both/streaming.yml`
 
   Copies of those files are kept under `test/fixtures/kometa-v2.5.3/` for the golden tests, with Kometa's MIT licence applying to them.

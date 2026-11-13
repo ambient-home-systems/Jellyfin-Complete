@@ -26,6 +26,7 @@ export type FakeItem = {
   LockedFields?: string[];
   DisplayOrder?: string | null;
   DateCreated?: string;
+  PremiereDate?: string;
   children?: string[]; // BoxSet linked children
   images?: Record<string, number>; // type -> byte length
 };

@@ -373,6 +373,29 @@ export const ADAPTERS: Record<string, Adapter> = {
     },
   },
 
+  // Titles from your library by date (ADR-037): released, first aired or aired in the last N days (Jellyfin's
+  // PremiereDate), or added in the last N days (DateCreated). Kometa's Newly Released and New Episodes, and Recently Added.
+  // Counted in whole days, today included; dates in the future don't count. Newest first.
+  jellyfin_recent: {
+    fresh: true,
+    label: (c) => `${c.field === 'added' ? 'Added' : c.kind === 'episode' ? 'Aired' : 'Released'} in the last ${Number(c.days)} days`,
+    async resolve(c, ctx) {
+      const days = Number(c.days);
+      if (!Number.isInteger(days) || days < 1 || days > 3650) throw new SourceError('Days must be a whole number from 1 to 3650', 'BAD_INPUT');
+      const kind = c.kind === 'series' || c.kind === 'episode' ? c.kind : 'movie';
+      const today = Math.floor((ctx.now?.() ?? Date.now()) / 86_400_000);
+      const rows = ctx.db.select().from(libraryItem).where(eq(libraryItem.kind, kind)).all()
+        .map((r) => ({ r, at: c.field === 'added' ? r.dateAdded : r.premiereDate }))
+        .filter((x): x is { r: typeof x.r; at: number } => x.at !== null && Math.floor(x.at / 86_400_000) > today - days && Math.floor(x.at / 86_400_000) <= today)
+        .sort((a, b) => b.at - a.at);
+      const as = kind === 'series' ? ('show' as const) : kind;
+      return {
+        items: rows.map(({ r }, i) => ({ jf: r.jfId, imdb: r.imdb ?? undefined, tmdb: r.tmdb ?? undefined, tvdb: r.tvdb ?? undefined, kind: as, rank: i + 1, title: r.name, year: r.year ?? undefined })),
+        meta: { days, field: c.field === 'added' ? 'added' : 'released' },
+      };
+    },
+  },
+
   jellyfin_query: {
     label: (c) => `Jellyfin ${['tags', 'genres', 'studios'].filter((k) => c[k]).map((k) => `${k} ${arr(c[k]).join('|')}`).join(', ')}`,
     async resolve(c, ctx) {

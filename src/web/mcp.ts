@@ -39,7 +39,7 @@ import { JOBS, type JobName } from '../jobs/schedules.js';
 import { nextRuns } from '../jobs/scheduler.js';
 import type { Settings } from '../settings.js';
 
-const INSTRUCTIONS = `Maverick Jellyfin Complete builds collections (box sets) in the user's Jellyfin media server: seasonal ones that appear and disappear on their dates, holiday episodes, film series, film universes, TV franchises, IMDb charts, streaming services (the titles the user owns that stream on Netflix and so on) and the user's own.
+const INSTRUCTIONS = `Maverick Jellyfin Complete builds collections (box sets) in the user's Jellyfin media server: seasonal ones that appear and disappear on their dates, holiday episodes, new and recent (newly released, new episodes, recently added), film series, film universes, TV franchises, IMDb charts, streaming services (the titles the user owns that stream on Netflix and so on) and the user's own.
 Each run plans changes. Changes set to Review, and every change while dry run is on, wait in Review until someone approves, snoozes or dismisses them.
 Approving applies the change to Jellyfin straight away (or when the collection's dates open), even while dry run is on: dry run only stops changes from applying without approval.
 Before approving, show the user exactly what will change (collection, action, titles) and get their go-ahead, especially for deletions and removals. Never approve on your own initiative.

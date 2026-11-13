@@ -560,6 +560,26 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - Streaming data comes from JustWatch, through TMDb; the Settings page and the guide say so.
   - IMDb can't be reached from the development sandbox, so the chart query is tested against fakes. Kometa uses the same query.
 
+### ADR-037 New and recent collections: Decided (13 Nov)
+- **Context.** Next on your list: Kometa's `defaults/chart/basic.yml` (v2.5.3, unchanged on master on 13 Nov 2026), plus Recently Added.
+  - Kometa's file has two collections, both Plex smart filters: **Newly Released** (released in the last 90 days, in film and show libraries) and **New Episodes** (episodes aired in the last 7 days).
+  - Recently Added isn't in that file, but Kometa's "Recently Added" poster still is in Default-Images.
+  - Jellyfin has no smart collections, so the box sets have to be kept up to date by the app.
+- **Decision.**
+  - **The library index keeps each title's `PremiereDate`** (release date, first air date or episode air date; migration 0005). Jellyfin returns it without asking, and it's in every checked API version.
+  - **A new source, `jellyfin_recent`,** reads the index: titles released, first aired or aired in the last N days, or added (`DateCreated`) in the last N days.
+    - Counted in whole days, today included; future dates don't count. Newest first, as Kometa sorts them.
+    - It reads only the index, so it's resolved afresh every run, including the midnight window check.
+  - **Presets, off by default (family "New and recent"):** Newly Released Movies and Shows (90 days), New Episodes (7 days), Recently Added Movies and Shows (30 days).
+    - Kometa's section (010), summaries and colour chart posters; sync; minimum 1.
+    - Films and shows are named apart, as for the charts (ADR-036).
+    - **Removals apply without review** (a per-collection mode, `collection.remove_items: auto`): titles age out every day, and a daily queue of removals in Review would be noise. Dry run still holds everything for review, and the mode can be changed per collection.
+  - Both kinds of window are sources in the collection editor, for your own collections.
+- **Consequences.**
+  - These box sets change every day. A week with no new episodes deletes New Episodes (minimum 1); the next new episode creates it again.
+  - Jellyfin box sets can only list oldest first, so the newest-first order shows only in the app.
+  - Until the first full index after updating, release dates are unknown, so these collections start after the next nightly refresh or a manual run.
+
 ---
 
 ## Open questions
