@@ -1,8 +1,8 @@
 // Ownership and adoption (ADR-009): list existing box sets that match a definition by name, flag the ones
 // Jellyfin-Auto-Collections manages, and let the person adopt or delete each. Nothing happens automatically.
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
-import { action, managedCollection, definition, definitionSource } from '../db/schema.js';
+import { action, managedCollection, membership, definition, definitionSource } from '../db/schema.js';
 import { PRESETS } from '../presets/index.js';
 import { MANAGED_TAG } from './planner.js';
 import { SERIES_PREFIX } from '../presets/film-series.js';
@@ -78,6 +78,14 @@ export async function adopt(app: AppContext, definitionId: number, boxsetId: str
   const now = Date.now();
   const values = { jfBoxsetId: boxsetId, origin: 'adopted' as const, state: 'live' as const, updatedAt: now };
   app.db.insert(managedCollection).values({ definitionId, ...values }).onConflictDoUpdate({ target: managedCollection.definitionId, set: values }).run();
+  // Its titles as they are now, so counts are right straight away.
+  const children = (await jf.collectionChildren(boxsetId)).map((c) => c.Id).filter((x): x is string => Boolean(x));
+  app.db.delete(membership).where(eq(membership.definitionId, definitionId)).run();
+  for (const jfId of children) app.db.insert(membership).values({ definitionId, jfId, provenance: { sources: [], match: 'in the box set' }, since: now, actionId: null }).onConflictDoNothing().run();
+  // Proposals made while it had no box set (create one, add its titles) are out of date now; the next run proposes
+  // only what the adopted box set still needs.
+  app.db.update(action).set({ status: 'superseded', updatedAt: now })
+    .where(and(eq(action.definitionId, definitionId), inArray(action.status, ['proposed', 'approved']), inArray(action.type, ['collection.create', 'collection.update_metadata', 'collection.add_items', 'collection.show']))).run();
   app.db.insert(action).values({
     type: 'collection.update_metadata', fingerprint: `adopt:${boxsetId}`, definitionId, mode: 'review', status: 'applied', reason: 'Adopted existing box set',
     before: { Tags: before.Tags }, after: { Tags: after.Tags, adopted: true }, decidedBy: by, decidedAt: now, appliedAt: now, createdAt: now, updatedAt: now,

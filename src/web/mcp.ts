@@ -81,6 +81,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       lastRun: d.lastRun ? { id: d.lastRun.id, status: d.lastRun.status, trigger: d.lastRun.trigger, started: at(d.lastRun.startedAt), finished: at(d.lastRun.finishedAt) } : null,
       runInProgress: p && p.status === 'running' ? { id: p.runId, step: p.step, started: at(p.startedAt) } : null,
       waitingInReview: shellModel(app).pending,
+      waitingForAdoption: d.waitingForAdoption ? `${d.waitingForAdoption} collection(s) have an existing box set to adopt first (list_existing_box_sets); nothing is created for them until then.` : 0,
       liveCollections: [...d.liveIds].map((id) => defs.get(id)?.name).filter(Boolean),
       upcoming: d.timetable.slice(0, 12).map((c) => ({ date: day(c.at), change: c.kind, collection: c.def.name, collectionId: c.def.id, notes: c.remarks })),
       sources: { ok: d.healthyCount, stale: d.stale.length, failing: d.failing.map((f) => ({ source: f.label, error: f.error })) },

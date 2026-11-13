@@ -1,8 +1,8 @@
 // One pipeline run: index → resolve → match → plan → route → persist → apply (ARCHITECTURE §3).
 // One run at a time; progress is kept in memory for the UI and the run log is stored with the run.
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
-import { run, libraryItem, library, managedCollection, definitionMode, definitionArr, type ActionType } from '../db/schema.js';
+import { action, run, libraryItem, library, managedCollection, membership, definitionMode, definitionArr, type ActionType } from '../db/schema.js';
 import { indexLibrary } from '../library/indexer.js';
 import { loadDefinitions } from '../domain/definitions.js';
 import { LibraryIndex, type LibRow } from '../domain/matching.js';
@@ -19,6 +19,7 @@ import type { Mode } from '../settings.js';
 import { proposeArrAdds, executeArrDue } from './arr.js';
 import { syncHomeRows } from '../homescreen/index.js';
 import { syncFilmSeries } from './film-series.js';
+import { adoptionCandidates } from './adoption.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
 import { missingTitles } from '../domain/missing.js';
 import { getCached } from '../cache.js';
@@ -152,11 +153,27 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
       });
     }
 
+    // The box set's titles as Jellyfin has them now (adopted sets, or edits made in Jellyfin), so counts stay true.
+    for (const [defId, l] of live) {
+      const known = new Set(app.db.select({ jfId: membership.jfId }).from(membership).where(eq(membership.definitionId, defId)).all().map((r) => r.jfId));
+      for (const jfId of l.children) if (!known.has(jfId)) app.db.insert(membership).values({ definitionId: defId, jfId, provenance: { sources: [], match: 'in the box set' }, since: Date.now(), actionId: null }).onConflictDoNothing().run();
+      for (const jfId of known) if (!l.children.has(jfId)) app.db.delete(membership).where(and(eq(membership.definitionId, defId), eq(membership.jfId, jfId))).run();
+    }
+
+    // Existing box sets that match a collection without one: hold its create until it's adopted (or deleted).
+    let adoptable = new Set<number>();
+    try {
+      adoptable = new Set((await adoptionCandidates(app)).filter((c) => c.suggestion === 'adopt' && c.definitionId !== null && !live.has(c.definitionId)).map((c) => c.definitionId!));
+      stats.waitingForAdoption = adoptable.size;
+    } catch (e) {
+      log.warn(`Couldn’t check for existing box sets: ${(e as Error).message}`);
+    }
+
     step('Planning');
-    const { actions, plans } = plan({ now, tz: settings.timezone, leadDays: settings.leadDays, definitions: defs, index, movieLibraryIds, showLibraryIds, resolved, live, saved, found });
+    const { actions, plans } = plan({ now, tz: settings.timezone, leadDays: settings.leadDays, definitions: defs, index, movieLibraryIds, showLibraryIds, resolved, live, saved, found, adoptable });
     savePlanSummary(app.db, {
       at: now,
-      defs: Object.fromEntries(plans.map((p) => [String(p.definitionId), { members: p.members.size, blocked: p.blocked, open: p.open, opensAt: p.opensAt, sources: p.sourceStatus }])),
+      defs: Object.fromEntries(plans.map((p) => [String(p.definitionId), { members: p.members.size, blocked: p.blocked, open: p.open, opensAt: p.opensAt, waitingForAdoption: p.waitingForAdoption, sources: p.sourceStatus }])),
     });
     const overrides = new Map<number, Partial<Record<ActionType, Mode>>>();
     for (const m of app.db.select().from(definitionMode).where(inArray(definitionMode.definitionId, defs.map((d) => d.id).concat(-1))).all()) {
@@ -243,8 +260,16 @@ function finish(app: AppContext, runId: number, status: 'ok' | 'failed', stats: 
 export async function applyNow(app: AppContext, ids: number[]): Promise<ExecStats> {
   const jf = app.jellyfin();
   if (!jf) throw new Error('Jellyfin is not connected yet');
-  const exec = await executeDue(app.db, jf, app.fetch, Date.now(), ids);
-  const arr = await executeArrDue(app, Date.now(), ids);
+  // A collection's approved changes go together: approving its "Create box set" also brings titles approved earlier
+  // (say by Auto), so the box set isn't left waiting for them until the next run.
+  const now = Date.now();
+  const defIds = [...new Set(app.db.select({ d: action.definitionId }).from(action).where(inArray(action.id, ids)).all().map((r) => r.d).filter((d): d is number => d !== null))];
+  const companions = defIds.length
+    ? app.db.select({ id: action.id, applyAt: action.applyAt }).from(action).where(and(inArray(action.definitionId, defIds), eq(action.status, 'approved'))).all().filter((a) => a.applyAt === null || a.applyAt <= now).map((a) => a.id)
+    : [];
+  const all = [...new Set([...ids, ...companions])];
+  const exec = await executeDue(app.db, jf, app.fetch, now, all);
+  const arr = await executeArrDue(app, now, ids);
   // An approval can create or delete a box set; bring the home-screen rows along straight away.
   if (app.settings().homeRows.enabled && exec.applied) {
     await syncHomeRows(app).catch((e: Error) => log.warn(`Home-screen rows not updated: ${e.message}`));

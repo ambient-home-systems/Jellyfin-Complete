@@ -2,6 +2,13 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.8.1 — 13 Nov 2026
+
+- **Fixed:**
+  - Approving "Create box set" could still answer "Applied 0, waiting for other approvals" when its titles had already been approved (for example by Auto), and the box set only appeared on the next run. A collection's approved changes now apply together.
+  - With existing box sets to adopt (such as Jellyfin's own film series sets), a run proposed creating duplicates of them. While a matching box set waits to be adopted, nothing is created for its collection, and the Dashboard says so. Adopting retires proposals made before it.
+  - Adopted box sets showed 0 titles (James Bond with all 25 films in Jellyfin, for example). Adopting now records the box set's titles, and every run keeps the count in step with Jellyfin.
+
 ## 0.8.0 — 13 Nov 2026
 
 - **Film series.** One collection for each film series you own at least 2 films of (Toy Story, John Wick…), like Kometa's franchise collections.

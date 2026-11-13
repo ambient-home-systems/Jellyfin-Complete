@@ -117,8 +117,33 @@ describe('Film series', () => {
     await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW });
     const c = await adoptionCandidates(app);
     expect(c.filter((x) => x.suggestion === 'adopt').map((x) => [x.name, x.definitionName]).sort()).toEqual([['Alien Collection', 'Alien'], ['Toy Story Collection', 'Toy Story']]);
+    // No duplicates: while a box set waits to be adopted, nothing is created for its collection.
+    const toy = seriesDefs(app).find((d) => d.name === 'Toy Story')!;
+    const open = (defId: number) => app.db.select().from(action).where(eq(action.definitionId, defId)).all().filter((a) => a.status === 'proposed' || a.status === 'approved');
+    expect(open(toy.id)).toEqual([]);
+    expect(getPlanSummary(app.db)!.defs[String(toy.id)]!.waitingForAdoption).toBe(true);
+
     expect(await adoptSuggested(app, 'admin')).toEqual({ adopted: 2, failed: [] });
     expect(await adoptionCandidates(app)).toEqual([]);
+    // Its titles are counted straight away, as Jellyfin has them.
+    const members = (defId: number) => (app.db.$client.prepare('select count(*) n from membership where definition_id = ?').get(defId) as { n: number }).n;
+    expect(members(toy.id)).toBe(2);
+    // The next run proposes only what the adopted set still needs: Toy Story 3, and dropping "Collection" from its name.
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + 3_600_000 });
+    expect(open(toy.id).map((a) => a.type === 'collection.add_items' ? a.item!.name : a.type).sort()).toEqual(['Toy Story 3', 'collection.update_metadata']);
+    expect(open(toy.id).some((a) => a.type === 'collection.create')).toBe(false);
+  });
+
+  it('adopting retires proposals made before it, so nothing duplicates the adopted set', async () => {
+    const { app, fake } = world();
+    setFilmSeries(app, true);
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW }); // no Jellyfin set yet: creates proposed
+    const toy = seriesDefs(app).find((d) => d.name === 'Toy Story')!;
+    expect(app.db.select().from(action).where(eq(action.definitionId, toy.id)).all().some((a) => a.type === 'collection.create' && a.status === 'proposed')).toBe(true);
+    fake.add({ Id: 'bs-toy', Name: 'Toy Story Collection', Type: 'BoxSet', ParentId: 'lib-collections', ProviderIds: { Tmdb: '10194' }, children: ['m-ts1', 'm-ts2', 'm-ts3'] });
+    expect(await adoptSuggested(app, 'admin')).toMatchObject({ adopted: 1 });
+    const left = app.db.select().from(action).where(eq(action.definitionId, toy.id)).all().filter((a) => a.status === 'proposed' || a.status === 'approved');
+    expect(left).toEqual([]);
   });
 
   it('turning it off turns every film series collection off', async () => {

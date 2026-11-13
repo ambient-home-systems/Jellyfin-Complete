@@ -56,6 +56,9 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
             {m.server && m.server.level !== 'verified' ? (
               <div class="notice"><Dot state={m.server.level === 'unsupported' ? 'err' : 'warn'} label={m.server.level} /><b>Jellyfin {m.server.version}</b><p>{m.server.note}</p></div>
             ) : null}
+            {m.waitingForAdoption ? (
+              <div class="notice"><Dot state="warn" label="Waiting" /><b>{m.waitingForAdoption} {m.waitingForAdoption === 1 ? 'collection has' : 'collections have'} a box set to adopt</b><p>Jellyfin already has a matching box set, so nothing new is created until you adopt it (or delete it) on <a href="/adoption">Existing box sets</a>.</p></div>
+            ) : null}
             {m.hashError ? (
               <div class="notice"><Dot state="err" label="Failing" /><b>IMDb query hashes</b><p>{m.hashError}. IMDb sources are served from their last good results until the published hashes are updated.</p></div>
             ) : null}

@@ -35,6 +35,8 @@ export type PlanInput = {
   saved: Map<number, SavedMeta | null>;
   /** TMDb /find results for IMDb IDs that didn't match directly. */
   found: Map<string, FindResult>;
+  /** Collections without a box set that have an existing one in Jellyfin to adopt: no create is proposed for them. */
+  adoptable?: Set<number>;
 };
 
 export type PlannedAction = {
@@ -56,6 +58,8 @@ export type DefinitionPlan = {
   members: Map<string, Provenance>;
   blocked: boolean;
   sourceStatus: { key: string; label: string; status: string; error: string | null; listed: number; matched: number }[];
+  /** A matching box set exists in Jellyfin: adopt it (or delete it) instead of creating a duplicate. */
+  waitingForAdoption?: boolean;
 };
 
 export function fingerprint(...parts: (string | number | null | undefined)[]): string {
@@ -145,13 +149,15 @@ export function plan(input: PlanInput): { actions: PlannedAction[]; plans: Defin
     const applyAt = open ? null : opensDay !== null ? localMidnight(opensDay, input.tz) : null;
     const cycleDay = open && def.window ? currentStart(def, today) : opensDay;
     const cycle = cycleDay !== null && cycleDay !== undefined ? isoDay(cycleDay) : 'always';
-    plans.push({ definitionId: def.id, open, opensAt: open ? null : applyAt, members: mem, blocked, sourceStatus });
+    const waitingForAdoption = !live && Boolean(input.adoptable?.has(def.id));
+    plans.push({ definitionId: def.id, open, opensAt: open ? null : applyAt, members: mem, blocked, sourceStatus, waitingForAdoption });
     const item = (jfId: string, provenance: Provenance) => {
       const r = input.index.get(jfId)!;
       return { jfId, name: input.index.displayName(r), year: r.kind === 'episode' ? null : r.year, provenance };
     };
     const ref = (jfId: string) => itemRef(input.index.get(jfId)!);
 
+    if (waitingForAdoption) continue; // never a duplicate: adopt the existing box set, or delete it, first
     if (open || opensDay !== null) {
       if (mem.size >= def.minItems) {
         const metaPayload = { ...desiredMeta(def), tags: [MANAGED_TAG], lockedFields: LOCKED_FIELDS, displayOrder: def.sortBy === 'title.asc' ? 'SortName' : 'PremiereDate' };

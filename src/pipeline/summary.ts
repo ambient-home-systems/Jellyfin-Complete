@@ -5,7 +5,7 @@ import { setting } from '../db/schema.js';
 
 export type PlanSummary = {
   at: number;
-  defs: Record<string, { members: number; blocked: boolean; open: boolean; opensAt: number | null; sources: { key: string; label: string; status: string; error: string | null; listed: number; matched: number }[] }>;
+  defs: Record<string, { members: number; blocked: boolean; open: boolean; opensAt: number | null; waitingForAdoption?: boolean; sources: { key: string; label: string; status: string; error: string | null; listed: number; matched: number }[] }>;
 };
 
 const KEY = 'lastPlan';

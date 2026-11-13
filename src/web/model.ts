@@ -149,6 +149,7 @@ export function dashboardModel(app: AppContext, now = Date.now()) {
     tz, today, now, needs, pendingTotal, failing, stale, hashError, lastRun, next, plannedMembers, members, liveIds,
     strip, timetable, healthyCount: sources.filter((r) => r.status === 'ok').length, progress: currentRun(),
     configured: Boolean(app.jellyfin()), dryRun: s.dryRun,
+    waitingForAdoption: defs.filter((d) => d.enabled && summary?.defs[String(d.id)]?.waitingForAdoption).length,
     server: s.server.version ? { version: s.server.version, ...versionSupport(s.server.version) } : null,
   };
 }
@@ -172,6 +173,7 @@ export function collectionsModel(app: AppContext, now = Date.now()) {
     if (!d.enabled) status = { label: 'Off', kind: 'off' };
     else if (live) status = { label: 'Live', kind: 'live' };
     else if (hidden) status = { label: 'Hidden', kind: 'below' };
+    else if (sum?.waitingForAdoption) status = { label: 'Adopt existing box set', kind: 'below' };
     else if (sum && sum.members < d.minItems) status = { label: sum.members === 0 ? 'Nothing matches' : 'Below minimum', kind: 'below' };
     else status = { label: 'Scheduled', kind: 'scheduled' };
     return {

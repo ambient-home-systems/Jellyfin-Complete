@@ -20,6 +20,21 @@ describe('0.7.0 fixes', () => {
     expect(t.fake.boxSets().find((b) => b.Name === 'Thanksgiving Movies')?.children).toEqual(['m-ptna']);
   });
 
+  it('approving "Create box set" also applies titles approved earlier by Auto (0.8.1)', async () => {
+    const t = setup();
+    await t.web.request('/setup', form({ url: FAKE_URL, apiKey: t.fake.apiKey, setupCode: t.app.setupCode ?? '' }));
+    // Dry run off; creating waits for review, adding titles is Auto: the adds are approved but can't apply without a box set.
+    t.app.updateSettings({ dryRun: false, modes: { ...t.app.settings().modes, 'collection.create': 'review', 'collection.delete': 'review' } });
+    await runPipeline(t.app, { job: 'manual', trigger: 'manual', index: true, now: Date.UTC(2026, 10, 17, 15) });
+    const acts = t.app.db.select().from(action).all();
+    const create = acts.find((a) => a.type === 'collection.create' && a.status === 'proposed')!;
+    expect(acts.find((a) => a.type === 'collection.add_items')!.status).toBe('approved');
+    expect(t.fake.boxSets()).toEqual([]);
+    const r = await reviewVerdict(t.app, [create.id], 'approve', 'admin');
+    expect(r.message).toContain('Applied 3');
+    expect(t.fake.boxSets().find((b) => b.Name === 'Thanksgiving Movies')?.children).toEqual(['m-ptna']);
+  });
+
   it('adds new spin-offs to existing show franchises, keeping IDs you added yourself', () => {
     const t = setup();
     const def = t.app.db.select().from(definition).where(eq(definition.slug, 'franchise-show-75219')).get()!;
