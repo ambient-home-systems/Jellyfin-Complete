@@ -76,7 +76,10 @@ Five collections that follow your library's own dates:
 | Recently Added Shows | Shows with an episode that arrived in the last 30 days |
 
 - Days are whole days, today included. A release date still to come doesn't count.
-- **Added means first arrived.** A replaced file, such as a Radarr or Sonarr upgrade, keeps its first date, so upgrades don't show as new. The first time this runs, a film already in your library uses Radarr's added date if that's earlier. A title that was gone for over a week and comes back counts as new.
+- **Added means first arrived.** A replaced file, such as a Radarr or Sonarr upgrade, keeps its first date, so upgrades don't show as new.
+  - **With Radarr connected,** a film arrived when Radarr first imported it (from Radarr's history). Upgrades don't move that date, and a film you asked Radarr for long before it downloaded counts from the download. This is checked on every run, so it doesn't matter when you connected Radarr. A film with no import in Radarr's history counts from when it was added to Radarr.
+  - **Otherwise,** the app remembers the first date it saw each film (by its TMDb ID) and each episode, and a title that was gone for over a week and comes back counts as new.
+  - **A show** was added when its newest episode was, so it comes back when a new episode arrives.
 - They change every night: titles that have aged out are taken out without waiting for review (unless dry run is on). You can change that, or the number of days, per collection.
 - A collection with nothing in it is deleted, and made again when something qualifies.
 - After updating to 0.10.0, they start after the next nightly refresh (or a manual run), when the app has read each title's release date.
@@ -155,11 +158,15 @@ If another tool builds the same collections, remove them from that tool first so
 
 The app checks each film and episode against its title. **Library health** in the menu (with a count of files needing review) shows how much of the library has been checked, what needs review and what's been reviewed, by library. It flags a file for:
 
-- **Length:** the file runs more than 12 minutes or 15% (whichever is larger) longer or shorter than TMDb's runtime. A two-hour film has to be 18 minutes out; an episode, 12.
+- **Length:** the file runs more than 12 minutes or 15% (whichever is larger) longer or shorter than it should. A two-hour film has to be 18 minutes out; an episode, 12.
+  - A film is measured against TMDb's runtime.
+  - An episode is measured against TMDb's runtime too, unless TMDb lists the whole season at a different length. Some networks list the TV slot, ads included: *Dirty Jobs* at 60 minutes for 42-minute files. Then the episode is measured against the season's typical (median) file length, so only the odd ones out are flagged: an episode with the ads left in, two episodes in one file, a double-length crossover. A season with fewer than three files uses the whole show's typical length. When TMDb has no runtimes, the typical length is used too.
+  - A file about twice the typical length says it may contain two episodes, and whether the next episode also has its own file. A file Jellyfin already knows holds two episodes ("S07E13-E14") is expected to be twice as long.
 - **Title tags:** a title tag inside the file names another title, for example "Bewitched (2005)" on *Black Panther: Wakanda Forever*. A tag with the same year is treated as a translated title and left alone.
 
 Each finding shows the library, the rating and the file's path. Check it by playing it.
 - **It's fine** moves it to Reviewed, with who marked it and when, until the file changes.
+- **Several at once:** tick findings and choose **Mark selected fine**, or pick a show and choose **Mark all for this show fine**.
 - **Review again** puts it back.
 - A finding that's no longer true goes away by itself.
 
@@ -197,7 +204,10 @@ Kometa-style badges on your posters, off until you choose them in **Settings →
 - Back up `/config` with that folder in it.
 - If Jellyfin saves artwork into your media folders, the badged poster is saved there too, and removing the overlays puts the original back there as well.
 
-Only titles in the libraries chosen under Settings → Libraries get overlays.
+**Which libraries.** Only titles in the libraries chosen under Settings → Libraries get overlays, and you can untick any of them in Settings → Poster overlays.
+- **Kids' libraries get none unless you tick them.** A library counts as a kids' library when its name says so (Kids, Children's, Family, Cartoons, Disney, Pixar, Animated…) or at least 80% of its rated titles have children's ratings (G, PG, TV-Y, TV-Y7, TV-G).
+- Unticking a library takes its overlays off on the next update, putting the originals back.
+- Box sets never get overlays.
 
 ## Home-screen rows
 

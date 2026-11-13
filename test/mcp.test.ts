@@ -129,7 +129,7 @@ describe('Claude access (MCP)', () => {
     const { token } = await makeToken(t, 'Desk', 'full');
     const client = await connect(t.web, token);
     const tools = (await client.listTools()).tools.map((x) => x.name);
-    expect(tools).toEqual(expect.arrayContaining(['update_settings', 'set_schedule', 'set_collection_enabled', 'approve_proposals']));
+    expect(tools).toEqual(expect.arrayContaining(['update_settings', 'set_schedule', 'set_collection_enabled', 'set_family_enabled', 'approve_proposals', 'mark_library_health_fine']));
 
     const before = json(await client.callTool({ name: 'get_settings', arguments: {} }));
     expect(before.dryRun).toBe(true);
@@ -153,7 +153,7 @@ describe('Claude access (MCP)', () => {
     expect((await client.callTool({ name: 'update_settings', arguments: { filmLibraries: ['Nope'] } })).isError).toBe(true);
     // Poster overlays (ADR-039): chosen through update_settings, applied or removed with their own tools.
     expect(text(await client.callTool({ name: 'update_settings', arguments: { posterOverlays: { status: true } } }))).toContain('"status":true');
-    expect(json(await client.callTool({ name: 'get_settings', arguments: {} })).posterOverlays).toEqual({ status: true, imdbTop250Ribbon: false, postersWithOverlays: 0 });
+    expect(json(await client.callTool({ name: 'get_settings', arguments: {} })).posterOverlays).toMatchObject({ status: true, imdbTop250Ribbon: false, postersWithOverlays: 0 });
     expect(tools).toEqual(expect.arrayContaining(['apply_poster_overlays', 'remove_poster_overlays']));
     // The streaming country (ADR-036).
     expect(text(await client.callTool({ name: 'update_settings', arguments: { streamingCountry: 'ca' } }))).toContain('"region":"CA"');
@@ -166,6 +166,19 @@ describe('Claude access (MCP)', () => {
     const universe = json(await client.callTool({ name: 'list_collections', arguments: {} })).find((c: { kind: string; on: boolean }) => c.kind === 'Universes' && !c.on);
     expect(text(await client.callTool({ name: 'set_collection_enabled', arguments: { id: universe.id, on: true } }))).toContain('is on');
     expect(json(await client.callTool({ name: 'get_collection', arguments: { id: universe.id } })).on).toBe(true);
+    // A whole family at once, with the All on rules: the streaming country (set to Canada above) picks the services.
+    expect(text(await client.callTool({ name: 'set_family_enabled', arguments: { family: 'streaming', on: true } }))).toMatch(/^Streaming services: \d+ turned on\./);
+    const on = json(await client.callTool({ name: 'list_collections', arguments: { only: 'on' } })).map((c: { name: string }) => c.name);
+    expect(on).toContain('Crave Shows');
+    expect(on).not.toContain('Channel 4 Shows');
+    expect(text(await client.callTool({ name: 'set_family_enabled', arguments: { family: 'film_series', on: true } }))).toContain('Film series');
+    expect(t.app.settings().filmSeries.enabled).toBe(true);
+    expect((await client.callTool({ name: 'set_family_enabled', arguments: { family: 'nope', on: true } })).isError).toBe(true);
+    // Library health in the overview.
+    expect(json(await client.callTool({ name: 'get_status', arguments: {} })).libraryHealth).toMatchObject({ checking: true, openFindings: 0, openByKind: { runtime: 0, title: 0 } });
+    // Marking findings fine takes several at once, or a whole show.
+    expect(text(await client.callTool({ name: 'mark_library_health_fine', arguments: {} }))).toContain('Give id');
+    expect(text(await client.callTool({ name: 'mark_library_health_fine', arguments: { ids: ['nope-1', 'nope-2'] } }))).toContain('No open findings matched');
     await client.close();
   });
 

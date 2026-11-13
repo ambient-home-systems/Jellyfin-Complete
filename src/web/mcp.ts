@@ -12,7 +12,7 @@ import { action, definitionArr, jobSchedule, libraryItem, managedCollection, mem
 import type { WindowDef } from '../db/schema.js';
 import { loadDefinition, loadDefinitions, type LoadedDefinition } from '../domain/definitions.js';
 import { LibraryIndex, type LibRow } from '../domain/matching.js';
-import { FAMILY_LABEL, familyOf } from '../presets/index.js';
+import { FAMILY_LABEL, familyOf, plexCounterpart, PRESET_FAMILIES, type PresetFamily } from '../presets/index.js';
 import { currentRun, isRunning, runPipeline } from '../pipeline/run.js';
 import { log } from '../log.js';
 import { activityModel, collectionsModel, dashboardModel, librariesModel, reviewModel, shellModel } from './model.js';
@@ -22,7 +22,7 @@ import { TYPE_LABEL } from './pages/review.js';
 import { reviewVerdict, type SnoozeFor } from './review-actions.js';
 import { verifyToken, type ApiToken } from './api-tokens.js';
 import { AttemptLimiter, clientIp } from './security.js';
-import { applySettings, setCollectionEnabled, setSchedule, SettingsError, MODE_KEYS } from './settings-actions.js';
+import { applySettings, setCollectionEnabled, setFamilyEnabled, setSchedule, SettingsError, MODE_KEYS } from './settings-actions.js';
 import { createCollection, updateCollection, addSource, removeSource, setSourceRole, setPin, deleteCollection, sendMissing, monitorInRadarr, saveArrDefaults, setPoster } from './collection-actions.js';
 import { explainCollection } from './explain.js';
 import { adoptionCandidates, adopt, adoptSuggested, deleteUnmanaged } from '../pipeline/adoption.js';
@@ -36,7 +36,8 @@ import { resolveSource, sourceKey, sourceLabel } from '../sources/index.js';
 import { SOURCE_INPUTS } from '../domain/source-input.js';
 import { startOverlayRun } from './overlay-actions.js';
 import { overlayCount } from '../overlays/sync.js';
-import { dismissFinding, healthRows } from '../library/health.js';
+import { overlayLibraries } from './overlay-actions.js';
+import { dismissFindings, healthDashboard, healthRows } from '../library/health.js';
 import { CONNECTIONS } from './pages/settings.js';
 import { JOBS, type JobName } from '../jobs/schedules.js';
 import { nextRuns } from '../jobs/scheduler.js';
@@ -72,7 +73,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('get_status', {
     title: 'Status',
-    description: 'Overview: dry run on or off, the last and current run, how many proposals wait in Review, live collections, the next openings and closings, and any failing sources.',
+    description: 'Overview: dry run on or off, the last and current run, how many proposals wait in Review, live collections, the next openings and closings, any failing sources, and Library health (open findings by kind, files left to check).',
     annotations: read,
   }, async () => {
     const d = dashboardModel(app);
@@ -89,6 +90,10 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       upcoming: d.timetable.slice(0, 12).map((c) => ({ date: day(c.at), change: c.kind, collection: c.def.name, collectionId: c.def.id, notes: c.remarks })),
       sources: { ok: d.healthyCount, stale: d.stale.length, failing: d.failing.map((f) => ({ source: f.label, error: f.error })) },
       imdbProblem: d.hashError,
+      libraryHealth: (() => {
+        const h = healthDashboard(app);
+        return { checking: h.enabled, openFindings: h.needsReview, openByKind: h.byKind, markedFine: h.reviewed, filesChecked: h.checked, filesLeftToCheck: h.waiting };
+      })(),
     });
   });
 
@@ -208,12 +213,12 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('list_library_health', {
     title: 'Library health',
-    description: 'Films and episodes whose file may not be what it says (Library health page): the file runs much longer or shorter than TMDb\'s runtime, or a title tag inside it names another title. Each with its library, rating and file path. The app never moves or deletes files; tell the user which to check by playing them.',
+    description: 'Films and episodes whose file may not be what it says (Library health page): the file runs much longer or shorter than it should (TMDb\'s runtime, or for episodes the season\'s typical length when TMDb lists the whole season at another length), or a title tag inside it names another title. Episodes carry their show and seriesId, for marking a whole show fine. Each with its library, rating and file path. The app never moves or deletes files; tell the user which to check by playing them.',
     inputSchema: { includeMarkedFine: z.boolean().optional().describe('Also list findings someone marked as fine.') },
     annotations: read,
   }, async (a) => ok({
     checking: app.settings().health.enabled,
-    findings: healthRows(app).map((r) => ({ id: r.jfId, kind: r.kind, title: r.title, library: r.library, rating: r.rating, whatDoesntMatch: r.detail, file: r.path, found: at(r.firstSeen) })),
+    findings: healthRows(app).map((r) => ({ id: r.jfId, kind: r.kind, title: r.title, ...(r.seriesJfId ? { show: r.show, seriesId: r.seriesJfId } : {}), library: r.library, rating: r.rating, whatDoesntMatch: r.detail, file: r.path, found: at(r.firstSeen) })),
     ...(a.includeMarkedFine ? { markedFine: healthRows(app, { dismissed: true }).map((r) => ({ id: r.jfId, kind: r.kind, title: r.title, whatDoesntMatch: r.detail, markedFine: at(r.dismissedAt) })) } : { markedFineCount: healthRows(app, { dismissed: true }).length }),
   }));
 
@@ -264,7 +269,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       homeRows: { enabled: s.homeRows.enabled, position: s.homeRows.orderIndex, view: s.homeRows.viewMode },
       filmSeries: s.filmSeries,
       streamingCountry: s.streaming.region,
-      posterOverlays: { status: s.overlays.status, imdbTop250Ribbon: s.overlays.imdbTop250, postersWithOverlays: overlayCount(app) },
+      posterOverlays: { status: s.overlays.status, imdbTop250Ribbon: s.overlays.imdbTop250, postersWithOverlays: overlayCount(app), libraries: overlayLibraries(app).libraries.map((l) => ({ id: l.id, name: l.name, kidsLibrary: l.kids, overlays: l.on })) },
       schedules: app.db.select().from(jobSchedule).all().map((j) => ({ job: j.job, what: JOBS[j.job as JobName]?.detail ?? null, cron: j.cron, on: j.enabled, next: at(runs.find((r) => r.job === j.job)?.next?.getTime()) })),
       otherToolsSchedules: s.neighbours,
       connections: Object.fromEntries(CONNECTIONS.map((x) => [x.key, { address: x.urlField ? s.connections[x.urlField] || null : undefined, keySaved: x.secret ? app.secrets.masked(x.secret).set : undefined }])),
@@ -286,7 +291,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('compare_with_plex', {
     title: 'Compare with Plex',
-    description: 'Compare a collection with the same-named collection in Plex (read-only): how many titles each has, how many are in both, and which are only in one, including Plex titles that aren\'t in your Jellyfin library.',
+    description: 'Compare a collection with its collection in Plex (read-only): the same name, or for Kometa collections it names once per Plex library (IMDb Top 250, IMDb Popular, IMDb Lowest Rated, Newly Released, New Episodes) Kometa\'s name in a films or TV library to match. Reports how many titles each has, how many are in both, and which are only in one, including Plex titles that aren\'t in your Jellyfin library.',
     inputSchema: { id: z.number().int().positive() },
     annotations: { ...read, openWorldHint: true },
   }, async ({ id }) => {
@@ -297,9 +302,11 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
     const plan = cachedPlan(app, def);
     if (!plan) return fail('No library index yet: run once first.');
     const s = app.settings();
-    const r = await resolveSource({ db: app.db, fetch: app.fetch, tmdb: app.tmdb(), plex, mdblistKey: null, imdbRoute: s.imdbRoute }, { type: 'plex_collection', config: { name: def.name } }, { maxAgeMs: 10 * 60_000 });
+    const counterpart = plexCounterpart(def);
+    const r = await resolveSource({ db: app.db, fetch: app.fetch, tmdb: app.tmdb(), plex, mdblistKey: null, imdbRoute: s.imdbRoute }, { type: 'plex_collection', config: { name: counterpart.names[0], names: counterpart.names, ...(counterpart.section ? { section: counterpart.section } : {}) } }, { maxAgeMs: 10 * 60_000 });
     if (r.status === 'failed') return fail(`Couldn’t read Plex: ${r.error}`);
-    if (!(r.meta as { found?: boolean } | null)?.found) return ok(`Plex has no collection called “${def.name}” right now.`);
+    const where = counterpart.section ? ` in a ${counterpart.section === 'movie' ? 'films' : 'TV'} library` : '';
+    if (!(r.meta as { found?: boolean } | null)?.found) return ok(`Plex has no collection called ${counterpart.names.map((n) => `“${n}”`).join(' or ')}${where} right now.`);
     const want = def.target === 'movies' ? 'movie' : def.target === 'shows' ? 'series' : def.target === 'episodes' ? 'episode' : 'any';
     return ok(parity(r.items, new Set(plan.members.keys()), plan.index, want));
   });
@@ -347,11 +354,21 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
   }, async ({ ids: list }) => decision(list, 'dismiss'));
 
   server.registerTool('mark_library_health_fine', {
-    title: 'Mark a library health finding as fine',
-    description: 'After the user has checked a file from list_library_health and says it is what it claims, hide that finding. It comes back if the file changes. Nothing changes in Jellyfin.',
-    inputSchema: { id: z.string(), kind: z.enum(['runtime', 'title']) },
+    title: 'Mark library health findings as fine',
+    description: 'After the user has checked files from list_library_health and says they are what they claim, hide those findings. Each comes back if its file changes. Nothing changes in Jellyfin. Mark one (id and kind), several at once (ids, optionally limited to one kind), or every open finding for the episodes of a show (seriesId: its Jellyfin ID, as list_library_health gives it), but only for findings the user has approved.',
+    inputSchema: {
+      id: z.string().optional().describe('One finding\'s item ID (with kind).'),
+      kind: z.enum(['runtime', 'title']).optional().describe('Which finding for that item (or, with ids, for each). Without it, every open finding for the items.'),
+      ids: z.array(z.string()).max(1000).optional().describe('Several items\' IDs.'),
+      seriesId: z.string().optional().describe('Every open finding for this show\'s episodes.'),
+    },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  }, async (a) => (dismissFinding(app, a.id, a.kind, `Claude (${token.name})`) ? ok('Marked as fine. It comes back if the file changes.') : fail('No such finding.')));
+  }, async (a) => {
+    const items = [...(a.id ? [a.id] : []), ...(a.ids ?? [])];
+    if (!items.length && !a.seriesId) return fail('Give id (with kind), ids, or seriesId.');
+    const n = dismissFindings(app, { findings: items.map((jfId) => ({ jfId, kind: a.kind })), seriesIds: a.seriesId ? [a.seriesId] : [] }, `Claude (${token.name})`);
+    return n ? ok(`${n} ${n === 1 ? 'finding' : 'findings'} marked as fine. Each comes back if its file changes.`) : fail('No open findings matched.');
+  });
 
   server.registerTool('snooze_proposals', {
     title: 'Snooze proposals',
@@ -413,7 +430,10 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       otherToolsSchedules: z.array(z.object({ name: z.string(), time: z.string() })).optional().describe('Replaces the list of other tools\' run times shown beside this app\'s jobs, e.g. [{"name":"Kometa (Plex)","time":"05:00"}].'),
       filmSeries: z.object({ enabled: z.boolean(), minimum: z.number().int().min(2).max(20).optional() }).optional().describe('Film series: one collection for each TMDb film series with at least `minimum` (default 2) owned films. Turning it on or off also turns every film series collection on or off; the next run adds new series.'),
       streamingCountry: z.string().optional().describe('Two-letter country code (US, GB, CA…) whose streaming services the streaming collections (Netflix Movies and so on) count.'),
-      posterOverlays: z.object({ status: z.boolean().optional(), imdbTop250Ribbon: z.boolean().optional() }).optional().describe('Poster overlays: Kometa\'s status badge on shows (AIRING, RETURNING, CANCELED, ENDED) and its IMDb Top 250 ribbon. Runs change posters only while dry run is off; apply_poster_overlays does it now.'),
+      posterOverlays: z.object({
+        status: z.boolean().optional(), imdbTop250Ribbon: z.boolean().optional(),
+        librariesWithout: z.array(z.string()).nullable().optional().describe('Library ids (from get_settings) whose titles get no overlays; null for the default, every kids\' library.'),
+      }).optional().describe('Poster overlays: Kometa\'s status badge on shows (AIRING, RETURNING, CANCELED, ENDED) and its IMDb Top 250 ribbon. Kids\' libraries get none by default. Runs change posters only while dry run is off; apply_poster_overlays does it now.'),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   }, async (a) => {
@@ -426,7 +446,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
         movieLibraryIds: libraryIds(a.filmLibraries, 'movies'), showLibraryIds: libraryIds(a.tvLibraries, 'tvshows'),
         homeRows: a.homeRows ? { enabled: a.homeRows.enabled, orderIndex: a.homeRows.position, viewMode: a.homeRows.view } : undefined,
         neighbours: a.otherToolsSchedules, streamingRegion: a.streamingCountry,
-        overlays: a.posterOverlays ? { status: a.posterOverlays.status, imdbTop250: a.posterOverlays.imdbTop250Ribbon } : undefined,
+        overlays: a.posterOverlays ? { status: a.posterOverlays.status, imdbTop250: a.posterOverlays.imdbTop250Ribbon, skipLibraryIds: a.posterOverlays.librariesWithout } : undefined,
       });
       if (a.filmSeries) setFilmSeries(app, a.filmSeries.enabled, a.filmSeries.minimum);
       if (r.timezoneChanged) opts.restartScheduler?.();
@@ -450,6 +470,22 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       log.info(`Claude access: schedule for ${job} changed via token “${token.name}”`);
       const row = app.db.select().from(jobSchedule).where(eq(jobSchedule.job, job)).get()!;
       return ok(`Saved. ${job}: ${row.cron}, ${row.enabled ? 'on' : 'off'}.`);
+    } catch (e) {
+      if (e instanceof SettingsError) return fail(e.message);
+      throw e;
+    }
+  });
+
+  server.registerTool('set_family_enabled', {
+    title: 'Turn a family of collections on or off',
+    description: 'All on / All off for one family of ready-made collections, as the buttons on the Collections page do. Streaming services: turning on picks only the services offered in the country set in Settings, and leaves any already on. Film series: also turns the film series setting on or off. Turning a family off means the next run removes its box sets (through Review unless deleting is set to auto and dry run is off). Confirm with the user first.',
+    inputSchema: { family: z.enum(PRESET_FAMILIES as [PresetFamily, ...PresetFamily[]]).describe('seasonal, holiday_episodes, basic (New and recent), film_series, universe, show_franchise, imdb_chart or streaming.'), on: z.boolean() },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  }, async ({ family, on }) => {
+    try {
+      const r = setFamilyEnabled(app, family, on);
+      log.info(`Claude access: family ${family} turned ${on ? 'on' : 'off'} (${r.changed} changed) via token “${token.name}”`);
+      return ok(r.message);
     } catch (e) {
       if (e instanceof SettingsError) return fail(e.message);
       throw e;

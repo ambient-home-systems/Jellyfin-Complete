@@ -73,14 +73,37 @@ export class ArrClient {
     return { ids, monitoredNoFile };
   }
 
-  /** Radarr only: when each film was added to Radarr, by "tmdb:<id>" and "imdb:<id>" (ADR-038). */
-  async addedDates(): Promise<Map<string, number>> {
+  /**
+   * Radarr only: when each film first arrived, by "tmdb:<id>" and "imdb:<id>" (ADR-038): the date of its first import
+   * in Radarr's history (a download, or an existing folder imported), which upgrades don't move. A film with a file but
+   * no import in the history counts from when it was added to Radarr.
+   */
+  async arrivals(): Promise<Map<string, number>> {
+    type Movie = { id: number; tmdbId?: number; imdbId?: string; added?: string; hasFile?: boolean };
+    const movies = await this.get<Movie[]>('/movie');
+    const firstImport = new Map<number, number>();
+    // 3: downloadFolderImported, 7: movieFolderImported. Asked for one type at a time (older Radarr takes one).
+    for (const [type, name] of [[3, 'downloadFolderImported'], [7, 'movieFolderImported']] as const) {
+      for (let page = 1; page <= 200; page++) {
+        const r = await this.get<{ totalRecords?: number; records?: { movieId?: number; date?: string; eventType?: string | number }[] }>(
+          `/history?page=${page}&pageSize=1000&sortKey=date&sortDirection=ascending&eventType=${type}`);
+        const records = r.records ?? [];
+        for (const h of records) {
+          if (h.eventType !== undefined && h.eventType !== name && h.eventType !== type) continue;
+          const at = h.date ? Date.parse(h.date) : NaN;
+          if (!h.movieId || !Number.isFinite(at) || at <= 0) continue;
+          if (at < (firstImport.get(h.movieId) ?? Infinity)) firstImport.set(h.movieId, at);
+        }
+        if (!records.length || page * 1000 >= (r.totalRecords ?? 0)) break;
+      }
+    }
     const out = new Map<string, number>();
-    for (const r of await this.get<{ tmdbId?: number; imdbId?: string; added?: string }[]>('/movie')) {
-      const at = r.added ? Date.parse(r.added) : NaN;
-      if (!Number.isFinite(at) || at <= 0) continue; // Radarr reports 0001-01-01 for unknown
-      if (r.tmdbId) out.set(`tmdb:${r.tmdbId}`, at);
-      if (r.imdbId) out.set(`imdb:${r.imdbId}`, at);
+    for (const m of movies) {
+      const added = m.added ? Date.parse(m.added) : NaN; // Radarr reports 0001-01-01 for unknown
+      const at = firstImport.get(m.id) ?? (m.hasFile && Number.isFinite(added) && added > 0 ? added : undefined);
+      if (at === undefined) continue;
+      if (m.tmdbId) out.set(`tmdb:${m.tmdbId}`, at);
+      if (m.imdbId) out.set(`imdb:${m.imdbId}`, at);
     }
     return out;
   }

@@ -11,7 +11,7 @@ import { createContext } from '../src/app-context.js';
 import { readConfig } from '../src/config.js';
 import { runPipeline } from '../src/pipeline/run.js';
 import { definition, healthFinding, mediaCheck } from '../src/db/schema.js';
-import { claimedTitle, dismissFinding, healthRows, HEALTH_LIMITS, runtimeVerdict, titleVerdict } from '../src/library/health.js';
+import { claimedTitle, dismissFinding, healthRows, HEALTH_LIMITS, lengthVerdicts, runtimeVerdict, titleVerdict } from '../src/library/health.js';
 import { dashboardModel } from '../src/web/model.js';
 import { Dashboard } from '../src/web/pages/dashboard.js';
 import { FakeJellyfin, FAKE_URL } from './fakes/jellyfin.js';
@@ -50,6 +50,50 @@ describe('the rules', () => {
     expect(titleVerdict(['English', 'Stereo', 'Commentary (2019)'], { names: ['Heat'], year: 1995 })).toBeNull();
     // Episodes are checked against the show's name too.
     expect(titleVerdict(['Teenage.Mutant.Ninja.Turtles.1987.S02E01'], { names: ['Return of the Shredder', 'Teenage Mutant Ninja Turtles'], year: null })).toBeNull();
+  });
+});
+
+describe('episode lengths: the season’s median when TMDb lists the TV slot', () => {
+  // One season: episode files and TMDb runtimes in minutes, by episode number.
+  const season = (show: string, s: number, files: Record<number, number>, tmdb: number | Record<number, number> | null, ends: Record<number, number> = {}) => {
+    const rows = Object.keys(files).map((n) => ({ jfId: `${show}-${s}-${n}`, kind: 'episode', seriesJfId: show, season: s, episode: Number(n), episodeEnd: ends[Number(n)] ?? null }));
+    const durations = new Map(rows.map((r) => [r.jfId, files[r.episode]!]));
+    const tm = new Map<string, number>();
+    if (tmdb !== null) for (const r of rows) tm.set(r.jfId, typeof tmdb === 'number' ? tmdb : tmdb[r.episode]!);
+    return { rows, durations, tm };
+  };
+  const flagged = (x: ReturnType<typeof season>) => Object.fromEntries([...lengthVerdicts(x.rows, x.durations, x.tm)].filter(([, v]) => v).map(([k, v]) => [k, v]));
+  const eight = (len: number, odd: Record<number, number> = {}) => Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].map((n) => [n, odd[n] ?? len]));
+
+  it('doesn’t flag a whole season TMDb lists at the slot length (Dirty Jobs 42 vs 60, Scorpion 41 vs 59)', () => {
+    expect(flagged(season('dirty-jobs', 1, eight(42), 60))).toEqual({});
+    expect(flagged(season('scorpion', 2, eight(41), 59))).toEqual({});
+  });
+
+  it('still catches an episode with the ads left in (9-1-1 S3E3: 57 against 43), whether TMDb is right or lists 60', () => {
+    expect(flagged(season('911', 3, eight(43, { 3: 57 }), 60))).toEqual({ '911-3-3': 'The file runs 57 min; this season’s episodes typically run 43 min.' });
+    expect(flagged(season('911', 3, eight(43, { 3: 57 }), 43))).toEqual({ '911-3-3': 'The file runs 57 min; TMDb says 43 min.' });
+  });
+
+  it('catches two episodes in one file (Last Man Standing S7E13: 43 against 21), and says whether the next has its own file', () => {
+    expect(flagged(season('lms', 7, { 11: 21, 12: 21, 13: 43, 14: 21, 15: 21 }, 30))).toEqual({
+      'lms-7-13': 'The file runs 43 min; this season’s episodes typically run 21 min. It may contain two episodes; E14 also has its own file, so the second half may be something else.',
+    });
+    expect(flagged(season('lms', 7, { 11: 21, 12: 21, 13: 43, 15: 21 }, 30))['lms-7-13']).toMatch(/It may contain two episodes \(E14 has no file of its own\)\.$/);
+    // A file Jellyfin knows holds E13–E14 is expected to be twice as long.
+    expect(flagged(season('lms', 7, { 11: 21, 12: 21, 13: 43, 15: 21 }, 30, { 13: 14 }))).toEqual({});
+  });
+
+  it('catches a combined crossover (FBI S2E18: 84 minutes)', () => {
+    expect(flagged(season('fbi', 2, eight(43, { 8: 84 }), 60))['fbi-2-8']).toMatch(/^The file runs 1 h 24 min; this season’s episodes typically run 43 min\./);
+  });
+
+  it('uses the median when TMDb has no runtimes, and the show’s median for a season with too few files', () => {
+    expect(flagged(season('nordic', 1, eight(52, { 5: 95 }), null))['nordic-1-5']).toMatch(/typically run 52 min/);
+    const a = season('mini', 1, eight(42), 60);
+    const b = season('mini', 2, { 1: 42, 2: 70 }, 60);
+    const both = { rows: [...a.rows, ...b.rows], durations: new Map([...a.durations, ...b.durations]), tm: new Map([...a.tm, ...b.tm]) };
+    expect(flagged(both)).toEqual({ 'mini-2-2': 'The file runs 1 h 10 min; this show’s episodes typically run 42 min.' });
   });
 });
 
@@ -153,6 +197,37 @@ describe('Library health', () => {
     await run(app);
     expect(app.db.select().from(healthFinding).all()).toEqual([]);
     expect(app.db.select().from(mediaCheck).all()).toEqual([]); // no file was even probed
+  });
+});
+
+describe('marking several findings fine', () => {
+  it('marks ticked findings, or every open finding for a show’s episodes, from the page', async () => {
+    const t = setup();
+    await t.web.request('/setup', form({ url: FAKE_URL, apiKey: t.fake.apiKey, setupCode: t.app.setupCode ?? '' }));
+    t.fake.add({ Id: 's-long', Name: 'Long Show', Type: 'Series', ParentId: 'lib-shows', ProviderIds: {} } as never);
+    // TMDb isn't connected, so the season's median is the reference: E4–E6 are twice as long as E1–E3.
+    for (const [n, min] of [[1, 22], [2, 22], [3, 22], [4, 60], [5, 60], [6, 61], [7, 22]] as const) {
+      t.fake.add({ Id: `e-long-${n}`, Name: `Episode ${n}`, Type: 'Episode', SeriesId: 's-long', ParentIndexNumber: 1, IndexNumber: n, DateCreated: '2026-11-01T00:00:00Z', MediaSources: [{ RunTimeTicks: min * TICKS_PER_MIN, Path: `/tv/long/S01E0${n}.mkv`, MediaStreams: [{ Type: 'Video' }] }] } as never);
+    }
+    t.fake.add({ Id: 'm-odd', Name: 'Odd Film', Type: 'Movie', ParentId: 'lib-movies', ProductionYear: 2020, DateCreated: '2026-11-01T00:00:00Z', MediaSources: [{ RunTimeTicks: 90 * TICKS_PER_MIN, Path: '/movies/odd.mkv', MediaStreams: [{ Type: 'Video', Title: 'Something Else (1999)' }] }] } as never);
+    await runPipeline(t.app, { job: 'manual', trigger: 'manual', index: true });
+    expect(healthRows(t.app).map((r) => `${r.jfId} ${r.kind}`).sort()).toEqual(['e-long-4 runtime', 'e-long-5 runtime', 'e-long-6 runtime', 'm-odd title']);
+    const { cookie } = await signIn(t.web);
+    const csrf = await csrfOf(t.web, cookie, '/health');
+    const page = await (await t.web.request('/health', { headers: { cookie } })).text();
+    expect(page).toContain('Mark selected fine');
+    expect(page).toMatch(/<option value="s-long">Long Show \(3\)<\/option>/);
+    expect(page).toContain('form="bulk-fine" name="sel" value="e-long-4|runtime"');
+    const post = (body: Record<string, string | string[]>) => {
+      const b = new URLSearchParams({ _csrf: csrf });
+      for (const [k, v] of Object.entries(body)) for (const x of ([] as string[]).concat(v)) b.append(k, x);
+      return t.web.request('/health/dismiss-many', { method: 'POST', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: b.toString() });
+    };
+    expect(flash(await post({ what: 'selected' }))).toContain('Tick the findings');
+    expect(flash(await post({ what: 'selected', sel: ['e-long-4|runtime', 'm-odd|title'] }))).toContain('2 findings marked as fine');
+    expect(flash(await post({ what: 'series', series: 's-long' }))).toContain('2 findings marked as fine'); // E5 and E6 were left
+    expect(healthRows(t.app)).toEqual([]);
+    expect(healthRows(t.app, { dismissed: true }).every((r) => r.dismissedBy === 'admin')).toBe(true);
   });
 });
 

@@ -4,7 +4,10 @@ import { eq } from 'drizzle-orm';
 import { Cron } from 'croner';
 import type { AppContext } from '../app-context.js';
 import { definition, jobSchedule, type ActionType } from '../db/schema.js';
-import { loadDefinition } from '../domain/definitions.js';
+import { loadDefinition, loadDefinitions } from '../domain/definitions.js';
+import { familyOf, FAMILY_LABEL, PRESET_FAMILIES, type PresetFamily } from '../presets/index.js';
+import { availableIn, serviceOfPreset } from '../presets/streaming.js';
+import { setFilmSeries } from '../pipeline/film-series.js';
 import type { Mode, Settings } from '../settings.js';
 import { librariesModel } from './model.js';
 
@@ -126,6 +129,31 @@ export function setSchedule(app: AppContext, job: string, change: { cron?: strin
 }
 
 /** Turn a collection on or off; returns a message for people. Throws SettingsError if there's no such collection. */
+/**
+ * All on / All off for a family of ready-made collections. Streaming's All on turns on only the services offered in
+ * the country set in Settings, and leaves any service already on as it is; film series also follow the film series
+ * setting. Your own collections aren't a family.
+ */
+export function setFamilyEnabled(app: AppContext, family: string, on: boolean): { family: PresetFamily; changed: number; message: string } {
+  if (!(PRESET_FAMILIES as string[]).includes(family)) throw new SettingsError(`No family called “${family}”. Families: ${PRESET_FAMILIES.join(', ')}.`);
+  const fam = family as PresetFamily;
+  const region = app.settings().streaming.region;
+  const defs = loadDefinitions(app.db).filter((d) => d.presetKey && familyOf(d.presetKey) === fam);
+  let changed = 0;
+  for (const d of defs) {
+    const service = fam === 'streaming' ? serviceOfPreset(d.presetKey) : undefined;
+    if (on && service && !availableIn(service, region)) continue;
+    if (on !== d.enabled) { app.db.update(definition).set({ enabled: on, updatedAt: Date.now() }).where(eq(definition.id, d.id)).run(); changed++; }
+  }
+  const series = fam === 'film_series' && app.settings().filmSeries.enabled !== on;
+  if (series) setFilmSeries(app, on);
+  const label = FAMILY_LABEL[fam];
+  const message = changed ? `${label}: ${changed} turned ${on ? 'on' : 'off'}. The next run ${on ? 'plans them' : 'removes their box sets'}.`
+    : series ? `${label}: film series turned ${on ? 'on' : 'off'}. The next run ${on ? 'finds them' : 'removes their box sets'}.`
+    : `${label}: nothing to change.`;
+  return { family: fam, changed, message };
+}
+
 export function setCollectionEnabled(app: AppContext, id: number, on: boolean): string {
   const def = loadDefinition(app.db, id);
   if (!def) throw new SettingsError(`No collection with id ${id}.`);

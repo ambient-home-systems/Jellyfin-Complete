@@ -357,6 +357,7 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - A parity report per collection: Plex count vs Jellyfin count, with the differences listed.
   - Baselines come from `spikes/03`.
 - **Consequences.** Exact parity, for as long as Plex and Kometa keep running. Optional per collection.
+- **Name mapping (0.16.0).** Kometa names some collections once per Plex library ("IMDb Top 250" in a films library and again in a TV library; "IMDb Popular", "IMDb Lowest Rated", "Newly Released", "New Episodes"), where this app names the films and shows versions apart ("IMDb Top 250 Movies"). The comparison now matches those by family and kind: Kometa's name in a library of the right type. Everything else matches by its own name or an older one (`plexCounterpart`).
 
 ### ADR-025 Home-screen rows: Accepted (Phase 3)
 - **Context.** Home Screen Sections registers sections in-process. Its HTTP registration still needs an endpoint inside Jellyfin. IAmParadox27's **Collection Sections** plugin already shows "a row per box set", configured by box set name.
@@ -591,6 +592,7 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - **A title missing from every index for over a week that comes back** counts as newly added (deleted, then downloaded again). Missing only while the app wasn't running doesn't count.
   - **Recently Added Shows** goes by the newest episode's first-arrival date. A show with no episodes uses its own date.
 - **Consequences.** Upgrades no longer count as new, for films or episodes. When this first runs, a film added to Radarr before it downloaded in the last 30 days may be missed until it ages out.
+- **Amended in 0.16.0: Radarr's first import, on every run.** On a real library, Recently Added Movies held 153 films, mostly upgrades: Radarr hadn't been connected when films were first remembered, so their upgrade dates stuck. Now, while Radarr is connected, a film it knows arrived when Radarr **first imported** it (`/history`, `downloadFolderImported` and `movieFolderImported`, earliest per film), or Jellyfin's date for the current file if that's earlier. This is worked out on every run, so nothing from an earlier pass can stick. Upgrades are later imports, so they never move it. A long-wanted film counts from its download, which is why the import date is used rather than Radarr's `added` date you suggested. A film with a file but no import in the history (history cleared, or added with files already in place) uses `added`. Films Radarr doesn't know, and episodes, keep the remembered first-seen date and the came-back rule.
 
 ### ADR-039 Poster overlays: Decided (13 Nov)
 - **Context.** Last on your list of Kometa gaps: badges on posters, keeping the originals.
@@ -616,6 +618,7 @@ Each entry is a short ADR: context, options, recommendation, consequences.
 - **Consequences.**
   - `/config` must be backed up with `overlays/originals`: those files are the only copies of the original posters until the overlays come off.
   - Kometa's other overlays (resolution, audio, ratings, streaming logos…) can be added on the same machinery.
+- **Kids' libraries (0.16.0).** At your request, kids' libraries get no overlays by default: a CANCELED badge or a ribbon isn't for a children's shelf. A library counts as a kids' library when its name says so (Kids, Children's, Family, Cartoons, Disney, Pixar, Animated…) or at least 80% of its rated titles (five or more) have children's ratings (G, PG, TV-Y, TV-Y7, TV-G, U). Settings → Poster overlays lists the libraries collections draw from, with the kids' ones marked, to tick or untick. The choice is stored as the libraries to skip (`overlays.skipLibraryIds`), or null for the default. Unticking a library takes its overlays off on the next update. Box sets never get overlays.
 
 ### ADR-040 Box set identity and artwork: Decided (13 Nov)
 - **Context: an incident on your server.** Seven managed box sets showed another TMDb collection's artwork. Two were harmful on a children's server: "Inside Out" had an adult collection's nude poster and backdrop, and "9-1-1" an erotic "9½ Weeks" backdrop. Your experiments established:
@@ -678,6 +681,12 @@ Each entry is a short ADR: context, options, recommendation, consequences.
     - "Library health" sits in the menu, with a count of files needing review.
     - The page is a dashboard: needs review (by length or by title tag), reviewed, and how much of the library has been checked (with how many could be compared with a TMDb runtime).
     - A by-library table, the files needing review, and the reviewed ones, with who marked each fine and when. **Review again** puts one back.
+- **Episode lengths, amended in 0.16.0.** On a real library, 136 of the first 140 findings were false alarms. TMDb lists some networks' episodes at the TV slot length, ads included: *Dirty Jobs* at 60 minutes for 42-minute files, *Scorpion* at 59 for 41.
+  - **A season off as a whole uses its own median.** When a season's typical (median) file length is more than 4 minutes or 10% from TMDb's typical runtime, or TMDb has fewer than three runtimes for it, its episodes are measured against the season's median file length instead. They're flagged beyond the same 12 minutes or 15%. A season with fewer than three files uses the show's median.
+  - **Still caught**, from the same library: an episode with the TV commercials left in (*9-1-1* S3E3, 57 minutes against 43), two episodes in one file (*Last Man Standing* S7E13, 43 against 21), a combined crossover (*FBI* S2E18, 84 minutes).
+  - **About twice the typical length** (1.7 to 2.4 times): the finding says the file may contain two episodes, and whether the next episode also has its own file, in which case the second half may be something else.
+  - **Multi-episode files:** a file Jellyfin knows spans several episodes (`IndexNumberEnd`, stored as `episode_end`, migration 0010) is expected to be that many times as long.
+- **Several at once (0.16.0).** Approving 138 findings took 138 calls. The page has checkboxes with **Mark selected fine**, and **Mark all for this show fine**. `mark_library_health_fine` takes `ids` (optionally one `kind`) or a `seriesId`. `get_status` gives a Library health summary: open findings by kind, files checked and left to check.
 
 ### ADR-042 Collection posters: Decided (13 Nov)
 - **Context.** Since ADR-040 the app supplies the only image a managed box set carries. Collections of your own had no poster setting, so a poster added in Jellyfin was removed; you asked for a poster field.

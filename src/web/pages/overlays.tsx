@@ -13,17 +13,30 @@ export type OverlaysModel = {
   toChange: number;
   running: boolean;
   samples: { id: string; name: string; badges: string }[];
+  /** The libraries collections draw from, and whether each gets overlays (kids' ones don't by default). */
+  libraries: { id: string; name: string; kids: boolean; on: boolean }[];
+  /** True while the default (no overlays in kids' libraries) applies. */
+  libraryDefault: boolean;
 };
 
 export const OverlaysPanel: FC<{ m: OverlaysModel; csrf: string }> = ({ m, csrf }) => (
   <>
     <form method="post" action="/settings/overlays" class="form">
       <Csrf token={csrf} />
+      <input type="hidden" name="libs" value="1" />
       <label class="check"><input type="checkbox" name="status" value="1" checked={m.status} /> <span><b>Status on shows:</b> AIRING (an episode in the last 14 days), RETURNING, CANCELED or ENDED, top left</span></label>
       <label class="check"><input type="checkbox" name="imdbTop250" value="1" checked={m.imdbTop250} /> <span><b>IMDb Top 250 ribbon</b> on films and shows in IMDb’s Top 250, bottom right</span></label>
+      {m.libraries.length ? (
+        <fieldset class="plain">
+          <legend>Libraries with overlays</legend>
+          {m.libraries.map((l) => (
+            <label class="check"><input type="checkbox" name="lib" value={l.id} checked={l.on} /> <span>{l.name}{l.kids ? <span class="faint"> · kids’ library{m.libraryDefault ? ', off by default' : ''}</span> : null}</span></label>
+          ))}
+        </fieldset>
+      ) : null}
       <p class="hint">
         Kometa’s designs, drawn on a copy of each poster at its own size. The original is kept in <code>/config/overlays/originals</code> and put back when you turn a badge off or remove them all; if Jellyfin gets a new poster, the badges go on the new one.
-        Only titles in the libraries above get overlays. {m.dryRun ? 'Dry run is on, so runs only check: use Apply now to change posters.' : 'Each run keeps them up to date.'}
+        Only titles in the libraries collections draw from, and ticked here, get overlays. A library counts as a kids’ library when its name says so or most of its titles have children’s ratings; those get none unless you tick them. Unticking a library takes its overlays off on the next update. {m.dryRun ? 'Dry run is on, so runs only check: use Apply now to change posters.' : 'Each run keeps them up to date.'}
       </p>
       <div class="actions-row"><button class="btn primary" type="submit">Save</button></div>
     </form>

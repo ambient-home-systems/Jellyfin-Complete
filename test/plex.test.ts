@@ -4,6 +4,7 @@ import { PlexClient } from '../src/clients/plex.js';
 import { parity } from '../src/domain/parity.js';
 import { LibraryIndex, type LibRow } from '../src/domain/matching.js';
 import { resolveSource } from '../src/sources/index.js';
+import { plexCounterpart } from '../src/presets/index.js';
 import { openDb } from '../src/db/index.js';
 import { fakePlex, PLEX } from './fakes/plex.js';
 
@@ -15,7 +16,8 @@ describe('Plex (read-only)', () => {
   it('lists collections in movie and show libraries, with items and their IDs', async () => {
     expect(await plex.version()).toBe('1.43.5');
     const colls = await plex.collections();
-    expect(colls).toEqual([{ ratingKey: '901', title: 'Thanksgiving Movies', titleSort: '!00_Thanksgiving Movies', section: 'Movies', sectionType: 'movie', childCount: 3 }]);
+    expect(colls[0]).toEqual({ ratingKey: '901', title: 'Thanksgiving Movies', titleSort: '!00_Thanksgiving Movies', section: 'Movies', sectionType: 'movie', childCount: 3 });
+    expect(colls.map((c) => `${c.title} (${c.sectionType})`)).toEqual(['Thanksgiving Movies (movie)', 'IMDb Top 250 (movie)', 'IMDb Top 250 (show)']);
     const items = await plex.items('901');
     expect(items[0]).toEqual({ title: 'Planes, Trains and Automobiles', year: 1987, type: 'movie', imdb: 'tt0093748', tmdb: '2609', tvdb: undefined });
   });
@@ -29,6 +31,18 @@ describe('Plex (read-only)', () => {
     expect(none).toMatchObject({ status: 'ok', items: [], meta: { found: false } });
     const off = await resolveSource({ ...ctx, plex: null }, { type: 'plex_collection', config: { name: 'X' } });
     expect(off.error).toMatch(/Plex isn’t connected/);
+  });
+
+  it('matches collections Kometa names once per Plex library by family and kind, not by name', async () => {
+    const ctx = { db: openDb(':memory:'), fetch: fakePlex, tmdb: null, plex, mdblistKey: null, imdbRoute: 'direct' as const };
+    const top = (key: string, name: string, target: string) => plexCounterpart({ name, presetKey: `imdb_chart:${key}`, target });
+    expect(top('top_movies', 'IMDb Top 250 Movies', 'movies')).toEqual({ names: ['IMDb Top 250'], section: 'movie' });
+    expect(top('popular_shows', 'IMDb Popular Shows', 'shows')).toEqual({ names: ['IMDb Popular'], section: 'show' });
+    expect(plexCounterpart({ name: 'New Episodes', presetKey: 'basic:episodes', target: 'episodes' })).toEqual({ names: ['New Episodes'], section: 'show' });
+    expect(plexCounterpart({ name: 'Thanksgiving Movies', presetKey: 'seasonal:thanksgiving', target: 'movies' }).names).toContain('Thanksgiving Movies');
+    const read = async (c: ReturnType<typeof plexCounterpart>) => (await resolveSource(ctx, { type: 'plex_collection', config: { name: c.names[0], names: c.names, section: c.section } })).items.map((i) => i.title);
+    expect(await read(top('top_movies', 'IMDb Top 250 Movies', 'movies'))).toEqual(['The Shawshank Redemption']);
+    expect(await read(top('top_shows', 'IMDb Top 250 Shows', 'shows'))).toEqual(['Breaking Bad']);
   });
 
   it('compares Plex with the plan and explains each difference', async () => {

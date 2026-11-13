@@ -50,6 +50,8 @@ export const libraryItem = sqliteTable(
     seriesJfId: text('series_jf_id'),
     season: integer('season'),
     episode: integer('episode'),
+    /** Episodes only: the last episode number in a file that holds several (Jellyfin's IndexNumberEnd, "S07E13-E14"). */
+    episodeEnd: integer('episode_end'),
     officialRating: text('official_rating'),
     genres: json<string[]>('genres').notNull().default([]),
     tags: json<string[]>('tags').notNull().default([]),

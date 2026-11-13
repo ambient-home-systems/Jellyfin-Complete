@@ -47,7 +47,7 @@ describe('basic presets vs Kometa v2.5.3 defaults/chart/basic.yml', () => {
 
 const RADARR = 'http://radarr.test:7878';
 
-function world(opts: { radarrAdded?: Record<number, number> } = {}) {
+function world(opts: { radarr?: Record<number, { added: number; imports?: number[] }> } = {}) {
   const fake = new FakeJellyfin();
   const film = (Id: string, Name: string, released: number | null, added: number, tmdb?: number) => fake.add({ Id, Name, Type: 'Movie', ParentId: 'lib-movies', ProductionYear: 2026, ...(released === null ? {} : { PremiereDate: daysAgo(released) }), DateCreated: daysAgo(added), ...(tmdb ? { ProviderIds: { Tmdb: String(tmdb) } } : {}) });
   film('m-new', 'Fresh Film', 10, 5); // released 10 days ago, added 5 days ago
@@ -62,7 +62,8 @@ function world(opts: { radarrAdded?: Record<number, number> } = {}) {
   ep('e-week', 2, 6); // the 7th day back, today counted
   ep('e-older', 1, 7);
   const radarr = new FakeArr('radarr', RADARR, 'rk', []);
-  radarr.library = Object.entries(opts.radarrAdded ?? {}).map(([tmdb, ago], i) => ({ id: i + 1, title: `Film ${tmdb}`, year: 2026, tmdbId: Number(tmdb), status: 'released', monitored: true, hasFile: true, added: daysAgo(ago) }));
+  radarr.library = Object.entries(opts.radarr ?? {}).map(([tmdb, r], i) => ({ id: i + 1, title: `Film ${tmdb}`, year: 2026, tmdbId: Number(tmdb), status: 'released', monitored: true, hasFile: true, added: daysAgo(r.added) }));
+  radarr.history = Object.values(opts.radarr ?? {}).flatMap((r, i) => (r.imports ?? []).map((ago) => ({ movieId: i + 1, date: daysAgo(ago), eventType: 'downloadFolderImported' as const })));
   const radarrFetch = radarr.fetch();
   const net: FetchLike = async (url, init) => {
     if (url.startsWith(RADARR)) return radarrFetch(url, init);
@@ -72,10 +73,11 @@ function world(opts: { radarrAdded?: Record<number, number> } = {}) {
   const app = createContext(config, { db: openDb(':memory:'), fetch: net, jellyfinFetch: fake.fetch() });
   app.updateSettings({ connections: { jellyfinUrl: FAKE_URL, plexUrl: '', radarrUrl: '', sonarrUrl: '' }, firstRunDone: true });
   app.secrets.set('jellyfin.apiKey', fake.apiKey);
-  if (opts.radarrAdded) {
+  const connectRadarr = () => {
     app.updateSettings({ connections: { jellyfinUrl: FAKE_URL, plexUrl: '', radarrUrl: RADARR, sonarrUrl: '' } });
     app.secrets.set('radarr.apiKey', 'rk');
-  }
+  };
+  if (opts.radarr) connectRadarr();
   app.db.update(definition).set({ enabled: false }).run();
   for (const p of PRESETS.filter((x) => x.family === 'basic')) app.db.update(definition).set({ enabled: true }).where(eq(definition.slug, p.definition.slug)).run();
   const def = (name: string) => app.db.select().from(definition).where(eq(definition.name, name)).get()!;
@@ -83,7 +85,7 @@ function world(opts: { radarrAdded?: Record<number, number> } = {}) {
     .filter((a) => a.type === 'collection.add_items' && a.status === 'proposed').map((a) => a.item!.name).sort();
   const box = (name: string) => fake.boxSets().find((b) => b.Name === name);
   const sourceTitles = (label: string, kind: string) => app.db.select().from(sourceResult).all().find((r) => r.label === label && r.items?.some((i) => i.kind === kind))?.items?.map((i) => i.title) ?? [];
-  return { fake, app, def, proposed, box, sourceTitles };
+  return { fake, app, def, proposed, box, sourceTitles, radarr, connectRadarr };
 }
 
 describe('New and recent collections', () => {
@@ -149,16 +151,37 @@ describe('Recently Added counts when a title first arrived (ADR-038)', () => {
     expect(app.db.select().from(libraryItem).where(eq(libraryItem.jfId, 'e-older')).get()!.firstAdded).toBe(Date.parse(daysAgo(7)));
   });
 
-  it('the first time, uses Radarr’s added date for films already there; after that, new arrivals count from when they arrive', async () => {
-    const { app, fake, sourceTitles } = world({ radarrAdded: { 555: 200, 556: 100 } });
-    fake.add({ Id: 'm-old-up', Name: 'Upgraded Before', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(2), ProviderIds: { Tmdb: '555' } });
+  it('with Radarr connected, a film arrived when Radarr first imported it: upgrades never make it new', async () => {
+    // 560: imported 300 days ago, upgraded today (a second import). 561: wanted for 100 days, downloaded today.
+    // 562: added with its file 50 days ago, no import in Radarr's history.
+    const { app, fake, sourceTitles, radarr } = world({ radarr: { 560: { added: 310, imports: [300, 0] }, 561: { added: 100, imports: [0] }, 562: { added: 50 } } });
+    fake.add({ Id: 'm-560', Name: 'Upgraded Today', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(0), ProviderIds: { Tmdb: '560' } });
+    fake.add({ Id: 'm-561', Name: 'Long Wanted', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(0), ProviderIds: { Tmdb: '561' } });
+    fake.add({ Id: 'm-562', Name: 'Added With File', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(1), ProviderIds: { Tmdb: '562' } });
     await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW });
-    expect(sourceTitles('Added in the last 30 days', 'movie')).not.toContain('Upgraded Before'); // in Radarr for 200 days
-    expect(sourceTitles('Added in the last 30 days', 'movie')).toContain('Fresh Film'); // not in Radarr: Jellyfin's date
-    // Wanted in Radarr for 100 days, downloaded today: it's new to the library.
-    fake.add({ Id: 'm-wanted', Name: 'Long Wanted', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(-1), ProviderIds: { Tmdb: '556' } });
+    const added = sourceTitles('Added in the last 30 days', 'movie');
+    expect(added).not.toContain('Upgraded Today');
+    expect(added).toContain('Long Wanted');
+    expect(added).not.toContain('Added With File');
+    expect(added).toContain('Fresh Film'); // not in Radarr: Jellyfin's date
+    expect(radarr.calls.filter((c) => c.path.startsWith('/history')).map((c) => c.path)).toEqual([
+      '/history?page=1&pageSize=1000&sortKey=date&sortDirection=ascending&eventType=3',
+      '/history?page=1&pageSize=1000&sortKey=date&sortDirection=ascending&eventType=7',
+    ]);
+  });
+
+  it('corrects films remembered before Radarr was connected (an upgrade then looked new)', async () => {
+    const { app, fake, sourceTitles, radarr, connectRadarr } = world();
+    // The file was replaced 2 days ago, before Radarr was connected: Jellyfin's date is all there is.
+    fake.add({ Id: 'm-up', Name: 'Replaced Early', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(2), ProviderIds: { Tmdb: '570' } });
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW });
+    expect(sourceTitles('Added in the last 30 days', 'movie')).toContain('Replaced Early');
+    radarr.library = [{ id: 1, title: 'Replaced Early', year: 2020, tmdbId: 570, status: 'released', monitored: true, hasFile: true, added: daysAgo(400) }];
+    radarr.history = [{ movieId: 1, date: daysAgo(390), eventType: 'downloadFolderImported' }, { movieId: 1, date: daysAgo(2), eventType: 'downloadFolderImported' }];
+    connectRadarr();
     await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + DAY });
-    expect(sourceTitles('Added in the last 30 days', 'movie')).toContain('Long Wanted');
+    expect(sourceTitles('Added in the last 30 days', 'movie')).not.toContain('Replaced Early');
+    expect(app.db.select().from(libraryItem).where(eq(libraryItem.jfId, 'm-up')).get()!.firstAdded).toBe(Date.parse(daysAgo(390)));
   });
 
   it('a title gone for over a week that comes back counts as newly added', async () => {

@@ -34,6 +34,11 @@ const daysAgo = (n: number) => new Date(today.getTime() - n * 86_400_000).toISOS
 fake.add({ Id: 's-bluey', Name: 'Bluey', Type: 'Series', ParentId: 'lib-shows', Status: 'Continuing', ProviderIds: { Imdb: 'tt7678620' } } as Parameters<typeof fake.add>[0]);
 fake.add({ Id: 'e-bluey', Name: 'Ghostbasket', Type: 'Episode', SeriesId: 's-bluey', ParentIndexNumber: 3, IndexNumber: 9, PremiereDate: daysAgo(4) });
 fake.add({ Id: 's-bb', Name: 'Breaking Bad', Type: 'Series', ParentId: 'lib-shows', Status: 'Ended', ProviderIds: { Imdb: 'tt0903747' } } as Parameters<typeof fake.add>[0]);
+// A sitcom season where one file holds two episodes (Library health's median rule, ADR-041).
+fake.add({ Id: 's-lms', Name: 'Last Man Standing', Type: 'Series', ParentId: 'lib-shows', Status: 'Ended' } as Parameters<typeof fake.add>[0]);
+for (const [n, min] of [[11, 21], [12, 21], [13, 43], [14, 21], [15, 21]] as const) {
+  fake.add({ Id: `e-lms-${n}`, Name: `Episode ${n}`, Type: 'Episode', SeriesId: 's-lms', ParentIndexNumber: 7, IndexNumber: n, DateCreated: daysAgo(40), MediaSources: [{ RunTimeTicks: min * 600_000_000, Path: `/tv/Last Man Standing/Season 07/S07E${n}.mkv`, MediaStreams: [{ Type: 'Video' }] }] } as Parameters<typeof fake.add>[0]);
+}
 fake.add({ Id: 's-glee', Name: 'Glee', Type: 'Series', ParentId: 'lib-shows', Status: 'Continuing', ProviderIds: { Imdb: 'tt1327801' } } as Parameters<typeof fake.add>[0]);
 const colours: [string, string, string][] = [['s-bluey', '#2a6fdb', '#8fd3ff'], ['s-bb', '#1f3d2b', '#a7c957'], ['s-glee', '#c1121f', '#fdf0d5']];
 for (const [id, a, b] of colours) {

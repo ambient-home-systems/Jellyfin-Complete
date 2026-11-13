@@ -35,7 +35,11 @@ export type Settings = {
   /** Streaming-service collections (ADR-036): the country whose services count, as a two-letter code. */
   streaming: { region: string };
   /** Poster overlays (ADR-039): Kometa's status badges on shows, and its IMDb Top 250 ribbon. Off until turned on. */
-  overlays: { status: boolean; imdbTop250: boolean };
+  overlays: {
+    status: boolean; imdbTop250: boolean;
+    /** Libraries whose titles get no overlays. Null: the default, every kids' library (overlays/badges.ts kidsLibraries). */
+    skipLibraryIds?: string[] | null;
+  };
   /** Library health (ADR-041): flag files whose length or title tags don't match the title. Read-only; on by default. */
   health: { enabled: boolean };
   /** The Jellyfin version seen at the last run (Phase 4 compatibility). */
@@ -81,7 +85,7 @@ export function defaultSettings(timezone: string): Settings {
     onboarding: { done: [], finished: false },
     filmSeries: { enabled: false, minimum: 2 },
     streaming: { region: 'US' },
-    overlays: { status: false, imdbTop250: false },
+    overlays: { status: false, imdbTop250: false, skipLibraryIds: null },
     health: { enabled: true },
     server: { version: null, seenAt: null },
   };

@@ -1,7 +1,10 @@
 // Library health (ADR-041): flag films and episodes whose file may not be what it says, from a real incident where a
 // kids' episode held an adult drama and three films held other films. Read-only: findings are shown, never acted on.
 // - Length: the file's own duration (as Jellyfin probed it) against TMDb's runtime, beyond 12 minutes or 15%,
-//   whichever is larger.
+//   whichever is larger. For episodes, when a season's files as a whole are off from TMDb (some networks list the TV
+//   slot, ads included: Dirty Jobs at 60 minutes for 42-minute files), or TMDb has no runtimes, the season's median
+//   file length is the reference instead, so only the odd ones out are flagged (an episode with the ads left in, two
+//   episodes in one file, a double-length crossover).
 // - Title tags: a stream's title tag naming another title ("Bewitched (2005)" on Black Panther: Wakanda Forever).
 //   Jellyfin doesn't expose a file's container-level title, only its streams', so those are what's read.
 // Files are probed once (again when the file changes), a few thousand a run; TMDb runtimes are cached for months.
@@ -72,6 +75,88 @@ export function titleVerdict(tags: string[], item: { names: string[]; year: numb
   return null;
 }
 
+const median = (xs: number[]) => {
+  const v = [...xs].sort((a, b) => a - b);
+  const n = v.length;
+  return n % 2 ? v[(n - 1) / 2]! : (v[n / 2 - 1]! + v[n / 2]!) / 2;
+};
+/** How many episodes a file holds: one, or several for a file Jellyfin knows spans them ("S07E13-E14"). */
+const parts = (r: { episode: number | null; episodeEnd: number | null }) => (r.episode !== null && r.episodeEnd !== null && r.episodeEnd > r.episode ? r.episodeEnd - r.episode + 1 : 1);
+/** When a season's typical file length is this far from TMDb's typical runtime, TMDb's runtimes aren't used for it. */
+export const SEASON_OFF = { minutes: 4, fraction: 0.1 };
+/** A group needs this many episode files before its median means anything. */
+export const MEDIAN_MIN_EPISODES = 3;
+
+type LenRow = { jfId: string; kind: string; seriesJfId: string | null; season: number | null; episode: number | null; episodeEnd: number | null };
+
+/**
+ * Each film's and episode's length problem in words (null if none), for the titles that have something to compare
+ * with. Films: TMDb's runtime. Episodes: TMDb's, unless the season's files as a whole are off from TMDb's runtimes, or
+ * TMDb has none; then the season's median file length (the show's, for a season with fewer than three files).
+ */
+export function lengthVerdicts(rows: LenRow[], durations: Map<string, number>, tmdbMin: Map<string, number>): Map<string, string | null> {
+  const out = new Map<string, string | null>();
+  const eps = rows.filter((r) => r.kind === 'episode' && r.seriesJfId && durations.get(r.jfId));
+  const groups = new Map<string, LenRow[]>();
+  const add = (k: string, r: LenRow) => (groups.get(k) ?? groups.set(k, []).get(k)!).push(r);
+  for (const r of eps) { add(`season|${r.seriesJfId}|${r.season}`, r); add(`show|${r.seriesJfId}`, r); }
+  const unit = (r: LenRow) => durations.get(r.jfId)! / parts(r);
+  type Ref = { median: number; useMedian: boolean; scope: 'season' | 'show' };
+  const refs = new Map<string, Ref>();
+  const refOf = (key: string, scope: 'season' | 'show'): Ref | null => {
+    if (refs.has(key)) return refs.get(key)!;
+    const list = groups.get(key) ?? [];
+    if (list.length < MEDIAN_MIN_EPISODES) return null;
+    const m = median(list.map(unit));
+    const listed = list.filter((r) => tmdbMin.has(r.jfId));
+    // Off as a whole: the typical file length is more than 4 minutes or 10% from TMDb's typical runtime (a sitcom TMDb
+    // lists at 30 minutes runs 21). A single file is held to the looser 12 minutes or 15%.
+    const fm = median(listed.map(unit)), tm = median(listed.map((r) => tmdbMin.get(r.jfId)!));
+    const useMedian = listed.length < MEDIAN_MIN_EPISODES || Math.abs(fm - tm) > Math.max(SEASON_OFF.minutes, SEASON_OFF.fraction * tm);
+    const ref = { median: m, useMedian, scope };
+    refs.set(key, ref);
+    return ref;
+  };
+  const byNumber = new Map(eps.map((r) => [`${r.seriesJfId}|${r.season}|${r.episode}`, r]));
+  for (const r of rows) {
+    const file = durations.get(r.jfId);
+    if (!file) continue;
+    if (r.kind !== 'episode') {
+      const t = tmdbMin.get(r.jfId);
+      if (t) out.set(r.jfId, runtimeVerdict(file, t));
+      continue;
+    }
+    if (!r.seriesJfId) continue;
+    const ref = refOf(`season|${r.seriesJfId}|${r.season}`, 'season') ?? refOf(`show|${r.seriesJfId}`, 'show');
+    const t = tmdbMin.get(r.jfId);
+    let verdict: string | null;
+    let typical: number;
+    if (ref?.useMedian) {
+      typical = ref.median;
+      verdict = medianVerdict(file, ref.median * parts(r), ref.scope);
+    } else if (t) {
+      typical = t;
+      verdict = runtimeVerdict(file, t * parts(r));
+    } else continue;
+    // About twice the usual length: say it may hold two episodes, and whether the next one has its own file.
+    if (verdict && parts(r) === 1 && file / typical >= 1.7 && file / typical <= 2.4 && r.episode !== null) {
+      const next = r.episode + 1;
+      const own = byNumber.get(`${r.seriesJfId}|${r.season}|${next}`);
+      verdict += own ? ` It may contain two episodes; E${String(next).padStart(2, '0')} also has its own file, so the second half may be something else.` : ` It may contain two episodes (E${String(next).padStart(2, '0')} has no file of its own).`;
+    }
+    out.set(r.jfId, verdict);
+  }
+  return out;
+}
+
+/** An episode's length against its season's (or show's) median file length, beyond 12 minutes or 15%. */
+export function medianVerdict(fileMin: number, medianMin: number, scope: 'season' | 'show'): string | null {
+  if (!(fileMin > 0) || !(medianMin > 0)) return null;
+  const tolerance = Math.max(RUNTIME_TOLERANCE.minutes, RUNTIME_TOLERANCE.fraction * medianMin);
+  if (Math.abs(fileMin - medianMin) <= tolerance) return null;
+  return `The file runs ${fmtMin(fileMin)}; this ${scope}’s episodes typically run ${fmtMin(medianMin)}.`;
+}
+
 export type HealthStats = { probed: number; lookedUp: number; open: number; found: number; compared: number };
 
 /** Probe files not yet checked, look up runtimes, and record what disagrees. Never fails the run. */
@@ -128,15 +213,16 @@ export async function checkLibraryHealth(app: AppContext, opts: { now: number; s
     }
   }
   out.lookedUp = films + seasons;
-  out.compared = runtimeOf.size;
 
   // 3. Findings: what disagrees now. A dismissal lasts until the file changes; findings that no longer hold go.
+  const durations = new Map([...checks].filter(([, c]) => c.durationMin).map(([id, c]) => [id, c.durationMin!]));
+  const lengths = lengthVerdicts(rows, durations, runtimeOf);
+  out.compared = lengths.size;
   const now = new Map<string, { kind: 'runtime' | 'title'; detail: string; sig: string }>();
   for (const [jfId, c] of checks) {
     const r = byId.get(jfId);
     if (!r) continue;
-    const tmdbMin = runtimeOf.get(jfId);
-    const rt = c.durationMin && tmdbMin ? runtimeVerdict(c.durationMin, tmdbMin) : null;
+    const rt = lengths.get(jfId) ?? null;
     if (rt) now.set(`${jfId}|runtime`, { kind: 'runtime', detail: rt, sig: c.sig });
     const show = r.kind === 'episode' ? series.get(r.seriesJfId ?? '') : undefined;
     const names = [r.name, ...(show ? [show.name] : [])];
@@ -147,7 +233,7 @@ export async function checkLibraryHealth(app: AppContext, opts: { now: number; s
   for (const [key, f] of existing) {
     // Gone from the library, or no longer true (and not just waiting on a lookup): forget it.
     const jfId = key.split('|')[0]!;
-    if (!byId.has(jfId) || (!now.has(key) && (f.kind === 'title' || runtimeOf.has(jfId)))) {
+    if (!byId.has(jfId) || (!now.has(key) && (f.kind === 'title' || lengths.has(jfId)))) {
       app.db.delete(healthFinding).where(and(eq(healthFinding.jfId, f.jfId), eq(healthFinding.kind, f.kind))).run();
     }
   }
@@ -170,6 +256,8 @@ export async function checkLibraryHealth(app: AppContext, opts: { now: number; s
 export type HealthRow = {
   jfId: string; kind: 'runtime' | 'title'; detail: string; firstSeen: number; dismissedAt: number | null; dismissedBy: string | null;
   title: string; library: string | null; rating: string | null; path: string | null;
+  /** Episodes: their show's Jellyfin ID and name. */
+  seriesJfId: string | null; show: string | null;
 };
 
 /** Findings with what they're about, for the page, the Dashboard and Claude. */
@@ -192,6 +280,7 @@ export function healthRows(app: AppContext, opts: { dismissed?: boolean } = {}):
     return {
       jfId: f.jfId, kind: f.kind, detail: f.detail, firstSeen: f.firstSeen, dismissedAt: f.dismissedAt ?? null, dismissedBy: f.dismissedBy ?? null,
       title, library: libId ? libs.get(libId) ?? null : null, rating: r?.officialRating ?? show?.officialRating ?? null, path: checks.get(f.jfId)?.path ?? null,
+      seriesJfId: r?.kind === 'episode' ? r.seriesJfId ?? null : null, show: show?.name ?? null,
     };
   }).sort((a, b) => (opts.dismissed ? (b.dismissedAt ?? 0) - (a.dismissedAt ?? 0) : b.firstSeen - a.firstSeen) || a.title.localeCompare(b.title));
 }
@@ -200,6 +289,29 @@ export function healthRows(app: AppContext, opts: { dismissed?: boolean } = {}):
 export function dismissFinding(app: AppContext, jfId: string, kind: 'runtime' | 'title', by: string): boolean {
   const r = app.db.update(healthFinding).set({ dismissedAt: Date.now(), dismissedBy: by }).where(and(eq(healthFinding.jfId, jfId), eq(healthFinding.kind, kind))).run();
   return r.changes > 0;
+}
+
+/**
+ * Mark several findings fine at once: given findings (an item and, optionally, one kind), every open finding for the
+ * episodes of given shows, or both. Returns how many were marked.
+ */
+export function dismissFindings(app: AppContext, opts: { findings?: { jfId: string; kind?: 'runtime' | 'title' }[]; seriesIds?: string[] }, by: string): number {
+  const open = app.db.select().from(healthFinding).all().filter((f) => !f.dismissedAt);
+  const wanted = new Set<string>();
+  for (const f of opts.findings ?? []) for (const o of open) if (o.jfId === f.jfId && (!f.kind || o.kind === f.kind)) wanted.add(`${o.jfId}|${o.kind}`);
+  if (opts.seriesIds?.length) {
+    const eps = new Set(app.db.select({ id: libraryItem.jfId }).from(libraryItem).where(inArray(libraryItem.seriesJfId, opts.seriesIds)).all().map((r) => r.id));
+    for (const id of opts.seriesIds) eps.add(id);
+    for (const o of open) if (eps.has(o.jfId)) wanted.add(`${o.jfId}|${o.kind}`);
+  }
+  const at = Date.now();
+  app.db.transaction((tx) => {
+    for (const k of wanted) {
+      const [jfId, kind] = k.split('|') as [string, 'runtime' | 'title'];
+      tx.update(healthFinding).set({ dismissedAt: at, dismissedBy: by }).where(and(eq(healthFinding.jfId, jfId), eq(healthFinding.kind, kind))).run();
+    }
+  });
+  return wanted.size;
 }
 
 /** Put a finding marked fine back up for review. */

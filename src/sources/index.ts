@@ -242,7 +242,9 @@ export const ADAPTERS: Record<string, Adapter> = {
     label: (c) => `Plex collection ${c.name}`,
     async resolve(c, ctx) {
       if (!ctx.plex) throw new SourceError('Plex isn’t connected (Settings → Connections)', 'NO_KEY');
-      const found = await ctx.plex.findCollection(String(c.name));
+      // `names` (any of them) and `section` (films or TV libraries only) come from the Plex comparison's name mapping.
+      const names = Array.isArray(c.names) && c.names.length ? c.names.map(String) : [String(c.name)];
+      const found = (await ctx.plex.collections()).filter((x) => names.includes(x.title) && (!c.section || x.sectionType === c.section));
       if (!found.length) return { items: [], meta: { found: false } };
       const items: SourceItem[] = [];
       for (const coll of found) {

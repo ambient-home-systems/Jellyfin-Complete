@@ -2,10 +2,11 @@
 // to a better copy is often indexed as a new item), so Recently Added would show upgrades as new. After each index, the
 // earliest date seen for a title is kept by a stable key, and written to library_item.first_added for the sources.
 //
-// - The first time films are remembered, a film's Radarr "added" date is used when it's earlier: the library may
-//   already hold upgrades, and Radarr's date doesn't move with them. After that, only Jellyfin's dates count, so a film
-//   added to Radarr long before it downloaded still shows as new when it arrives.
-// - A title that was missing from every index for over a week and then comes back counts as newly added.
+// - While Radarr is connected, a film it knows arrived when Radarr first imported it (its history), which upgrades don't
+//   move; a film added to Radarr long before it downloaded counts from the download. This is worked out afresh on every
+//   pass, so it doesn't matter whether Radarr was connected the first time films were remembered.
+// - Otherwise the earliest date Jellyfin has shown for the title counts, and a title that was missing from every index
+//   for over a week and then comes back counts as newly added.
 import { eq, like, sql } from 'drizzle-orm';
 import type { DB } from '../db/index.js';
 import { libraryItem, titleAdded } from '../db/schema.js';
@@ -26,30 +27,36 @@ export function episodeKey(r: Pick<Row, 'jfId' | 'season' | 'episode'>, series: 
   return `episode:${s}:${r.season}:${r.episode}`;
 }
 
-/** True when no film has been remembered yet: the first pass, when Radarr's dates are worth asking for. */
+/** True when no film has been remembered yet. */
 export const needsSeeding = (db: DB): boolean => !db.select({ k: titleAdded.key }).from(titleAdded).where(like(titleAdded.key, 'movie:%')).limit(1).get();
 
 /**
- * Remember first-added dates after an index pass made at `indexedAt`. `radarrAdded` maps "tmdb:<id>" and "imdb:<id>"
- * to Radarr's added date; it's used only for films seen for the first time while seeding.
+ * Remember first-added dates after an index pass made at `indexedAt`. `radarrArrivals` maps "tmdb:<id>" and
+ * "imdb:<id>" to when Radarr first imported each film (ArrClient.arrivals); films it covers take that date.
  */
-export function rememberFirstAdded(db: DB, indexedAt: number, radarrAdded?: Map<string, number>): { remembered: number; seeded: boolean } {
+export function rememberFirstAdded(db: DB, indexedAt: number, radarrArrivals?: Map<string, number>): { remembered: number; seeded: boolean; fromRadarr: number } {
   const seeding = needsSeeding(db);
   // The latest complete index before this one: a title last seen before it was missing from at least one index.
   const previousIndex = db.select({ at: sql<number | null>`max(${titleAdded.lastSeen})` }).from(titleAdded).get()?.at ?? null;
   const rows = db.select().from(libraryItem).all();
   const series = new Map(rows.filter((r) => r.kind === 'series').map((r) => [r.jfId, r]));
   const known = new Map(db.select().from(titleAdded).all().map((t) => [t.key, t]));
-  let remembered = 0;
+  let remembered = 0, fromRadarr = 0;
   db.transaction((tx) => {
     for (const r of rows) {
       if (r.kind === 'series' || r.dateAdded === null) continue;
       const key = r.kind === 'movie' ? movieKey(r) : episodeKey(r, series.get(r.seriesJfId ?? ''));
       const prev = known.get(key);
+      const radarr = r.kind === 'movie' && radarrArrivals
+        ? Math.min(...[r.tmdb && radarrArrivals.get(`tmdb:${r.tmdb}`), r.imdb && radarrArrivals.get(`imdb:${r.imdb}`)].filter((x): x is number => typeof x === 'number'))
+        : Infinity;
       let first: number;
-      if (!prev) {
-        const radarr = seeding && r.kind === 'movie' && radarrAdded ? Math.min(...[r.tmdb && radarrAdded.get(`tmdb:${r.tmdb}`), r.imdb && radarrAdded.get(`imdb:${r.imdb}`)].filter((x): x is number => typeof x === 'number')) : Infinity;
-        first = Math.min(r.dateAdded, radarr);
+      if (Number.isFinite(radarr)) {
+        // Radarr's first import; Jellyfin's date only if it's earlier (the file was there before Radarr imported it).
+        first = Math.min(radarr, r.dateAdded);
+        fromRadarr++;
+      } else if (!prev) {
+        first = r.dateAdded;
       } else {
         const cameBack = prev.lastSeen < indexedAt - WEEK && previousIndex !== null && prev.lastSeen < previousIndex;
         first = cameBack ? r.dateAdded : Math.min(prev.firstAdded, r.dateAdded);
@@ -61,5 +68,5 @@ export function rememberFirstAdded(db: DB, indexedAt: number, radarrAdded?: Map<
       remembered++;
     }
   });
-  return { remembered, seeded: seeding };
+  return { remembered, seeded: seeding, fromRadarr };
 }

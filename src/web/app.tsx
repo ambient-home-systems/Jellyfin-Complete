@@ -31,7 +31,7 @@ import { homeStatus, syncHomeRows } from '../homescreen/index.js';
 import { HomeRowsPanel } from './pages/home-rows.js';
 import { Start } from './pages/start.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
-import { familyOf, FAMILY_LABEL, PRESET_FAMILIES, type PresetFamily } from '../presets/index.js';
+import { familyOf, FAMILY_LABEL, plexCounterpart, PRESET_FAMILIES, type PresetFamily } from '../presets/index.js';
 import { availableIn, serviceOfPreset } from '../presets/streaming.js';
 import type { OnboardingStep } from '../settings.js';
 import { Review } from './pages/review.js';
@@ -46,7 +46,7 @@ import { createToken, listTokens, revokeToken, SCOPE_LABEL, type TokenScope } fr
 import type { Reveal } from './pages/claude-access.js';
 import { mcpHandler } from './mcp.js';
 import { setFilmSeries } from '../pipeline/film-series.js';
-import { applySettings, setSchedule, setCollectionEnabled, SettingsError, MODE_KEYS, type ModeKey, type SettingsPatch } from './settings-actions.js';
+import { applySettings, setSchedule, setCollectionEnabled, setFamilyEnabled, SettingsError, MODE_KEYS, type ModeKey, type SettingsPatch } from './settings-actions.js';
 import { createCollection, updateCollection, addSource, removeSource, setSourceRole, setPin, deleteCollection, sendMissing, monitorInRadarr, saveArrDefaults, setPoster, type CollectionPatch, type PosterChoice } from './collection-actions.js';
 import { defaultPoster, postersDir, readPoster } from '../domain/posters.js';
 import { undoAction } from '../pipeline/undo.js';
@@ -60,10 +60,11 @@ import { getPlanSummary } from '../pipeline/summary.js';
 import { startScheduler, nextRuns, lastHeartbeat } from '../jobs/scheduler.js';
 import { log } from '../log.js';
 import type { Mode, Settings } from '../settings.js';
-import { overlaysModel, overlayPreview, startOverlayRun } from './overlay-actions.js';
+import { overlayLibraries, overlaysModel, overlayPreview, startOverlayRun } from './overlay-actions.js';
+import { kidsLibraries } from '../overlays/badges.js';
 import { OverlaysPanel } from './pages/overlays.js';
 import { HealthPage } from './pages/health.js';
-import { dismissFinding, healthDashboard, reopenFinding } from '../library/health.js';
+import { dismissFinding, dismissFindings, healthDashboard, reopenFinding } from '../library/health.js';
 
 const MODES = new Set(['off', 'review', 'auto']);
 
@@ -307,21 +308,14 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   });
   // All on / All off for a family. Streaming turns on only the services offered in your country.
   web.post('/collections/family/:fam/enabled', async (c) => {
-    const fam = c.req.param('fam');
     const on = (await c.req.parseBody()).enabled === '1';
-    const region = app.settings().streaming.region;
-    const defs = loadDefinitions(app.db).filter((d) => d.presetKey && familyOf(d.presetKey) === fam);
-    if (!defs.length) return c.notFound();
-    let changed = 0;
-    for (const d of defs) {
-      // All on skips services not offered in your country (one you turned on yourself stays on); All off turns off everything.
-      const service = fam === 'streaming' ? serviceOfPreset(d.presetKey) : undefined;
-      if (on && service && !availableIn(service, region)) continue;
-      if (on !== d.enabled) { setCollectionEnabled(app, d.id, on); changed++; }
+    try {
+      const r = setFamilyEnabled(app, c.req.param('fam'), on);
+      return back(c, `/collections#fam-${r.family}`, { ok: r.message });
+    } catch (e) {
+      if (e instanceof SettingsError) return c.notFound();
+      throw e;
     }
-    if (fam === 'film_series' && app.settings().filmSeries.enabled !== on) setFilmSeries(app, on);
-    const label = FAMILY_LABEL[fam as PresetFamily] ?? fam;
-    return back(c, `/collections#fam-${fam}`, { ok: changed ? `${label}: ${changed} turned ${on ? 'on' : 'off'}. The next run ${on ? 'plans them' : 'removes their box sets'}.` : `${label}: nothing to change.` });
   });
 
   web.get('/collections/new', (c) => page(c, 'New collection', 'collections', <NewCollection csrf={userOf(c).csrf} />));
@@ -440,9 +434,11 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     if (!plan) return c.html(<p class="muted">No library index yet. Run once from the Dashboard.</p>);
     const s = app.settings();
     const ctx = { db: app.db, fetch: app.fetch, tmdb: app.tmdb(), plex, mdblistKey: null, imdbRoute: s.imdbRoute };
-    const r = await resolveSource(ctx, { type: 'plex_collection', config: { name: def.name } }, { maxAgeMs: 10 * 60_000 });
+    const counterpart = plexCounterpart(def);
+    const r = await resolveSource(ctx, { type: 'plex_collection', config: { name: counterpart.names[0], names: counterpart.names, ...(counterpart.section ? { section: counterpart.section } : {}) } }, { maxAgeMs: 10 * 60_000 });
     if (r.status === 'failed') return c.html(<p class="muted">Couldn’t read Plex: {r.error}</p>);
-    if (!(r.meta as { found?: boolean } | null)?.found) return c.html(<p class="muted">Plex has no collection called “{def.name}” right now. Seasonal collections in Plex usually exist only during their dates, so compare while it’s open.</p>);
+    const where = counterpart.section ? ` in a ${counterpart.section === 'movie' ? 'films' : 'TV'} library` : '';
+    if (!(r.meta as { found?: boolean } | null)?.found) return c.html(<p class="muted">Plex has no collection called {counterpart.names.map((n) => `“${n}”`).join(' or ')}{where} right now. Seasonal collections in Plex usually exist only during their dates, so compare while it’s open.</p>);
     const want = def.target === 'movies' ? 'movie' : def.target === 'shows' ? 'series' : def.target === 'episodes' ? 'episode' : 'any';
     return c.html(<ParityPanel p={parity(r.items, new Set(plan.members.keys()), plan.index, want)} fetchedAt={r.fetchedAt} />);
   });
@@ -496,6 +492,16 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const kind = b.kind === 'title' ? 'title' : 'runtime';
     const ok = dismissFinding(app, String(b.jfId ?? ''), kind, userOf(c).name);
     return back(c, '/health', ok ? { ok: 'Marked as fine. It comes back if the file changes.' } : { err: 'That finding is gone.' });
+  });
+  // Several at once: the ticked findings, or every open finding for one show's episodes.
+  web.post('/health/dismiss-many', async (c) => {
+    const b = await c.req.parseBody({ all: true });
+    const list = ([] as unknown[]).concat(b.sel ?? []).map(String);
+    const findings = list.map((v) => v.split('|')).filter((x) => x.length === 2 && (x[1] === 'runtime' || x[1] === 'title')).map(([jfId, kind]) => ({ jfId: jfId!, kind: kind as 'runtime' | 'title' }));
+    const seriesIds = b.what === 'series' && b.series ? [String(b.series)] : [];
+    if (b.what !== 'series' && !findings.length) return back(c, '/health#needs-h', { err: 'Tick the findings to mark fine first.' });
+    const n = dismissFindings(app, b.what === 'series' ? { seriesIds } : { findings }, userOf(c).name);
+    return back(c, '/health#needs-h', n ? { ok: `${n} ${n === 1 ? 'finding' : 'findings'} marked as fine. Each comes back if its file changes.` } : { err: 'Those findings are gone.' });
   });
   web.post('/health/reopen', async (c) => {
     const b = await c.req.parseBody();
@@ -769,8 +775,18 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   // ── Poster overlays (ADR-039) ──
   web.get('/settings/overlays', async (c) => c.html(<OverlaysPanel m={await overlaysModel(app)} csrf={userOf(c).csrf} />));
   web.post('/settings/overlays', async (c) => {
-    const b = await c.req.parseBody();
-    return save(c, 'overlays', { overlays: { status: b.status === '1', imdbTop250: b.imdbTop250 === '1' } }, 'Saved. Use Apply now to change posters straight away.');
+    const b = await c.req.parseBody({ all: true });
+    const overlays: { status: boolean; imdbTop250: boolean; skipLibraryIds?: string[] | null } = { status: b.status === '1', imdbTop250: b.imdbTop250 === '1' };
+    if (b.libs === '1') {
+      // Libraries left unticked get no overlays; the default (kids' libraries only) is kept while the choice matches it.
+      const on = new Set(([] as unknown[]).concat(b.lib ?? []).map(String));
+      const listed = overlayLibraries(app).libraries;
+      const skip = listed.filter((l) => !on.has(l.id)).map((l) => l.id);
+      const kids = kidsLibraries(app);
+      const isDefault = listed.every((l) => kids.has(l.id) === skip.includes(l.id));
+      overlays.skipLibraryIds = isDefault ? null : skip;
+    }
+    return save(c, 'overlays', { overlays }, 'Saved. Use Apply now to change posters straight away.');
   });
   web.post('/settings/overlays/apply', (c) => {
     const r = startOverlayRun(app, 'apply');

@@ -2,6 +2,28 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.16.0 — 14 Nov 2026
+
+- **Recently Added Movies no longer fills with upgrades.**
+  - While Radarr is connected, a film arrived when Radarr first imported it. That date comes from Radarr's history and is checked on every run.
+  - Upgrades are later imports, so they don't make a film new again.
+  - A film you asked Radarr for long before it downloaded counts from the download.
+  - Films remembered before Radarr was connected are corrected on the next run.
+  - Recently Added Shows still goes by each show's newest episode.
+- **Library health: far fewer false alarms on TV episodes.**
+  - When TMDb lists a whole season at a different length (often the TV slot, ads included, such as *Dirty Jobs* at 60 minutes for 42-minute files), its episodes are measured against the season's typical file length instead.
+  - It still catches an episode with the ads left in, two episodes in one file, and a double-length crossover.
+  - A file about twice the typical length says it may contain two episodes.
+  - A file Jellyfin knows holds two episodes is expected to be twice as long.
+- **Library health: mark several findings fine at once.**
+  - On the page, tick findings and choose **Mark selected fine**, or mark every finding for a show fine.
+  - Claude's `mark_library_health_fine` takes several IDs, or a whole show.
+- **Poster overlays skip kids' libraries by default.** A library counts as a kids' library by its name or by its titles' ratings. Settings → Poster overlays lets you choose libraries one by one.
+- **Plex comparison** matches Kometa's per-library collections ("IMDb Top 250", "IMDb Popular", "Newly Released", "New Episodes") to the films or shows version here.
+- **Claude:**
+  - `set_family_enabled` turns a whole family on or off, with the same rules as All on / All off.
+  - `get_status` now includes a Library health summary.
+
 ## 0.15.0 — 13 Nov 2026
 
 - **One-click on/off on the Collections page.** Each row has a switch.

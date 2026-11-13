@@ -59,6 +59,7 @@ export async function indexLibrary(db: DB, jf: JellyfinClient, onProgress?: (msg
             seriesJfId: it.SeriesId ?? null,
             season: it.ParentIndexNumber ?? null,
             episode: it.IndexNumber ?? null,
+            episodeEnd: kind === 'episode' && it.IndexNumberEnd && it.IndexNumber && it.IndexNumberEnd > it.IndexNumber ? it.IndexNumberEnd : null,
             officialRating: it.OfficialRating ?? null,
             genres: it.Genres ?? [],
             tags: it.Tags ?? [],

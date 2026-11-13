@@ -5,7 +5,9 @@ type Title = { title: string; year: number; tmdbId?: number; tvdbId?: number; im
 
 export class FakeArr {
   readonly calls: { method: string; path: string; body?: any }[] = [];
-  library: (Title & { id: number; monitored: boolean; hasFile: boolean })[] = [];
+  library: (Title & { id: number; monitored: boolean; hasFile: boolean; added?: string })[] = [];
+  /** Radarr's import history: downloadFolderImported (3) and movieFolderImported (7) events. */
+  history: { movieId: number; date: string; eventType: 'downloadFolderImported' | 'movieFolderImported' | 'grabbed' }[] = [];
   excluded = new Set<number>(); // TMDb (Radarr) or TVDB (Sonarr) IDs
   collections = [{ id: 7, title: 'Halloween Collection', tmdbId: 91361, monitored: false, missingMovies: 5 }];
   private seq = 100;
@@ -26,6 +28,12 @@ export class FakeArr {
       if (path === '/qualityprofile') return json([{ id: 1, name: 'Any' }, { id: 4, name: 'HD-1080p' }]);
       if (path === '/rootfolder') return json([{ path: this.app === 'radarr' ? '/movies' : '/tv', freeSpace: 1_099e9, accessible: true }]);
       if (path === '/tag') return json([{ id: 3, label: 'maverick' }]);
+      if (path === '/history' && method === 'GET') {
+        const want = { 3: 'downloadFolderImported', 7: 'movieFolderImported' }[Number(url.searchParams.get('eventType'))];
+        const all = this.history.filter((h) => !want || h.eventType === want).sort((a, b) => a.date.localeCompare(b.date));
+        const page = Number(url.searchParams.get('page') ?? 1), size = Number(url.searchParams.get('pageSize') ?? 10);
+        return json({ page, pageSize: size, totalRecords: all.length, records: all.slice((page - 1) * size, page * size) });
+      }
       if (path === items && method === 'GET') return json(this.library.map((m) => ({ ...m, statistics: { episodeFileCount: m.hasFile ? 1 : 0 } })));
       if (path === `${items}/lookup`) {
         const term = url.searchParams.get('term') ?? '';

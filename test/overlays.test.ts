@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { eq } from 'drizzle-orm';
+import { overlayLibraries } from '../src/web/overlay-actions.js';
 import { openDb } from '../src/db/index.js';
 import { createContext } from '../src/app-context.js';
 import { readConfig } from '../src/config.js';
@@ -126,6 +127,32 @@ describe('Poster overlays', () => {
       // In Production on TMDb: no badge, even though Jellyfin says Continuing
       's-prod': undefined,
     } as never);
+  });
+
+  it('leaves kids’ libraries alone by default, found by name or by ratings, and does one you tick', async () => {
+    const { app, fake } = world();
+    await library(fake);
+    // "Saturday Mornings": no telling name, but every show is rated TV-Y7. "Animated Classics": the name says so.
+    fake.libraries.push({ Name: 'Saturday Mornings', CollectionType: 'tvshows', ItemId: 'lib-sat' });
+    for (let i = 0; i < 5; i++) {
+      fake.add({ Id: `s-kid${i}`, Name: `Kid Show ${i}`, Type: 'Series', ParentId: 'lib-sat', OfficialRating: 'TV-Y7', ProviderIds: { Tmdb: '200' } } as never);
+      fake.setImage(`s-kid${i}`, await poster([40 * i, 90, 90]));
+    }
+    fake.add({ Id: 'm-cartoon', Name: 'Cartoon Classic', Type: 'Movie', ParentId: 'lib-animated', ProviderIds: { Imdb: 'tt0111161' } });
+    fake.setImage('m-cartoon', await poster([250, 120, 0]));
+    app.updateSettings({ overlays: { status: true, imdbTop250: true, skipLibraryIds: null } });
+    await run(app, NOW, true);
+    expect(records(app)['s-kid0']).toBeUndefined();
+    expect(records(app)['m-cartoon']).toBeUndefined(); // on the Top 250, but in a kids' library
+    expect(records(app)['s-can']).toEqual(['status:canceled']);
+    expect(overlayLibraries(app).libraries.map((l) => `${l.name}${l.kids ? ' (kids)' : ''}: ${l.on ? 'on' : 'off'}`)).toEqual([
+      'Animated Classics (kids): off', 'Movies: on', 'Saturday Mornings (kids): off', 'Shows: on',
+    ]);
+    // Ticking Saturday Mornings in Settings: its shows get their badges on the next update.
+    app.updateSettings({ overlays: { status: true, imdbTop250: true, skipLibraryIds: ['lib-animated'] } });
+    await run(app, NOW + 60_000, true);
+    expect(records(app)['s-kid0']).toEqual(['status:canceled']);
+    expect(records(app)['m-cartoon']).toBeUndefined();
   });
 
   it('keeps each original byte for byte, and uploads nothing more while nothing changes', async () => {
@@ -257,7 +284,7 @@ describe('Poster overlays in Settings', () => {
     expect(await (await t.web.request('/settings', { headers: { cookie } })).text()).toContain('Poster overlays');
     expect(await panel()).toContain('0 posters have overlays.');
     expect(flash(await post('/settings/overlays', { status: '1' }))).toContain('Saved');
-    expect(t.app.settings().overlays).toEqual({ status: true, imdbTop250: false });
+    expect(t.app.settings().overlays).toEqual({ status: true, imdbTop250: false, skipLibraryIds: null });
     const p = await panel();
     expect(p).toContain('1 would change on the next update.');
     expect(p).toContain('Dry run is on, so runs only check');
@@ -276,7 +303,7 @@ describe('Poster overlays in Settings', () => {
 
     await post('/settings/overlays/remove');
     await untilIdle();
-    expect(t.app.settings().overlays).toEqual({ status: false, imdbTop250: false });
+    expect(t.app.settings().overlays).toEqual({ status: false, imdbTop250: false, skipLibraryIds: null });
     expect(sha256(current(t.fake, 's-end'))).toBe(sha256(original));
     expect(await panel()).toContain('0 posters have overlays.');
   });

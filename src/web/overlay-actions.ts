@@ -2,7 +2,8 @@
 // posters even in dry run (the approval).
 import { inArray } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
-import { libraryItem } from '../db/schema.js';
+import { library, libraryItem } from '../db/schema.js';
+import { kidsLibraries, overlaySkipped } from '../overlays/badges.js';
 import { isRunning, runPipeline } from '../pipeline/run.js';
 import { planOverlays, originalsDir, readOriginal } from '../overlays/sync.js';
 import { BADGE_LABEL, renderOverlay, type Badge } from '../overlays/render.js';
@@ -10,6 +11,18 @@ import { log } from '../log.js';
 import type { OverlaysModel } from './pages/overlays.js';
 
 const label = (b: Badge[]) => b.map((x) => BADGE_LABEL[x]).join(' · ');
+
+/** The libraries collections draw from, each with whether it gets overlays. */
+export function overlayLibraries(app: AppContext): Pick<OverlaysModel, 'libraries' | 'libraryDefault'> {
+  const s = app.settings();
+  const kids = kidsLibraries(app);
+  const skip = overlaySkipped(app);
+  const libs = app.db.select().from(library).all().filter((l) => (l.collectionType === 'movies' && (s.movieLibraryIds ?? [l.id]).includes(l.id)) || (l.collectionType === 'tvshows' && (s.showLibraryIds ?? [l.id]).includes(l.id)));
+  return {
+    libraries: libs.sort((a, b) => a.name.localeCompare(b.name)).map((l) => ({ id: l.id, name: l.name, kids: kids.has(l.id), on: !skip.has(l.id) })),
+    libraryDefault: !s.overlays.skipLibraryIds,
+  };
+}
 
 export async function overlaysModel(app: AppContext): Promise<OverlaysModel> {
   const s = app.settings();
@@ -29,6 +42,7 @@ export async function overlaysModel(app: AppContext): Promise<OverlaysModel> {
     status: s.overlays.status, imdbTop250: s.overlays.imdbTop250, dryRun: s.dryRun,
     withOverlays: plan.records.size, toChange: plan.changes.length, running: isRunning(),
     samples: picks.map((p) => ({ id: p.id, name: names.get(p.id) ?? p.id, badges: label(p.badges) })),
+    ...overlayLibraries(app),
   };
 }
 

@@ -2,7 +2,8 @@
 // - status.yml (shows): AIRING if an episode aired in the last 14 days; else RETURNING, CANCELED or ENDED from TMDb's
 //   status (Jellyfin's own Continuing/Ended when TMDb has none). One status per show: AIRING > RETURNING > CANCELED > ENDED.
 // - ribbon.yml: the IMDb Top 250 ribbon on films and shows on IMDb's Top 250 charts.
-// Only titles in the libraries collections draw from (Settings → Libraries) get overlays.
+// Only titles in the libraries collections draw from (Settings → Libraries) get overlays, and not kids' libraries unless
+// chosen (Settings → Poster overlays): a badge reading CANCELED or a ribbon isn't for a children's shelf.
 import { eq } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
 import { library, libraryItem, sourceResult } from '../db/schema.js';
@@ -22,6 +23,32 @@ const CHARTS: Record<'movie' | 'series', SourceSpec> = {
 const TMDB_STATUS: Record<string, Badge> = { 'Returning Series': 'status:returning', Canceled: 'status:canceled', Ended: 'status:ended' };
 const JELLYFIN_STATUS: Record<string, Badge> = { Continuing: 'status:returning', Ended: 'status:ended' };
 const ORDER: Badge[] = ['status:airing', 'status:returning', 'status:canceled', 'status:ended', 'ribbon:imdb_top_250'];
+
+const KIDS_NAME = /\b(kids?|children|childrens|family|cartoons?|junior|disney|pixar|animated|animation)\b/i;
+const KIDS_RATINGS = new Set(['G', 'PG', 'TV-Y', 'TV-Y7', 'TV-Y7-FV', 'TV-G', 'U', 'UC', 'NR-KIDS']);
+
+/**
+ * Libraries that look like kids' libraries: the name says so (Kids, Children's, Family, Cartoons, Disney, Pixar,
+ * Animated…), or at least 80% of its rated titles (five or more) carry children's ratings (G, PG, TV-Y, TV-Y7, TV-G, U).
+ */
+export function kidsLibraries(app: AppContext): Set<string> {
+  const out = new Set<string>();
+  const ratings = new Map<string, { kids: number; rated: number }>();
+  for (const r of app.db.select({ lib: libraryItem.libraryId, rating: libraryItem.officialRating, kind: libraryItem.kind }).from(libraryItem).all()) {
+    if (r.kind === 'episode' || !r.rating) continue;
+    const t = ratings.get(r.lib) ?? ratings.set(r.lib, { kids: 0, rated: 0 }).get(r.lib)!;
+    t.rated++;
+    if (KIDS_RATINGS.has(r.rating.toUpperCase())) t.kids++;
+  }
+  for (const l of app.db.select().from(library).all()) {
+    const t = ratings.get(l.id);
+    if (KIDS_NAME.test(l.name) || (t && t.rated >= 5 && t.kids / t.rated >= 0.8)) out.add(l.id);
+  }
+  return out;
+}
+
+/** Libraries whose titles get no overlays: the chosen ones, or by default every kids' library. */
+export const overlaySkipped = (app: AppContext): Set<string> => new Set(app.settings().overlays.skipLibraryIds ?? [...kidsLibraries(app)]);
 
 export type DesiredBadges = {
   /** Badges per title that should have any. */
@@ -43,8 +70,9 @@ export async function desiredBadges(app: AppContext, opts: { now: number; networ
   const movieLibs = new Set(s.movieLibraryIds ?? libs.filter((l) => l.collectionType === 'movies').map((l) => l.id));
   const showLibs = new Set(s.showLibraryIds ?? libs.filter((l) => l.collectionType === 'tvshows').map((l) => l.id));
   const rows = app.db.select().from(libraryItem).all();
-  const films = rows.filter((r) => r.kind === 'movie' && movieLibs.has(r.libraryId));
-  const shows = rows.filter((r) => r.kind === 'series' && showLibs.has(r.libraryId));
+  const skip = overlaySkipped(app);
+  const films = rows.filter((r) => r.kind === 'movie' && movieLibs.has(r.libraryId) && !skip.has(r.libraryId));
+  const shows = rows.filter((r) => r.kind === 'series' && showLibs.has(r.libraryId) && !skip.has(r.libraryId));
   const add = (jfId: string, b: Badge) => out.desired.set(jfId, [...(out.desired.get(jfId) ?? []), b]);
 
   if (s.overlays.status) {

@@ -8,6 +8,12 @@ import type { HealthDashboard, HealthRow } from '../../library/health.js';
 
 const KIND: Record<HealthRow['kind'], string> = { runtime: 'Length', title: 'Title tag' };
 const pct = (a: number, b: number) => (b ? Math.floor((a / b) * 100) : 0);
+/** Shows with open findings on their episodes, most first. */
+const shows = (rows: HealthRow[]) => {
+  const by = new Map<string, { id: string; name: string; count: number }>();
+  for (const r of rows) if (r.seriesJfId) (by.get(r.seriesJfId) ?? by.set(r.seriesJfId, { id: r.seriesJfId, name: r.show ?? 'Unknown show', count: 0 }).get(r.seriesJfId)!).count++;
+  return [...by.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+};
 
 export const HealthPage: FC<{ m: HealthDashboard; tz: string; csrf: string }> = ({ m, tz, csrf }) => (
   <>
@@ -17,7 +23,8 @@ export const HealthPage: FC<{ m: HealthDashboard; tz: string; csrf: string }> = 
     </header>
     <div class="content">
       <p class="lead">
-        Films and episodes whose file may not be what it says: it runs much longer or shorter than TMDb’s runtime (more than 12 minutes or 15%, whichever is larger), or a title tag inside it names another title.
+        Films and episodes whose file may not be what it says: it runs much longer or shorter than it should (more than 12 minutes or 15%, whichever is larger), or a title tag inside it names another title.
+        A film is measured against TMDb’s runtime. An episode is measured against TMDb’s too, unless TMDb lists the whole season at a different length (often the TV slot, ads included); then it’s measured against the season’s typical file length.
         Check each one by playing it. The app never moves or deletes files.
       </p>
       {!m.enabled ? <p class="callout">The check is off (Settings → Run and review → Library health), so nothing new is checked or found.</p> : null}
@@ -41,7 +48,7 @@ export const HealthPage: FC<{ m: HealthDashboard; tz: string; csrf: string }> = 
           <progress class="meter" max={Math.max(m.files, 1)} value={m.checked} aria-label="Files checked">{pct(m.checked, m.files)}%</progress>
           <p class="faint">
             {m.checked.toLocaleString('en-US')} checked{m.waiting ? `, ${m.waiting.toLocaleString('en-US')} still to check (a few thousand a night)` : ''}.
-            {m.compared !== null ? ` ${m.compared.toLocaleString('en-US')} had a TMDb runtime to compare; the rest are checked by title tags only.` : ''}
+            {m.compared !== null ? ` ${m.compared.toLocaleString('en-US')} had a length to compare with (TMDb’s runtime, or for episodes the season’s typical length); the rest are checked by title tags only.` : ''}
           </p>
         </section>
       </div>
@@ -67,13 +74,29 @@ export const HealthPage: FC<{ m: HealthDashboard; tz: string; csrf: string }> = 
       ) : null}
 
       <section class="panel" aria-labelledby="needs-h">
-        <div class="section-head"><h2 id="needs-h">Needs review</h2><span class="aside">{plural(m.open.length, 'file')}</span></div>
+        <div class="section-head"><h2 id="needs-h">Needs review</h2><span class="aside">{plural(m.open.length, 'finding')}</span></div>
         {m.open.length ? (
+          <>
+            {/* Several at once: tick rows, or pick a show. The row checkboxes belong to this form through form="bulk-fine". */}
+            <form id="bulk-fine" method="post" action="/health/dismiss-many" class="bulk-bar">
+              <Csrf token={csrf} />
+              <button class="btn sm" type="submit" name="what" value="selected">Mark selected fine</button>
+              {shows(m.open).length ? (
+                <span class="bulk-show">
+                  <label for="bulk-series" class="sr-only">Show</label>
+                  <select id="bulk-series" name="series">
+                    {shows(m.open).map((x) => <option value={x.id}>{x.name} ({x.count})</option>)}
+                  </select>
+                  <button class="btn sm ghost" type="submit" name="what" value="series">Mark all for this show fine</button>
+                </span>
+              ) : null}
+            </form>
           <table class="tt" aria-labelledby="needs-h">
-            <thead><tr><th scope="col">Title</th><th scope="col">What doesn’t match</th><th scope="col" class="hide-sm">File</th><th scope="col">Found</th><th scope="col"><span class="sr-only">Action</span></th></tr></thead>
+            <thead><tr><th scope="col" class="cb"><span class="sr-only">Select</span></th><th scope="col">Title</th><th scope="col">What doesn’t match</th><th scope="col" class="hide-sm">File</th><th scope="col">Found</th><th scope="col"><span class="sr-only">Action</span></th></tr></thead>
             <tbody>
               {m.open.map((r) => (
                 <tr>
+                  <td class="cb"><input type="checkbox" form="bulk-fine" name="sel" value={`${r.jfId}|${r.kind}`} aria-label={`Select ${r.title}: ${KIND[r.kind]}`} /></td>
                   <td><b>{r.title}</b><br /><span class="faint">{[r.library, r.rating].filter(Boolean).join(' · ')}</span></td>
                   <td><span class="chip">{KIND[r.kind]}</span> {r.detail}</td>
                   <td class="hide-sm"><code class="path">{r.path ?? '—'}</code></td>
@@ -89,6 +112,7 @@ export const HealthPage: FC<{ m: HealthDashboard; tz: string; csrf: string }> = 
               ))}
             </tbody>
           </table>
+          </>
         ) : <p class="muted">{m.enabled ? 'Nothing to review. Every file checked so far matches its title.' : 'Nothing to review.'}</p>}
       </section>
 

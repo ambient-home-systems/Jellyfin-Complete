@@ -54,6 +54,27 @@ export const PRESETS: Preset[] = [
 ];
 
 /** "seasonal:christmas" → "seasonal"; custom collections have no preset key. */
+/**
+ * Which Plex collection a collection corresponds to, for the Plex comparison. Kometa names some collections once per
+ * Plex library ("IMDb Top 250" in both a films and a TV library, "Newly Released", "New Episodes") where this app names
+ * the films and shows versions apart, so those match by Kometa's name and the library's type. Everything else matches
+ * by its own name or an older one.
+ */
+export function plexCounterpart(def: { name: string; presetKey: string | null; target: string }): { names: string[]; section?: 'movie' | 'show' } {
+  const sectionOf = (t: string) => (t === 'movies' || t === 'movie' ? 'movie' : t === 'shows' || t === 'series' || t === 'episodes' || t === 'episode' ? 'show' : undefined);
+  const [fam, key] = (def.presetKey ?? '').split(':');
+  if (fam === 'imdb_chart') {
+    const c = CHART_PRESETS.find((x) => x.chart === key);
+    if (c) return { names: [c.keyName], section: sectionOf(c.kind) };
+  }
+  if (fam === 'basic') {
+    const b = BASIC_PRESETS.find((x) => x.key === key);
+    if (b) return { names: [b.keyName], section: sectionOf(b.kind) };
+  }
+  const preset = def.presetKey ? PRESETS.find((p) => p.definition.presetKey === def.presetKey) : undefined;
+  return { names: [...new Set([def.name, ...(preset?.deleteCollectionsNamed ?? [])])], section: sectionOf(def.target) };
+}
+
 export function familyOf(presetKey: string | null): PresetFamily | 'custom' {
   const f = presetKey?.split(':')[0];
   return (PRESET_FAMILIES as (string | undefined)[]).includes(f) ? (f as PresetFamily) : 'custom';
