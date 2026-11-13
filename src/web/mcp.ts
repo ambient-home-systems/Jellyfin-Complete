@@ -36,12 +36,13 @@ import { resolveSource, sourceKey, sourceLabel } from '../sources/index.js';
 import { SOURCE_INPUTS } from '../domain/source-input.js';
 import { startOverlayRun } from './overlay-actions.js';
 import { overlayCount } from '../overlays/sync.js';
+import { dismissFinding, healthRows } from '../library/health.js';
 import { CONNECTIONS } from './pages/settings.js';
 import { JOBS, type JobName } from '../jobs/schedules.js';
 import { nextRuns } from '../jobs/scheduler.js';
 import type { Settings } from '../settings.js';
 
-const INSTRUCTIONS = `Maverick Jellyfin Complete builds collections (box sets) in the user's Jellyfin media server: seasonal ones that appear and disappear on their dates, holiday episodes, new and recent (newly released, new episodes, recently added), film series, film universes, TV franchises, IMDb charts, streaming services (the titles the user owns that stream on Netflix and so on) and the user's own.
+const INSTRUCTIONS = `Maverick Jellyfin Complete builds collections (box sets) in the user's Jellyfin media server: seasonal ones that appear and disappear on their dates, holiday episodes, new and recent (newly released, new episodes, recently added), film series, film universes, TV franchises, IMDb charts, streaming services (the titles the user owns that stream on Netflix and so on) and the user's own. It also flags files that may not be what they say (list_library_health).
 Each run plans changes. Changes set to Review, and every change while dry run is on, wait in Review until someone approves, snoozes or dismisses them.
 Approving applies the change to Jellyfin straight away (or when the collection's dates open), even while dry run is on: dry run only stops changes from applying without approval.
 Before approving, show the user exactly what will change (collection, action, titles) and get their go-ahead, especially for deletions and removals. Never approve on your own initiative.
@@ -205,6 +206,17 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
     return ok({ collection: def.name, total: list.length, titles: list.slice(0, n).map((m) => ({ key: m.keys[0], sendsTo: m.app, title: m.title, year: m.year, imdb: m.imdb ?? null, tmdb: m.tmdb ?? null, tvdb: m.tvdb ?? null, sources: m.sources.map((s) => `${s.label} #${s.rank}`) })), truncated: list.length > n });
   });
 
+  server.registerTool('list_library_health', {
+    title: 'Library health',
+    description: 'Films and episodes whose file may not be what it says (Library health page): the file runs much longer or shorter than TMDb\'s runtime, or a title tag inside it names another title. Each with its library, rating and file path. The app never moves or deletes files; tell the user which to check by playing them.',
+    inputSchema: { includeMarkedFine: z.boolean().optional().describe('Also list findings someone marked as fine.') },
+    annotations: read,
+  }, async (a) => ok({
+    checking: app.settings().health.enabled,
+    findings: healthRows(app).map((r) => ({ id: r.jfId, kind: r.kind, title: r.title, library: r.library, rating: r.rating, whatDoesntMatch: r.detail, file: r.path, found: at(r.firstSeen) })),
+    ...(a.includeMarkedFine ? { markedFine: healthRows(app, { dismissed: true }).map((r) => ({ id: r.jfId, kind: r.kind, title: r.title, whatDoesntMatch: r.detail, markedFine: at(r.dismissedAt) })) } : { markedFineCount: healthRows(app, { dismissed: true }).length }),
+  }));
+
   server.registerTool('list_activity', {
     title: 'Activity',
     description: 'Recent runs and the changes applied to Jellyfin (or that failed), newest first, with who decided them.',
@@ -333,6 +345,13 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
     inputSchema: { ids },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, async ({ ids: list }) => decision(list, 'dismiss'));
+
+  server.registerTool('mark_library_health_fine', {
+    title: 'Mark a library health finding as fine',
+    description: 'After the user has checked a file from list_library_health and says it is what it claims, hide that finding. It comes back if the file changes. Nothing changes in Jellyfin.',
+    inputSchema: { id: z.string(), kind: z.enum(['runtime', 'title']) },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  }, async (a) => (dismissFinding(app, a.id, a.kind, `Claude (${token.name})`) ? ok('Marked as fine. It comes back if the file changes.') : fail('No such finding.')));
 
   server.registerTool('snooze_proposals', {
     title: 'Snooze proposals',

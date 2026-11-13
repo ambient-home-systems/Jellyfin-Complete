@@ -73,7 +73,8 @@ describe('Claude access (MCP)', () => {
     const { token } = await makeToken(t, 'Reader', 'read');
     const client = await connect(t.web, token);
     const names = (await client.listTools()).tools.map((x) => x.name).sort();
-    expect(names).toEqual(['compare_with_plex', 'explain_collection', 'get_collection', 'get_radarr_sonarr_options', 'get_run', 'get_settings', 'get_status', 'list_activity', 'list_collections', 'list_existing_box_sets', 'list_missing', 'list_review']);
+    expect(names).toEqual(['compare_with_plex', 'explain_collection', 'get_collection', 'get_radarr_sonarr_options', 'get_run', 'get_settings', 'get_status', 'list_activity', 'list_collections', 'list_existing_box_sets', 'list_library_health', 'list_missing', 'list_review']);
+    expect(json(await client.callTool({ name: 'list_library_health', arguments: {} }))).toEqual({ checking: true, findings: [], markedFineCount: 0 });
     const status = json(await client.callTool({ name: 'get_status', arguments: {} }));
     expect(status.app.dryRun).toBe(true);
     expect(status.app.timezone).toBe('America/New_York');
@@ -89,6 +90,7 @@ describe('Claude access (MCP)', () => {
     expect(reviewTools).toContain('approve_proposals');
     expect(reviewTools).not.toContain('update_settings');
     expect(reviewTools).not.toContain('apply_poster_overlays');
+    expect(reviewTools).toContain('mark_library_health_fine');
 
     const queue = json(await client.callTool({ name: 'list_review', arguments: {} }));
     expect(queue.total).toBe(3);

@@ -33,6 +33,8 @@ export type SettingsPatch = {
   streamingRegion?: string;
   /** Which poster overlays (ADR-039). */
   overlays?: Partial<Settings['overlays']>;
+  /** Library health check on or off (ADR-041). */
+  healthEnabled?: boolean;
 };
 
 /** Check the whole patch, then save it. Throws SettingsError with a message for people. */
@@ -104,6 +106,7 @@ export function applySettings(app: AppContext, patch: SettingsPatch): { changed:
     if (!/^[A-Z]{2}$/.test(region)) throw new SettingsError('The streaming country must be a two-letter code, such as US, GB or CA.');
     next.streaming = { ...s.streaming, region };
   }
+  if (patch.healthEnabled !== undefined) next.health = { ...s.health, enabled: patch.healthEnabled };
   if (patch.overlays) next.overlays = { ...s.overlays, ...Object.fromEntries(Object.entries(patch.overlays).filter(([, v]) => v !== undefined)) };
   app.updateSettings(next);
   return { changed: Object.keys(next) as (keyof Settings)[], timezoneChanged: next.timezone !== undefined && next.timezone !== s.timezone };

@@ -140,6 +140,32 @@ export class TmdbClient {
     }
   }
 
+  /** A film's runtime on TMDb, in minutes (null if TMDb has none). Cached for 180 days. */
+  movieRuntime(id: string): Promise<number | null> {
+    return cached(this.db, `movie-runtime:${id}`, 180, async () => {
+      try {
+        const r = await this.get<{ runtime?: number | null }>(`/movie/${encodeURIComponent(id)}`);
+        return r.runtime ? r.runtime : null;
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) return null;
+        throw e;
+      }
+    });
+  }
+
+  /** Each episode's runtime in one season of a show, in minutes, by episode number. Cached for 90 days. */
+  seasonRuntimes(tvId: string, season: number): Promise<Record<string, number | null>> {
+    return cached(this.db, `season-runtimes:${tvId}:${season}`, 90, async () => {
+      try {
+        const r = await this.get<{ episodes?: { episode_number: number; runtime?: number | null }[] }>(`/tv/${encodeURIComponent(tvId)}/season/${season}`);
+        return Object.fromEntries((r.episodes ?? []).map((e) => [String(e.episode_number), e.runtime ? e.runtime : null]));
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) return {};
+        throw e;
+      }
+    });
+  }
+
   /** The TMDb collection a film belongs to, for films Jellyfin hasn't recorded one for. Cached for 30 days. */
   movieCollection(id: number | string): Promise<string | null> {
     return cached(this.db, `movie-collection:${id}`, 30, async () => {

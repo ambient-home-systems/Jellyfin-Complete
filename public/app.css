@@ -556,3 +556,6 @@ fieldset.plain > legend { padding: 0; margin-bottom: var(--s2); font-weight: 600
 .overlay-previews figure { margin: 0; width: 140px; font-size: var(--fs-xs); }
 .overlay-previews img { display: block; width: 140px; height: auto; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; background: var(--rule); }
 .overlay-previews figcaption { margin-top: 6px; overflow-wrap: anywhere; }
+
+/* Text for screen readers only (a table's action column heading, say). */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

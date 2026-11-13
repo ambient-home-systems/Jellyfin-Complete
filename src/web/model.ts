@@ -1,7 +1,7 @@
 // View models: everything the pages need, computed from the database (no Jellyfin calls on page load).
 import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
-import { action, run, sourceResult, imdbHash, managedCollection, membership, definition, library, integrityEvent } from '../db/schema.js';
+import { action, run, sourceResult, imdbHash, managedCollection, membership, definition, library, integrityEvent, healthFinding } from '../db/schema.js';
 import type { WindowDef } from '../db/schema.js';
 import { loadDefinitions, type LoadedDefinition } from '../domain/definitions.js';
 import { localDay, transitions, localMidnight, occurrence, fromDayNumber, dayNumber } from '../domain/windows.js';
@@ -154,6 +154,8 @@ export function dashboardModel(app: AppContext, now = Date.now()) {
     // ADR-040: box set repairs this week, and libraries where Jellyfin makes its own (unlocked) box sets.
     integrity: app.db.select().from(integrityEvent).where(gte(integrityEvent.at, now - 7 * 86_400_000)).orderBy(desc(integrityEvent.at)).limit(50).all(),
     autoCollections: app.db.select().from(library).all().filter((l) => l.autoCollections).map((l) => l.name),
+    // ADR-041: files that may not be what they say, not yet marked as fine.
+    healthOpen: app.db.select().from(healthFinding).all().filter((f) => !f.dismissedAt).length,
   };
 }
 

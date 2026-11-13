@@ -2,6 +2,14 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.13.0 — 13 Nov 2026
+
+- **Library health.** The app checks each film and episode against its title, and lists the ones that may not be what they say on a new **Library health** page, counted on the Dashboard:
+  - **length:** the file runs more than 12 minutes or 15% (whichever is larger) longer or shorter than TMDb's runtime
+  - **title tags:** a title tag inside the file names another title, such as "Bewitched (2005)" on *Black Panther: Wakanda Forever*
+
+  Each finding shows the library, rating and file path. **It's fine** hides one until the file changes. Read-only: the app never moves, deletes or hides files. Each file is checked once (and again when it changes), a few thousand a night. Claude can list findings and mark them fine. On by default; turn it off in Settings → Run and review. See [Library health](https://github.com/ambient-home-systems/Jellyfin-Complete/blob/main/docs/USER-GUIDE.md#library-health).
+
 ## 0.12.0 — 13 Nov 2026
 
 **Safety fix: box sets could show another collection's artwork.** Jellyfin fills in an unlocked box set by searching TMDb for its name, and can pick the wrong collection; on one server, "Inside Out" showed an adult collection's poster and "9-1-1" an erotic film's backdrop. Box sets this app created were unlocked, and adopted ones kept whatever Jellyfin had attached. Now:

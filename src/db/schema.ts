@@ -1,5 +1,5 @@
 // SQLite schema (Drizzle). See docs/ARCHITECTURE.md §2. Timestamps are epoch milliseconds.
-import { sqliteTable, text, integer, primaryKey, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const json = <T>(name: string) => text(name, { mode: 'json' }).$type<T>();
 
@@ -344,4 +344,35 @@ export const apiToken = sqliteTable(
     lastUsedAt: integer('last_used_at'),
   },
   (t) => [uniqueIndex('api_token_hash').on(t.hash)],
+);
+
+/**
+ * Library health (ADR-041): each film's and episode's file as Jellyfin probed it. sig changes when the file does (its
+ * DateCreated), so a replaced file is checked again.
+ */
+export const mediaCheck = sqliteTable('media_check', {
+  jfId: text('jf_id').primaryKey(),
+  sig: text('sig').notNull(),
+  /** The file's own duration, in minutes. */
+  durationMin: real('duration_min'),
+  /** Title tags on its video, audio and subtitle streams. */
+  titles: json<string[]>('titles').notNull().default([]),
+  path: text('path'),
+  checkedAt: integer('checked_at').notNull(),
+});
+
+/** A file that may not be what it says (ADR-041): its length or a title tag disagrees with the title. */
+export const healthFinding = sqliteTable(
+  'health_finding',
+  {
+    jfId: text('jf_id').notNull(),
+    kind: text('kind').$type<'runtime' | 'title'>().notNull(),
+    detail: text('detail').notNull(),
+    /** The file's sig when found: a dismissal lasts until the file changes. */
+    sig: text('sig').notNull(),
+    firstSeen: integer('first_seen').notNull(),
+    dismissedAt: integer('dismissed_at'),
+    dismissedBy: text('dismissed_by'),
+  },
+  (t) => [primaryKey({ columns: [t.jfId, t.kind] })],
 );

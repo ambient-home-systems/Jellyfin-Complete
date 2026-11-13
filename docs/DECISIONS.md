@@ -655,6 +655,26 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - Hand-made backdrops and logos on managed sets are removed, since the app doesn't supply them.
   - Locking existing box sets yourself through Jellyfin (metadata editor or API) likely locked their titles too; that's worth checking.
 
+### ADR-041 Library health: Decided (13 Nov)
+- **Context.** The same audit (ADR-040) found four files that weren't what they said: a kids' "TMNT" episode held a live-action adult drama, "Black Panther: Wakanda Forever" held *Bewitched*, "The Spy Who Loved Me" held *The Lucky One*, and "The Search for General Tso" held a Trans-Siberian Orchestra concert. They were caught by comparing each file's length with TMDb's runtime, and by title tags inside the files naming other films. You asked for that as a feature.
+- **Decision.**
+  - **Length:**
+    - The file's own duration, as Jellyfin probed it (`MediaSources[].RunTimeTicks`, not the item's metadata runtime), against TMDb's runtime. Films use `/movie/{id}`, cached 180 days. Episodes use `/tv/{id}/season/{n}`, one lookup a season, cached 90 days.
+    - A file is flagged when the difference is **more than 12 minutes or 15%, whichever is larger**. The larger keeps director's cuts and long credits out, and still catches all four (diffs of 60, 24, 25 and 73 minutes).
+  - **Title tags:**
+    - Jellyfin doesn't expose a file's container-level title, only its streams' (`MediaStreams[].Title`), so those are read.
+    - A tag that looks like a release name ("Name 2012", "Name (2012)") and names a different title is flagged. Different means fewer than half its words are shared and neither name contains the other; for an episode, the show's name counts too.
+    - It's not flagged when the year is within one of the title's, which is likely a translated title (*Le Fabuleux Destin d'Amélie Poulain* on *Amélie*). Tags that aren't titles (English, SDH, Commentary…) are ignored.
+  - **Cost:** each file is probed once, and again when it changes (its `DateCreated`), 3,000 a run in batches of 50. TMDb runtime lookups are capped at 400 films and 150 seasons a run, so a big library is checked over a few nights.
+  - **Read-only:**
+    - Findings are listed on a **Library health** page (title, library, rating, what doesn't match, file path) and counted on the Dashboard. Claude can list them, and mark one fine at the review level and above.
+    - **It's fine** hides a finding until the file changes. Findings that stop being true go away.
+    - The app never moves, deletes or hides a file.
+  - On by default; a setting turns it off.
+- **Consequences.**
+  - Extended editions far longer than TMDb's runtime will be flagged; mark them fine once.
+  - Where TMDb has no runtime (common for episodes), only the title tags are checked.
+
 ---
 
 ## Open questions

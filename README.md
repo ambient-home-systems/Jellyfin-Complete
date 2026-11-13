@@ -17,6 +17,7 @@ Kometa-style collections for Jellyfin: seasonal box sets that appear and disappe
 - **Your own collections**, from IMDb lists or keywords, MDBList, TMDb collections, keywords or lists, Letterboxd, Plex collections, or your own Jellyfin tags and genres.
 - **Plan → review → apply.** Choose which kinds of change happen on their own and which wait for you. A failing source never empties a collection, and any change can be undone.
 - **Poster overlays.** Kometa's status badges on shows (AIRING, RETURNING, CANCELED, ENDED) and its IMDb Top 250 ribbon, drawn on copies of your posters. The originals are kept and go back when you turn them off.
+- **Library health.** Flags films and episodes whose file runs far longer or shorter than TMDb says, or whose title tags name another film, so a mislabelled file doesn't end up in front of the wrong audience. Read-only.
 - **Optional extras:**
   - send missing titles to Radarr or Sonarr
   - compare collections with what Kometa built in Plex

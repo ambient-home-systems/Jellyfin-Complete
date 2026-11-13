@@ -61,6 +61,8 @@ import { log } from '../log.js';
 import type { Mode, Settings } from '../settings.js';
 import { overlaysModel, overlayPreview, startOverlayRun } from './overlay-actions.js';
 import { OverlaysPanel } from './pages/overlays.js';
+import { HealthPage } from './pages/health.js';
+import { dismissFinding, healthRows } from '../library/health.js';
 
 const MODES = new Set(['off', 'review', 'auto']);
 
@@ -430,6 +432,15 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   });
 
   // ── missing (Phase 2): what collections list that you don't own; send to Radarr/Sonarr ──
+  // ── Library health (ADR-041) ──
+  web.get('/health', (c) => page(c, 'Library health', 'dashboard', <HealthPage rows={healthRows(app)} dismissed={healthRows(app, { dismissed: true })} showDismissed={c.req.query('dismissed') === '1'} enabled={app.settings().health.enabled} tz={app.settings().timezone} csrf={userOf(c).csrf} />));
+  web.post('/health/dismiss', async (c) => {
+    const b = await c.req.parseBody();
+    const kind = b.kind === 'title' ? 'title' : 'runtime';
+    const ok = dismissFinding(app, String(b.jfId ?? ''), kind, userOf(c).name);
+    return back(c, '/health', ok ? { ok: 'Marked as fine. It comes back if the file changes.' } : { err: 'That finding is gone.' });
+  });
+
   web.get('/missing', async (c) => {
     const tab = c.req.query('tab') === 'shows' ? 'shows' : 'movies';
     const m = await missingModel(app, tab, Number(c.req.query('def')) || null, Number(c.req.query('page')) || 1);
@@ -627,7 +638,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       return m ? { name: m[1]!.trim(), time: m[2]! } : { name: l, time: '' };
     });
     const snooze = ['window', '7d', '30d'].includes(String(b.defaultSnooze)) ? (String(b.defaultSnooze) as Settings['defaultSnooze']) : 'window';
-    return save(c, 'run', { timezone: String(b.timezone ?? ''), leadDays: Number(b.leadDays), arrCapPerRun: Number(b.arrCapPerRun), dryRun: b.dryRun === '1', neighbours, defaultSnooze: snooze, releasedOnly: b.releasedOnly === '1', streamingRegion: b.streamingRegion === undefined ? undefined : String(b.streamingRegion) }, 'Saved.');
+    return save(c, 'run', { timezone: String(b.timezone ?? ''), leadDays: Number(b.leadDays), arrCapPerRun: Number(b.arrCapPerRun), dryRun: b.dryRun === '1', neighbours, defaultSnooze: snooze, releasedOnly: b.releasedOnly === '1', streamingRegion: b.streamingRegion === undefined ? undefined : String(b.streamingRegion), healthEnabled: b.healthEnabled === '1' }, 'Saved.');
   });
 
   web.post('/settings/modes', async (c) => {

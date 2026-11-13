@@ -23,6 +23,11 @@ const films: [string, string, number, string, string][] = [
 for (const [Name, Imdb, ProductionYear, Tmdb, ParentId] of films) fake.add({ Name, Type: 'Movie', ParentId, ProductionYear, ProviderIds: { Imdb, Tmdb } });
 fake.add({ Id: 'jac-xmas', Name: 'Christmas Movies', Type: 'BoxSet', ParentId: 'lib-collections', Tags: ['Jellyfin-Auto-Collections', 'mdblist'], children: [] });
 fake.add({ Id: 'jac-orphan', Name: "{'includeItemTypes': 'Movie', 'tags': 'christmas|santa claus'}", Type: 'BoxSet', ParentId: 'lib-collections', Tags: ['Jellyfin-Auto-Collections'], children: [] });
+// One mislabelled file, so Library health has something to show (ADR-041).
+const klaus = [...fake.items.values()].find((i) => i.Name === 'Klaus')!;
+klaus.DateCreated = '2026-11-01T00:00:00Z';
+klaus.MediaSources = [{ RunTimeTicks: 98 * 600_000_000, Path: '/movies/Klaus (2019)/Klaus.mkv', MediaStreams: [{ Type: 'Video', Title: 'Bewitched (2005) 1080p' }, { Type: 'Audio', Title: 'English' }] }];
+
 // A few shows and posters, so Settings → Poster overlays has something to preview (ADR-039).
 const today = new Date();
 const daysAgo = (n: number) => new Date(today.getTime() - n * 86_400_000).toISOString();

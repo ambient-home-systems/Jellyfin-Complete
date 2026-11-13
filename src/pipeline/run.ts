@@ -23,6 +23,7 @@ import { syncFilmSeries } from './film-series.js';
 import { refreshWatchProviders, type ProviderKind } from '../sources/watch-providers.js';
 import { overlayCount, syncOverlays } from '../overlays/sync.js';
 import { checkIntegrity, identityCtx } from './boxset-identity.js';
+import { checkLibraryHealth } from '../library/health.js';
 import { adoptionCandidates } from './adoption.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
 import { missingTitles } from '../domain/missing.js';
@@ -281,6 +282,18 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
         stats.homeRowsShowing = h.showing.length;
       } catch (e) {
         log.warn(`Home-screen rows not updated: ${(e as Error).message}`);
+      }
+    }
+
+    // Library health (ADR-041): files whose length or title tags don't match the title. Read-only; never fails the run.
+    if (settings.health.enabled) {
+      step('Checking files against their titles');
+      try {
+        const h = await checkLibraryHealth(app, { now, step });
+        Object.assign(stats, { healthFilesChecked: h.probed, healthOpen: h.open, healthFound: h.found });
+        if (h.found) log.warn(`Library health: ${h.found} new ${h.found === 1 ? 'file' : 'files'} may not be what ${h.found === 1 ? 'it says' : 'they say'} (Library health page)`);
+      } catch (e) {
+        log.warn(`Library health not checked: ${(e as Error).message}`);
       }
     }
 

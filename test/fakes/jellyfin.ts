@@ -28,6 +28,8 @@ export type FakeItem = {
   DisplayOrder?: string | null;
   DateCreated?: string;
   PremiereDate?: string;
+  /** The file as Jellyfin probed it (Fields=MediaSources). */
+  MediaSources?: { RunTimeTicks?: number; Path?: string; MediaStreams?: { Type: string; Title?: string }[] }[];
   children?: string[]; // BoxSet linked children
   images?: Record<string, number>; // type -> byte length
 };

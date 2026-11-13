@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { JELLYFIN_CALLS, ITEM_PROPERTIES, POLICY_PROPERTIES, LIBRARY_PROPERTIES, ENUM_VALUES, API_CHECKED, versionSupport, compareVersions } from '../src/clients/jellyfin/compat.js';
+import { JELLYFIN_CALLS, ITEM_PROPERTIES, POLICY_PROPERTIES, SCHEMA_PROPERTIES, ENUM_VALUES, API_CHECKED, versionSupport, compareVersions } from '../src/clients/jellyfin/compat.js';
 
 type Surface = { version: string; paths: Record<string, Record<string, string[]>>; schemas: Record<string, string[]>; enums: Record<string, string[]> };
 const dir = join(__dirname, 'fixtures/jellyfin-api');
@@ -28,10 +28,10 @@ describe('Jellyfin API compatibility', () => {
         expect(missing).toEqual([]);
       });
 
-      it('has the item, policy and library properties and enum values the app reads and writes', () => {
+      it('has the item, policy, library and media properties and enum values the app reads and writes', () => {
         expect(ITEM_PROPERTIES.filter((p) => !s.schemas.BaseItemDto!.includes(p))).toEqual([]);
         expect(POLICY_PROPERTIES.filter((p) => !s.schemas.UserPolicy!.includes(p))).toEqual([]);
-        for (const [schema, props] of Object.entries(LIBRARY_PROPERTIES)) expect(props.filter((p) => !s.schemas[schema]!.includes(p)), schema).toEqual([]);
+        for (const [schema, props] of Object.entries(SCHEMA_PROPERTIES)) expect(props.filter((p) => !s.schemas[schema]!.includes(p)), schema).toEqual([]);
         for (const [e, values] of Object.entries(ENUM_VALUES)) expect(values.filter((v) => !s.enums[e]!.includes(v)), e).toEqual([]);
       });
     });

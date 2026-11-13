@@ -64,6 +64,13 @@
       "when": 1794603893140,
       "tag": "0008_artwork_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794605487520,
+      "tag": "0009_library_health",
+      "breakpoints": true
     }
   ]
 }

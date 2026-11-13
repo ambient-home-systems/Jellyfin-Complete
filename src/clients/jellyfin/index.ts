@@ -200,6 +200,23 @@ export class JellyfinClient {
     return this.allItems({ ParentId: collectionId, userId: await this.userId(), Recursive: false, Fields: 'ProviderIds' });
   }
 
+  /**
+   * Each item's file as Jellyfin probed it (ADR-041): its own duration, path, and the title tags on its streams.
+   * MediaSources are heavy, so 50 items a request.
+   */
+  async mediaDetails(ids: string[]): Promise<Map<string, { durationTicks: number | null; path: string | null; titles: string[] }>> {
+    const out = new Map<string, { durationTicks: number | null; path: string | null; titles: string[] }>();
+    for (const batch of chunk(ids, 50)) {
+      for (const it of await this.allItems({ Ids: batch.join(','), Fields: 'MediaSources,Path' })) {
+        if (!it.Id) continue;
+        const src = it.MediaSources?.[0];
+        const titles = [...new Set((src?.MediaStreams ?? []).map((m) => m.Title?.trim()).filter((t): t is string => Boolean(t)))];
+        out.set(it.Id, { durationTicks: src?.RunTimeTicks ?? null, path: src?.Path ?? it.Path ?? null, titles });
+      }
+    }
+    return out;
+  }
+
   /** Delete one image; for backdrops, by index (a box set can have several). */
   async deleteImage(id: string, type: string, index?: number): Promise<void> {
     await this.send('DELETE', `/Items/${id}/Images/${type}`, index === undefined ? undefined : { imageIndex: index });

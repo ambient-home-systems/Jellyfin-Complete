@@ -148,6 +148,17 @@ Some things follow from that:
 
 If another tool builds the same collections, remove them from that tool first so the two don't fight.
 
+## Library health
+
+The app checks each film and episode against its title, and lists the ones that may not be what they say on **Library health** (linked from the Dashboard when there are any, and from Settings → Run and review):
+
+- **Length:** the file runs more than 12 minutes or 15% (whichever is larger) longer or shorter than TMDb's runtime. A two-hour film has to be 18 minutes out; an episode, 12.
+- **Title tags:** a title tag inside the file names another title, for example "Bewitched (2005)" on *Black Panther: Wakanda Forever*. A tag with the same year is treated as a translated title and left alone.
+
+Each finding shows the library, the rating and the file's path. Check it by playing it. **It's fine** hides it until the file changes; a finding that's no longer true goes away by itself. The app never moves, deletes or hides files.
+
+Each file is checked once, and again when it changes, a few thousand a night, so a big library is covered over a few nights. Extended editions much longer than TMDb's runtime show up too: mark them fine once. Turn the check off in Settings → Run and review.
+
 ## Missing titles, Radarr and Sonarr
 
 **Missing** lists what each collection's sources name that isn't in your library, best-ranked first, with each title's status in Radarr or Sonarr. Select titles and **Send to Radarr/Sonarr**, or **Send to Review instead**.

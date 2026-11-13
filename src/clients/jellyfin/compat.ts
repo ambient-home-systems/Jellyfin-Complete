@@ -28,16 +28,21 @@ export const JELLYFIN_CALLS: { method: 'get' | 'post' | 'delete'; path: string; 
 /** BaseItemDto properties the app reads or writes back (POST /Items/{id} sends the whole DTO; ADR-019). */
 export const ITEM_PROPERTIES = [
   'Id', 'Name', 'ForcedSortName', 'SortName', 'Overview', 'Tags', 'LockData', 'LockedFields', 'ProviderIds', 'ImageTags',
-  'ChildCount', 'DisplayOrder', 'SeriesId', 'ParentIndexNumber', 'IndexNumber', 'ProductionYear', 'OfficialRating', 'Genres', 'Studios', 'DateCreated', 'PremiereDate', 'Status', 'Type', 'BackdropImageTags',
+  'ChildCount', 'DisplayOrder', 'SeriesId', 'ParentIndexNumber', 'IndexNumber', 'ProductionYear', 'OfficialRating', 'Genres', 'Studios', 'DateCreated', 'PremiereDate', 'Status', 'Type', 'BackdropImageTags', 'MediaSources', 'Path', 'RunTimeTicks',
 ];
 export const POLICY_PROPERTIES = ['IsAdministrator', 'BlockedTags'];
-/** Library settings the app reads (ADR-040): "Automatically add to collection" makes unlocked box sets Jellyfin identifies by name. */
-export const LIBRARY_PROPERTIES: Record<'VirtualFolderInfo' | 'LibraryOptions', string[]> = {
+/**
+ * Other schemas the app reads: library settings ("Automatically add to collection" makes unlocked box sets Jellyfin
+ * identifies by name, ADR-040) and each file's media source (its own duration and stream title tags, ADR-041).
+ */
+export const SCHEMA_PROPERTIES: Record<'VirtualFolderInfo' | 'LibraryOptions' | 'MediaSourceInfo' | 'MediaStream', string[]> = {
   VirtualFolderInfo: ['ItemId', 'Name', 'CollectionType', 'LibraryOptions'],
   LibraryOptions: ['AutomaticallyAddToCollection'],
+  MediaSourceInfo: ['RunTimeTicks', 'Path', 'MediaStreams'],
+  MediaStream: ['Type', 'Title'],
 };
 export const ENUM_VALUES: Record<string, string[]> = {
-  ItemFields: ['ProviderIds', 'Genres', 'Tags', 'Studios', 'SortName', 'DateCreated', 'ParentId'],
+  ItemFields: ['ProviderIds', 'Genres', 'Tags', 'Studios', 'SortName', 'DateCreated', 'ParentId', 'MediaSources', 'Path'],
   MetadataField: ['Name', 'Overview', 'Tags'],
   BaseItemKind: ['Movie', 'Series', 'Episode', 'BoxSet'],
   ImageType: ['Primary', 'Art', 'Backdrop', 'Banner', 'Logo', 'Thumb', 'Disc', 'Box', 'BoxRear', 'Menu'],
