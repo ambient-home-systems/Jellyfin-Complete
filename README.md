@@ -140,7 +140,7 @@ npm run dev
 
 - `docker build -t maverick-jellyfin-complete:local .` builds the image yourself. Use that name as the `image:` in your compose file.
 
-CI runs on every push. Each push to `main` also publishes the `main` image. Pushing a `vX.Y.Z` tag that matches `package.json` publishes `latest`, the version tags and a GitHub release.
+CI runs on every push. Each push to `main` also publishes the `main` image. To release, set the version in `package.json` and add its `CHANGELOG.md` section. Then go to **Actions → Release → Run workflow** on `main` and enter the version, or push a matching `vX.Y.Z` tag. It publishes `latest` and the version tags, and creates the GitHub release.
 
 ## Licence and credits
 

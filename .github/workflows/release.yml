@@ -1,20 +1,52 @@
-# On a version tag (vX.Y.Z): run CI, publish a multi-arch image to GitHub Container Registry, and create a GitHub
-# release with that version's CHANGELOG.md section. The tag must match package.json's version.
+# Release a version: run CI, publish a multi-arch image to GitHub Container Registry (:X.Y.Z, :X.Y and :latest), and
+# create a GitHub release with that version's CHANGELOG.md section. The version must match package.json.
+# Start it either way:
+#   - Actions → Release → Run workflow, on main, with the version (for example 0.5.0). The release creates its tag.
+#   - or push a tag vX.Y.Z.
 name: Release
 
 on:
   push:
     tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, as in package.json (for example 0.5.0)
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Which version, and is it ready?
+        env:
+          INPUT: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "::error::Run the release from main."; exit 1; }
+            tag="v${INPUT#v}"
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then echo "::error::$tag has already been released."; exit 1; fi
+          else
+            tag="$GITHUB_REF_NAME"
+          fi
+          want="v$(node -p "require('./package.json').version")"
+          [ "$tag" = "$want" ] || { echo "::error::$tag doesn't match package.json ($want)."; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   ci:
+    needs: prepare
     uses: ./.github/workflows/ci.yml
 
   image:
-    needs: ci
+    needs: [prepare, ci]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -22,8 +54,6 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-      - name: Tag matches package.json
-        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - name: Image name (registries need lowercase)
         id: name
         run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
@@ -39,9 +69,9 @@ jobs:
         with:
           images: ${{ steps.name.outputs.image }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=semver,pattern={{version}},value=${{ needs.prepare.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.prepare.outputs.tag }}
+            type=raw,value=latest,enable=${{ !contains(needs.prepare.outputs.tag, '-') }}
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -49,23 +79,25 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: VERSION=${{ github.ref_name }}
+          build-args: VERSION=${{ needs.prepare.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   release:
-    needs: image
+    needs: [prepare, image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      TAG: ${{ needs.prepare.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
       - name: Release notes from CHANGELOG.md
         run: |
-          v="${GITHUB_REF_NAME#v}"
+          v="${TAG#v}"
           awk -v v="$v" 'index($0, "## " v " ") == 1 || $0 == "## " v {f=1; next} /^## / && f {exit} f' CHANGELOG.md > notes.md
-          test -s notes.md || { echo "No CHANGELOG.md section for $v"; exit 1; }
-      - name: Create the GitHub release
+          test -s notes.md || { echo "::error::No CHANGELOG.md section for $v"; exit 1; }
+      - name: Create the GitHub release (and its tag, when started from Actions)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)
+        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes-file notes.md $([[ "$TAG" == *-* ]] && echo --prerelease)
