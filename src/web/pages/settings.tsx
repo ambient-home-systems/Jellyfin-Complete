@@ -275,7 +275,7 @@ const MediaFields: FC<{ s: Settings; media: MediaStatus }> = ({ s, media }) => {
       <details class="how"><summary>How to mount it, and frames from the middle</summary>
         <ul class="plain-list">
           <li><b>Mounting.</b> Under <code>volumes</code> add, for example, <code>- /srv/media:/media:ro</code>, readable by uid 1000.</li>
-          <li><b>Frames from the middle.</b> A flagged file can show one frame, from Jellyfin’s trickplay previews or, with the mount on, from ffmpeg: {media.ffmpeg ? <b>found ({media.ffmpeg})</b> : 'not in this image; mount a binary and set FFMPEG_PATH'}.</li>
+          <li><b>Frames from the middle.</b> A flagged file can show one frame, from Jellyfin’s trickplay previews or, with the mount on, from ffmpeg: {media.ffmpeg ? <b>found ({media.ffmpeg})</b> : <>not in this image. Mount a static Linux build with <code>- /path/to/static/ffmpeg:/usr/local/bin/ffmpeg:ro</code>, readable by uid 1000</>}.</li>
         </ul>
       </details>
     </section>
