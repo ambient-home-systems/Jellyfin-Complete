@@ -122,7 +122,7 @@ Jellyfin fills in an unlocked box set by searching TMDb for its name, and can pi
 
 - creates it locked, so that search never runs (the titles in it aren't locked)
 - sets its TMDb link itself: the series' own for a film series, none for anything else
-- gives it this app's poster (TMDb's for a film series, Kometa's for presets) or none, and no backdrop, logo, thumb, banner or art
+- gives it this app's poster (the preset's own, Kometa's for universes and show franchises, TMDb's for a film series) or none, and no backdrop, logo, thumb, banner or art
 - checks all of that every run, with its lock, name and overview, and puts back anything else changed. Each repair shows on the Dashboard for a week.
 
 Some things follow from that:
@@ -143,6 +143,8 @@ Some things follow from that:
 - **When the window is closed.** Either delete the box set (Kometa's way; the poster and sort title come back next season), or keep it hidden with a blocked tag. Hiding keeps the same box set with its titles, but adds a tag to every Jellyfin user's blocked tags.
 - **Plex parity.** If Plex is connected, compares the collection with the one Kometa built in Plex and explains each difference.
 - **Poster.** An image address, an image you upload (JPEG, PNG or WebP, up to 10 MB), the preset's own poster, or none. Saving puts it on the box set in Jellyfin straight away. Uploads are kept in `/config/posters`.
+  - **The presets' own posters** were made for this app: seasonal films, holiday episodes, New and recent, IMDb charts and streaming services each have one, in one style, with the collection's name set in the app's typeface. Streaming services share a picture in each service's colour. Universes and show franchises use Kometa's posters, and film series TMDb's.
+  - Your choice always wins: an upload, an address or "No poster" stays until you change it. To use Kometa's poster for a preset instead, paste its address.
 
 ### Box sets you already have
 

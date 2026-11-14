@@ -1,9 +1,9 @@
 // Collection definitions: seeding from presets and loading with their sources, modes and pins.
 import { eq } from 'drizzle-orm';
 import type { DB } from '../db/index.js';
-import { definition, definitionSource, definitionMode, pin } from '../db/schema.js';
+import { definition, definitionSource, definitionMode, pin, setting, type Poster } from '../db/schema.js';
 import type { ActionType } from '../db/schema.js';
-import { PRESETS, type PresetDefinition } from '../presets/index.js';
+import { LEGACY_POSTER, PRESETS, type PresetDefinition } from '../presets/index.js';
 import type { Mode } from '../settings.js';
 
 export type LoadedDefinition = typeof definition.$inferSelect & {
@@ -61,6 +61,30 @@ export function upgradePresets(db: DB, now = Date.now()): number {
       changed++;
     }
   }
+  return changed;
+}
+
+const POSTERS_SWITCHED = 'bundledPostersSwitched';
+
+/**
+ * Once, when the version with the presets' own posters first starts (ADR-045): a preset still set to the Kometa poster
+ * it came with gets the app's own instead. A poster you uploaded, an address you entered, or none, stays as it is, and
+ * so does the Kometa address if you put it back afterwards. Box sets get the new poster on the next run. Returns how
+ * many collections changed.
+ */
+export function upgradePosters(db: DB, now = Date.now()): number {
+  if (db.select().from(setting).where(eq(setting.key, POSTERS_SWITCHED)).get()) return 0;
+  let changed = 0;
+  for (const p of PRESETS) {
+    const legacy = LEGACY_POSTER.get(p.definition.presetKey);
+    if (!legacy) continue;
+    const row = db.select({ id: definition.id, poster: definition.poster }).from(definition).where(eq(definition.slug, p.definition.slug)).get();
+    const was = row?.poster as Poster | undefined;
+    if (!row || was?.kind !== 'url' || was.url !== legacy) continue;
+    db.update(definition).set({ poster: p.definition.poster, updatedAt: now }).where(eq(definition.id, row.id)).run();
+    changed++;
+  }
+  db.insert(setting).values({ key: POSTERS_SWITCHED, value: { at: now, changed } }).run();
   return changed;
 }
 

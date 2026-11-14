@@ -234,7 +234,7 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - `delete_not_scheduled`
   - summary "A collection of <name> movies that may relate to the season."
   - **sort title `!00_<name>`**, from `templates.yml` `shared`: `sort_prefix` "!" + `collection_section` "00" + "_" + title. **Confirmed in your Plex:** `!00_Thanksgiving Movies`, `!00_Veteran's Day Movies`.
-  - posters from `Default-Images/seasonal/<key>.jpg`, **fetched at runtime rather than bundled**, because the repository has no licence file
+  - posters from `Default-Images/seasonal/<key>.jpg`, **fetched at runtime rather than bundled**, because the repository has no licence file. Since 0.19.0 the app has its own (ADR-045).
   - `delete_collections_named`, the old emoji names, offered as adoption candidates
 - **Consequences.**
   - A preset carries `preset_rev`, so future Kometa changes show as a diff to accept.
@@ -808,6 +808,23 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - Frames need trickplay previews in Jellyfin, or an ffmpeg you provide.
   - Back up `/config/frames` with the rest of `/config`, or don't: frames are made again when needed.
 
+### ADR-045 The presets' own posters: Decided (14 Nov)
+- **Context.** Presets used Kometa's Default-Images posters, fetched at runtime because that repository has no licence file (ADR-014). You asked for posters designed for this app instead, built as part of the Docker image, while keeping the Poster section's choices (ADR-042): an upload, an address or no poster still win.
+- **Decision.**
+  - **Artwork made for the app.** 29 textless illustrations in one house style (mid-century travel poster crossed with gouache), from the brief in [posters/ART-BRIEF.md](posters/ART-BRIEF.md). They're kept as WebP in `assets/posters/art`; the prompts behind each are in [posters/PROMPTS.txt](posters/PROMPTS.txt).
+  - **The title is set by the app, not drawn.** The collection's name goes over the art's quiet bottom third in Archivo ExtraCondensed Black (cream), with "MOVIES", "SHOWS" or "EPISODES" below in Archivo SemiBold (gold), and a small line above where it reads better ("IMDb", "Asian American & Pacific Islander"). Titles take one to three lines at the largest size that fits. So every poster is spelled right and the set matches.
+  - **Which presets:** seasonal films (19), holiday episodes (3), New and recent (5), IMDb charts (5) and streaming services (41): 73 posters. Films and shows versions share a picture.
+    - **Streaming services share one picture,** tinted in each service's colour, with the service's name set in the app's type. No logos.
+    - **Universes and show franchises keep Kometa's posters,** and film series TMDb's: those show the franchises' own characters and worlds, which the app doesn't draw.
+  - **Built with the image.** `npm run build` sets every poster into `dist/posters` (about 6 seconds, 12 MB). The image's self-test checks all 73 are there at 1000 × 1500, and the source art isn't copied into the runtime image. Run from source, a poster is set the first time it's asked for and kept in memory.
+  - **A new poster kind,** `{ kind: 'bundled', key: <preset slug> }`. Its key for the integrity check is `bundled:<slug>@<revision>`. `BUNDLED_POSTERS_REV` goes up whenever the art, lettering or layout changes, so box sets get the new version on their next run, like any other change of poster setting.
+  - **Switching existing installs, once.** On the first start of this version, a preset whose poster is still the Kometa address it came with gets the app's own. A poster you uploaded, an address you entered, or none, stays. A marker (`bundledPostersSwitched`) stops it running again, so putting Kometa's address back afterwards sticks. Live box sets get the new poster on the next run.
+  - **The editor** shows it as "The preset's own poster", as before.
+- **Consequences.**
+  - The image is about 12 MB bigger.
+  - Changing the art or lettering means raising `BUNDLED_POSTERS_REV`, or box sets keep the old version.
+  - Kometa's posters for these presets are no longer fetched. To go back to one, paste its address into the Poster section.
+
 ---
 
 
@@ -821,7 +838,7 @@ Each entry is a short ADR: context, options, recommendation, consequences.
 - Seasonal "Shows" sets off.
 - 14-day pre-review lead time.
 - Removals need review.
-- Kometa posters fetched at runtime.
+- Kometa posters fetched at runtime (since ADR-045, only for universes and show franchises).
 - `spikes/06` approved and run; all checks passed.
 - The GitHub Actions and Worker IMDb tests are skipped.
 

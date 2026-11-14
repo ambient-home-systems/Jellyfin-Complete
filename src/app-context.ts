@@ -12,7 +12,7 @@ import { newSetupCode } from './web/security.js';
 import { run, setting } from './db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { FetchLike } from './clients/http.js';
-import { seedPresets, upgradePresets } from './domain/definitions.js';
+import { seedPresets, upgradePosters, upgradePresets } from './domain/definitions.js';
 import { seedSchedules } from './jobs/schedules.js';
 
 export type AppContext = {
@@ -78,6 +78,7 @@ export function createContext(config: AppConfig, opts: { db?: DB; fetch?: FetchL
   }
   seedPresets(db);
   upgradePresets(db);
+  upgradePosters(db);
   seedSchedules(db);
   return ctx;
 }

@@ -1,4 +1,5 @@
-// Collection posters (ADR-042): an image address, an image uploaded to /config/posters, or none. The app reads the
+// Collection posters (ADR-042): an image address, an image uploaded to /config/posters, one of the presets' own that
+// ship in the image (ADR-045), or none. The app reads the
 // poster and uploads it to the box set itself (ADR-040), so whatever's chosen here is the only poster a managed box set
 // carries. Uploads and addresses are checked: JPEG, PNG or WebP, at most 10 MB, and an image that actually decodes.
 import { createHash } from 'node:crypto';
@@ -12,6 +13,7 @@ import type { CollectionDetails } from '../clients/tmdb.js';
 import { PRESETS } from '../presets/index.js';
 import { SERIES_PREFIX } from '../presets/film-series.js';
 import { loadSharp } from '../overlays/render.js';
+import { bundledPosterBytes } from '../posters/bundled.js';
 
 export const POSTER_MAX_BYTES = 10 * 1024 * 1024;
 const TYPES: Record<string, string> = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
@@ -20,9 +22,16 @@ export class PosterError extends Error {}
 
 export const postersDir = (configDir: string) => join(configDir, 'posters');
 
-/** A poster's bytes: fetched from its address, or read from /config/posters. Null for none. */
+/** A poster's bytes: fetched from its address, read from /config/posters, or the app's own. Null for none. */
 export async function readPoster(p: Poster, x: { fetch: FetchLike; postersDir: string }): Promise<{ bytes: Uint8Array; type: string } | null> {
   if (p.kind === 'none') return null;
+  if (p.kind === 'bundled') {
+    try {
+      return { bytes: await bundledPosterBytes(p.key), type: 'image/jpeg' };
+    } catch (e) {
+      throw new PosterError((e as Error).message);
+    }
+  }
   if (p.kind === 'file') {
     const path = join(x.postersDir, p.file);
     if (!existsSync(path)) throw new PosterError(`the uploaded poster (${p.file}) is missing from /config/posters`);
@@ -85,7 +94,10 @@ export function removePosterFile(configDir: string, p: Poster): void {
   if (p.kind === 'file') rmSync(join(postersDir(configDir), p.file), { force: true });
 }
 
-/** The poster a preset comes with (Kometa's, or TMDb's for a film series); null for a collection of your own. */
+/**
+ * The poster a preset comes with: the app's own (ADR-045), Kometa's for universes and show franchises, or TMDb's for a
+ * film series; null for a collection of your own.
+ */
 export function defaultPoster(app: AppContext, presetKey: string | null): Poster | null {
   if (!presetKey) return null;
   if (presetKey.startsWith(SERIES_PREFIX)) {

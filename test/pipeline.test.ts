@@ -190,7 +190,7 @@ describe('undo (Activity)', () => {
     expect(box.children!.sort()).toEqual(['m-elf', 'm-home', 'm-mickey']);
     expect(box.ForcedSortName).toBe('!00_Christmas Movies');
     expect(box.Tags).toContain(MANAGED_TAG);
-    expect(w.posterHits).toBeGreaterThan(1);
+    expect(box.images?.Primary).toBeGreaterThan(10_000); // its own poster (ADR-045), put back too
     // The next run doesn't delete it again (the window-closed delete is dismissed), and it can't be undone twice.
     await runPipeline(w.app, { job: 'window-check', trigger: 'schedule', index: false, now: ET(2027, 1, 2, 0, 1) });
     expect(boxSet(w.fake, 'Christmas Movies')).toBeDefined();

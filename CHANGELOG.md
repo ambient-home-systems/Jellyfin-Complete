@@ -2,6 +2,18 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.19.0 — 14 Nov 2026
+
+- **Posters of the app's own.** 73 presets now have posters made for this app, in one style, instead of Kometa's:
+  - seasonal films (19), holiday episodes (3), New and recent (5), IMDb charts (5) and streaming services (41)
+  - each is new artwork with no text in it; the collection's name is set over it in the app's typeface (Archivo), so every title is spelled right and the set matches
+  - streaming services share one picture, in each service's colour, with the service's name in plain type (no logos)
+  - they're made when the Docker image is built, and checked by its self-test
+  - universes and show franchises keep Kometa's posters, and film series TMDb's
+- **Your poster still wins.** On first start, collections still on the Kometa poster they came with switch to the app's own. An upload, an address or "No poster" stays as you set it. Box sets get the new poster on the next run.
+  - To keep Kometa's poster for a preset, paste its address into the collection's Poster section; it won't be switched again.
+- The image is about 12 MB bigger.
+
 ## 0.18.0 — 14 Nov 2026
 
 - **Optional read-only media mount.** Mount your media folder read-only, and turn on Settings → Run and review → Media files.

@@ -11,7 +11,7 @@ import { createContext } from '../src/app-context.js';
 import { readConfig } from '../src/config.js';
 import { runPipeline } from '../src/pipeline/run.js';
 import { action, definition, definitionMode, libraryItem, sourceResult } from '../src/db/schema.js';
-import { PRESETS } from '../src/presets/index.js';
+import { PRESETS, LEGACY_POSTER } from '../src/presets/index.js';
 import { parseSourceInput } from '../src/domain/source-input.js';
 import { FakeJellyfin, FAKE_URL } from './fakes/jellyfin.js';
 import { FakeArr } from './fakes/arr.js';
@@ -35,8 +35,10 @@ describe('basic presets vs Kometa v2.5.3 defaults/chart/basic.yml', () => {
     expect(basic.find((d) => d.name === 'New Episodes')).toMatchObject({
       target: 'episodes', sortTitle: '!010_New Episodes', overview: 'A collection of newly-released episodes.',
       sources: [{ type: 'jellyfin_recent', config: { field: 'premiere', days: episodes.in_the_last_episodes, kind: 'episode' } }],
-      poster: { kind: 'url', url: 'https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/chart/color/New%20Episodes.jpg' },
+      poster: { kind: 'bundled', key: 'basic-episodes' },
     });
+    // The app's own poster (ADR-045); Kometa's is remembered only to switch collections still set to it.
+    expect(LEGACY_POSTER.get('basic:episodes')).toBe('https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/chart/color/New%20Episodes.jpg');
     expect(yml.collections['New Episodes'].template[1].allowed_libraries).toBe('show');
     expect(basic.find((d) => d.name === 'Recently Added Shows')).toMatchObject({ target: 'shows', overview: 'A collection of recently-added shows.', sources: [{ config: { field: 'added', days: 30, kind: 'series' } }] });
     // Titles age out daily, so taking them out doesn't wait for review; everything starts off.

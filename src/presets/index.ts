@@ -7,6 +7,7 @@ import { HOLIDAY_EPISODES, holidayEpisodesDefinition } from './episodes.js';
 import { streamingPresets } from './streaming.js';
 import { CHART_PRESETS, chartDefinition } from './charts.js';
 import { BASIC_PRESETS, basicDefinition } from './basic.js';
+import { bundledPosterFor } from '../posters/catalog.js';
 import type { ActionType, WindowDef, Poster } from '../db/schema.js';
 import type { SourceSpec } from '../sources/index.js';
 import type { Mode } from '../settings.js';
@@ -43,6 +44,20 @@ export type Preset = {
   enabledByDefault: boolean;
 };
 
+/**
+ * The Kometa Default-Images address each preset with a poster of the app's own used to have (ADR-045), by preset key:
+ * a collection still set to it gets the app's own poster once, when this version first starts.
+ */
+export const LEGACY_POSTER = new Map<string, string>();
+
+/** Give a preset its own poster, if the app has one for it, and remember the address it replaces. */
+function withOwnPoster(p: Preset): Preset {
+  const b = bundledPosterFor(p.definition);
+  if (!b) return p;
+  if (p.definition.poster.kind === 'url') LEGACY_POSTER.set(p.definition.presetKey, p.definition.poster.url);
+  return { ...p, definition: { ...p.definition, poster: { kind: 'bundled', key: b.key } } };
+}
+
 export const PRESETS: Preset[] = [
   ...SEASONAL_PRESETS.map((p): Preset => ({ family: 'seasonal', definition: presetDefinition(p), deleteCollectionsNamed: p.deleteCollectionsNamed, enabledByDefault: true })),
   ...HOLIDAY_EPISODES.map((h): Preset => ({ family: 'holiday_episodes', definition: holidayEpisodesDefinition(h), deleteCollectionsNamed: [], enabledByDefault: true })),
@@ -51,7 +66,7 @@ export const PRESETS: Preset[] = [
   ...BASIC_PRESETS.map((b): Preset => ({ family: 'basic', definition: basicDefinition(b), deleteCollectionsNamed: [], enabledByDefault: false })),
   ...CHART_PRESETS.map((c): Preset => ({ family: 'imdb_chart', definition: chartDefinition(c), deleteCollectionsNamed: [], enabledByDefault: false })),
   ...streamingPresets().map((p): Preset => ({ family: 'streaming', definition: p.definition, deleteCollectionsNamed: p.oldNames, enabledByDefault: false })),
-];
+].map(withOwnPoster);
 
 /** "seasonal:christmas" → "seasonal"; custom collections have no preset key. */
 /**

@@ -1,4 +1,5 @@
 // SQLite schema (Drizzle). See docs/ARCHITECTURE.md §2. Timestamps are epoch milliseconds.
+import { BUNDLED_POSTERS_REV } from '../posters/catalog.js';
 import { sqliteTable, text, integer, real, primaryKey, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const json = <T>(name: string) => text(name, { mode: 'json' }).$type<T>();
@@ -122,11 +123,19 @@ export type Filters = {
   yearTo?: number | null;
 };
 
-/** A collection's poster: an image address, an image uploaded to /config/posters (ADR-042), or none. */
-export type Poster = { kind: 'url'; url: string } | { kind: 'file'; file: string } | { kind: 'none' };
+/**
+ * A collection's poster: an image address, an image uploaded to /config/posters (ADR-042), one of the presets' own
+ * posters that ship in the image (ADR-045, named by the preset's slug), or none.
+ */
+export type Poster = { kind: 'url'; url: string } | { kind: 'file'; file: string } | { kind: 'bundled'; key: string } | { kind: 'none' };
 
-/** A stable name for where a poster comes from: its address, or "file:<name>" for an uploaded one; null for none. */
-export const posterKey = (p: Poster): string | null => (p.kind === 'url' ? p.url : p.kind === 'file' ? `file:${p.file}` : null);
+/**
+ * A stable name for where a poster comes from: its address, "file:<name>" for an uploaded one, "bundled:<slug>@<rev>"
+ * for one of the app's own (the revision changes when the artwork or lettering does, so box sets get the new one);
+ * null for none.
+ */
+export const posterKey = (p: Poster): string | null =>
+  p.kind === 'url' ? p.url : p.kind === 'file' ? `file:${p.file}` : p.kind === 'bundled' ? `bundled:${p.key}@${BUNDLED_POSTERS_REV}` : null;
 
 export const definition = sqliteTable(
   'definition',

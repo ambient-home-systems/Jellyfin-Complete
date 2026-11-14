@@ -18,12 +18,16 @@ Maverick Jellyfin Complete is MIT-licensed (see `LICENSE`). It builds on work fr
 - **Poster overlays.** The status and IMDb Top 250 ribbon overlays follow Kometa v2.5.3's `defaults/overlays/status.yml` and `ribbon.yml`. The ribbon image (`assets/overlays/ribbon-imdb-top-250.png`) is Kometa's `defaults/overlays/images/ribbon/yellow/imdb.png`, under Kometa's MIT licence.
 - **IMDb query mapping.** The IMDb GraphQL variable mapping and chart query (`src/imdb/`) follow Kometa's `modules/imdb.py` (v2.5.3).
 - **Hash files, read at runtime.** The IMDb persisted-query hashes are read from <https://github.com/Kometa-Team/IMDb-Hash> while the app runs, not bundled.
-- **Default posters, read at runtime.** Kometa's default collection posters are fetched from <https://github.com/Kometa-Team/Default-Images> while the app runs. They are not redistributed with this software. That repository has no licence file; the posters remain the work of their authors.
+- **Default posters, read at runtime.** For universes and show franchises, Kometa's default collection posters are fetched from <https://github.com/Kometa-Team/Default-Images> while the app runs. They are not redistributed with this software. That repository has no licence file; the posters remain the work of their authors. The other presets' posters are the app's own (below).
 - **Hosted IMDb service.** Kometa's hosted IMDb service (`utilities.kometa.wiki`) is an **opt-in** setting, off by default, intended only for parity checks.
 
 ## Inter
 
 `assets/overlays/Inter-Medium.ttf` is Inter 3.019 (<https://github.com/rsms/inter>), Copyright (c) 2016-2020 The Inter Project Authors, under the SIL Open Font License 1.1; the licence is in `assets/overlays/Inter-OFL.txt`. It's the font Kometa's overlays use.
+
+## The presets' own posters
+
+The poster artwork in `assets/posters/art` was made for this project with an image-generation model, from the brief and prompts in `docs/posters/`, and is distributed under this project's MIT licence. The collection titles are set over it when the image is built. No logos or trademarks are drawn; streaming services are named in plain type.
 
 ## sharp and libvips
 
@@ -36,6 +40,6 @@ Poster overlays are drawn with sharp (<https://sharp.pixelplumbing.com>, Apache 
 
 ## Other
 
-- **Archivo** typeface: SIL Open Font License 1.1, Copyright 2020 The Archivo Project Authors. See `docs/mockups/fonts/OFL.txt`.
+- **Archivo** typeface: SIL Open Font License 1.1, Copyright 2020 The Archivo Project Authors. Archivo ExtraCondensed Black and Archivo SemiBold (`assets/posters/fonts`) set the titles on the presets' own posters; the licence is in `assets/posters/fonts/Archivo-OFL.txt` (and `docs/mockups/fonts/OFL.txt`).
 - **htmx** (BSD Zero Clause License), bundled from the `htmx.org` npm package.
 - **Lucide** icon paths (ISC License) are used in the UI icon sprite.

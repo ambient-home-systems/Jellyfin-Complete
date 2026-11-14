@@ -99,7 +99,7 @@ describe('collection posters', () => {
     const christmas = app.db.select().from(definition).where(eq(definition.slug, 'seasonal-christmas')).get()!;
     await setPoster(app, christmas.id, { kind: 'url', url: 'https://example.test/poster.jpg' });
     await setPoster(app, christmas.id, { kind: 'default' });
-    expect(app.db.select().from(definition).where(eq(definition.id, christmas.id)).get()!.poster).toEqual({ kind: 'url', url: 'https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/seasonal/christmas.jpg' });
+    expect(app.db.select().from(definition).where(eq(definition.id, christmas.id)).get()!.poster).toEqual({ kind: 'bundled', key: 'seasonal-christmas' });
   });
 
   it('deleting a collection deletes its uploaded poster', async () => {

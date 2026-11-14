@@ -180,7 +180,7 @@ Example settings: dry run **off**; global modes create/delete = Auto, add = Auto
    - **metadata:**
      - ForcedSortName `!00_Christmas Movies`
      - Kometa's overview text
-     - poster from Default-Images, uploaded as base64
+     - the preset's own poster (ADR-045), uploaded as base64
      - `DisplayOrder: SortName`
      - `LockedFields [Name, Overview, Tags]`
      - tag `managed:maverick-collections`

@@ -16,7 +16,8 @@ COPY src ./src
 COPY drizzle ./drizzle
 COPY public ./public
 COPY assets ./assets
-RUN npm run build && npm prune --omit=dev --ignore-scripts --no-audit --no-fund
+# The build also sets the presets' own posters (ADR-045) into dist/posters; their source artwork isn't needed after that.
+RUN npm run build && npm prune --omit=dev --ignore-scripts --no-audit --no-fund && rm -rf assets/posters/art
 # sharp (poster overlays) loads a prebuilt library for the machine it runs on, and npm installed only the build
 # machine's. Add both Linux builds (amd64, arm64) at the versions sharp asks for, and drop the musl and WebAssembly
 # builds this glibc image never uses. The runtime stage checks the one it loads.
@@ -44,8 +45,10 @@ COPY --from=build /app/drizzle ./drizzle
 COPY --from=build /app/public ./public
 COPY --from=build /app/assets ./assets
 COPY package.json LICENSE NOTICE.md ./
-# Self-test on this platform: draw a status badge and the ribbon, so an image whose sharp can't load fails here, not in use.
+# Self-test on this platform: draw a status badge and the ribbon, so an image whose sharp can't load fails here, not in use;
+# and check every preset's own poster was set, at 1000 x 1500.
 RUN node --input-type=module -e "const m = await import('/app/dist/overlays/render.js'); const s = await m.loadSharp(); const p = await s({ create: { width: 200, height: 300, channels: 3, background: '#336' } }).jpeg().toBuffer(); const out = await m.renderOverlay(p, ['status:ended', 'ribbon:imdb_top_250']); if (!(await m.hasMarker(out))) throw new Error('overlay self-test failed'); console.log('poster overlays ok on ' + process.arch);" \
+ && node --input-type=module -e "const b = await import('/app/dist/posters/bundled.js'); const { loadSharp } = await import('/app/dist/overlays/render.js'); const s = await loadSharp(); const all = b.bundledPosters(); for (const p of all) { const m = await s(await b.bundledPosterBytes(p.key)).metadata(); if (m.format !== 'jpeg' || m.width !== 1000 || m.height !== 1500) throw new Error('poster ' + p.key + ' is wrong'); } console.log('preset posters ok: ' + all.length);" \
  && rm -rf /tmp/maverick-fontconfig
 # Runs as the image's unprivileged "node" user (uid 1000). A bind-mounted /config must be writable by uid 1000.
 RUN mkdir -p /config && chown node:node /config

@@ -12,7 +12,7 @@ import { readConfig } from '../src/config.js';
 import { runPipeline } from '../src/pipeline/run.js';
 import { getPlanSummary } from '../src/pipeline/summary.js';
 import { action, definition, tmdbCache } from '../src/db/schema.js';
-import { PRESETS } from '../src/presets/index.js';
+import { PRESETS, LEGACY_POSTER } from '../src/presets/index.js';
 import { STREAMING_SERVICES, availableIn, providerIdsIn, serviceByKey } from '../src/presets/streaming.js';
 import { CHART_PRESETS } from '../src/presets/charts.js';
 import { resolveSource, type SourceContext } from '../src/sources/index.js';
@@ -41,16 +41,18 @@ describe('streaming presets vs Kometa v2.5.3 defaults/both/streaming.yml', () =>
     }
   });
 
-  it('names each "<service> Movies" or "<service> Shows" with Kometa’s poster, and offers the old names for adoption', () => {
+  it('names each "<service> Movies" or "<service> Shows" with the app’s own poster, and offers the old names for adoption', () => {
     const streaming = PRESETS.filter((p) => p.family === 'streaming');
     expect(streaming).toHaveLength(22 * 2 - 3);
     const netflix = streaming.find((p) => p.definition.slug === 'streaming-netflix-movies')!;
     expect(netflix.definition).toMatchObject({
       name: 'Netflix Movies', target: 'movies', minItems: 1, syncMode: 'sync', sortTitle: '!030_Netflix Movies', overview: 'Movies streaming on Netflix.',
-      poster: { kind: 'url', url: 'https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/streaming/color/Netflix.jpg' },
+      poster: { kind: 'bundled', key: 'streaming-netflix-movies' },
       sources: [{ type: 'tmdb_watch_provider', config: { service: 'netflix', kind: 'movie' } }],
     });
-    expect(streaming.find((p) => p.definition.name === 'Disney+ Shows')!.definition.poster).toEqual({ kind: 'url', url: expect.stringMatching(/streaming\/color\/Disney%2B\.jpg$/) });
+    expect(streaming.every((p) => p.definition.poster.kind === 'bundled')).toBe(true);
+    expect(LEGACY_POSTER.get('streaming:netflix:movies')).toBe('https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/streaming/color/Netflix.jpg');
+    expect(LEGACY_POSTER.get('streaming:disney:shows')).toMatch(/streaming\/color\/Disney%2B\.jpg$/);
     expect(streaming.some((p) => p.definition.name === 'hayu Movies')).toBe(false);
     for (const [key, names] of Object.entries(tv.delete_collections_named as Record<string, string[]>)) {
       const old = streaming.filter((p) => p.definition.presetKey.startsWith(`streaming:${key}:`)).flatMap((p) => p.deleteCollectionsNamed);
@@ -85,9 +87,10 @@ describe('IMDb chart presets vs Kometa v2.5.3 defaults/chart/imdb.yml', () => {
     expect(charts.map((d) => d.name)).toEqual(['IMDb Popular Movies', 'IMDb Popular Shows', 'IMDb Top 250 Movies', 'IMDb Top 250 Shows', 'IMDb Lowest Rated Movies']);
     expect(charts.find((d) => d.name === 'IMDb Top 250 Shows')).toMatchObject({
       target: 'shows', sortTitle: '!020_IMDb Top 250 Shows', overview: 'List of IMDb Top 250 Shows.',
-      poster: { kind: 'url', url: 'https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/chart/color/IMDb%20Top%20250.jpg' },
+      poster: { kind: 'bundled', key: 'chart-top-shows' },
       sources: [{ type: 'imdb_chart', config: { chart: 'top_shows' } }],
     });
+    expect(LEGACY_POSTER.get('imdb_chart:top_shows')).toBe('https://raw.githubusercontent.com/Kometa-Team/Default-Images/master/chart/color/IMDb%20Top%20250.jpg');
   });
 });
 

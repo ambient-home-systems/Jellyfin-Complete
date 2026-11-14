@@ -233,7 +233,7 @@ export const CollectionEditor: FC<{
             <div class="section-head"><h2 id="poster-h">Poster</h2><span class="aside">the only image its box set carries</span></div>
             <div class="poster-edit">
               {def.poster.kind !== 'none'
-                ? <img src={`/collections/${def.id}/poster?v=${encodeURIComponent(def.poster.kind === 'url' ? def.poster.url : def.poster.file)}`} alt={`${def.name}’s poster`} width={120} height={180} />
+                ? <img src={`/collections/${def.id}/poster?v=${encodeURIComponent(posterKey(def.poster) ?? '')}`} alt={`${def.name}’s poster`} width={120} height={180} />
                 : <div class="poster-none" role="img" aria-label="No poster">No poster</div>}
               <form method="post" action={`/collections/${def.id}/poster`} enctype="multipart/form-data" class="form">
                 <Csrf token={csrf} />
