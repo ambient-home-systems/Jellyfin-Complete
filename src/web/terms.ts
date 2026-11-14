@@ -111,13 +111,13 @@ export function timezoneOptions(current: string): string[] {
  */
 export function familyNote(family: PresetFamily, n: number, s: Settings): string {
   switch (family) {
-    case 'seasonal': return `${n} movie collections for holidays and awareness months (Christmas, Halloween, Black History Month…). Each appears only during its dates.`;
-    case 'holiday_episodes': return `${n} collections of Christmas, Halloween and Thanksgiving episodes from your shows, on the same dates as the movies.`;
-    case 'universe': return `${n} movie universes (Marvel, Star Wars, Middle Earth…), one collection each. A universe’s collection is made only when you have at least 2 of its movies, and stays all year.`;
-    case 'show_franchise': return `${n} TV franchises (Star Trek, NCIS, One Chicago…), one collection each. A franchise’s collection is made only when you have at least 2 of its shows, and stays all year.`;
-    case 'film_series': return `One collection for each movie series you have at least ${s.filmSeries.minimum} movies of (Toy Story, John Wick…), named and illustrated from TMDb, in release order. New series appear as you add movies.${n ? ` ${n} so far.` : ''} Needs a TMDb key.`;
-    case 'basic': return `${n} collections that follow your library: Newly Released Movies and Shows (the last 90 days), New Episodes (aired in the last 7 days), and Recently Added Movies and Shows (the last 30 days). They change every night.`;
-    case 'imdb_chart': return `${n} collections of the titles you own from IMDb’s charts: the Top 250 and Most Popular movies and shows, and the Lowest Rated movies. They follow the charts and stay all year.`;
-    case 'streaming': return `${n} collections of the titles you own that stream on a service in your country (${s.streaming.region}; change it in Settings): Netflix Movies, Disney+ Shows and so on. Turning this on turns on the services offered there. Needs a TMDb key; a big library fills in over a few nights.`;
+    case 'seasonal': return `${n} movie collections for holidays and awareness months (Christmas, Halloween, Black History Month…), each only on its dates.`;
+    case 'holiday_episodes': return `${n} collections of Christmas, Halloween and Thanksgiving episodes from your shows.`;
+    case 'universe': return `${n} movie universes (Marvel, Star Wars, Middle Earth…), one collection each, made when you have at least 2 of its movies.`;
+    case 'show_franchise': return `${n} TV franchises (Star Trek, NCIS, One Chicago…), one collection each, made when you have at least 2 of its shows.`;
+    case 'film_series': return `One collection for each movie series you have at least ${s.filmSeries.minimum} movies of (Toy Story, John Wick…).${n ? ` ${n} so far.` : ''} Needs a TMDb key.`;
+    case 'basic': return `${n} collections that follow your library: Newly Released Movies and Shows, New Episodes, and Recently Added Movies and Shows.`;
+    case 'imdb_chart': return `${n} collections of the titles you own from IMDb’s charts: Top 250, Most Popular and Lowest Rated.`;
+    case 'streaming': return `${n} collections of the titles you own that stream on a service in your country (${s.streaming.region}): Netflix Movies, Disney+ Shows and so on. Needs a TMDb key.`;
   }
 }

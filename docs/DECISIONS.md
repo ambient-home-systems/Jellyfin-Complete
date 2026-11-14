@@ -856,6 +856,21 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - Mockups in `docs/mockups` show the earlier layout and words.
   - A container restart in the middle of Getting started ends the guide, as before, once a run exists.
 
+### ADR-047 Undo in the Inbox, and a design pass: Decided (14 Nov)
+- **Context.** ADR-046's core loop ended in "confirmation with Undo", but 0.20.0 only confirmed: taking a decision back meant finding it in History. You also asked for a full design check of 0.20.0: concise words, colour, usability.
+- **Decision.**
+  - **Undo beside the message.** A decision made in the Inbox (approve, snooze, dismiss) redirects with the ids of the changes it touched, and the message offers Undo (`POST /review/undo`, `undoDecision` in `src/web/review-actions.ts`).
+    - Dismissed, snoozed, and approved-for-later changes go straight back to waiting; a dismissal or snooze is forgotten.
+    - Applied changes are reversed with the same `undoAction` History uses. Undoing a "create" removes the collection, which covers the titles and details approved with it.
+    - **It differs from History's Undo in one way:** it doesn't leave the change dismissed. History's Undo means "I don't want this"; Undo seconds after approving means "not yet", so the next run lists the change again. It was in the Inbox because it needed approval, so it comes back to the Inbox, not straight to Jellyfin.
+    - At most 200 changes per decision carry an Undo, to keep the address short. The MCP tools are unchanged.
+  - **The design pass** checked 0.20.0 against DESIGN.md and fixed where it had drifted: a yellow edge stripe (The Posted Departure Rule), pill-shaped filters (Shapes), a filled segment for an inherited approval (Segmented Control), several solid buttons on one page (Buttons), 6px poster corners (Shapes), and typed arrow characters used as icons.
+  - **Words:** hints, notices and empty pages were cut to what's needed to act. Explanations that are only sometimes needed stay folded away.
+  - **Measured, not judged by eye:** text contrast was computed for every page in light and dark at 1440px and 390px; nothing is below 4.5:1. No page scrolls sideways at 390px.
+- **Consequences.**
+  - A decision's Undo lives only in the address of the page that follows it. Reloading keeps it; navigating away loses it, and History's Undo remains.
+  - Undoing an approval that created a collection leaves its other approved changes marked as applied in History, as undoing a create there always has.
+
 ---
 
 

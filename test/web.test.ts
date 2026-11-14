@@ -160,7 +160,7 @@ describe('web', () => {
     expect(dash.timetable.some((c) => c.kind === 'opens' && c.def.slug === 'seasonal-christmas')).toBe(true);
     const review = await (await t.web.request('/review', { headers: { cookie } })).text();
     expect(review).toContain('Thanksgiving Movies');
-    expect(review).toContain('You’re approving everything first');
+    expect(review).toContain('Approving everything first.');
     expect(review).toMatch(/name="group" value="approve:\d+"[^>]*>.*Approve all 3/);
     expect(review).toMatch(/<span class="n num">3<\/span>/); // the Inbox's Collection changes tab
     const ids = [...review.matchAll(/name="ids" value="(\d+)"/g)].map((m) => m[1]!);
@@ -170,6 +170,7 @@ describe('web', () => {
     const res = await t.web.request('/review', { method: 'POST', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: body.toString() });
     expect(res.status).toBe(302);
     expect(flash(res)).toContain('Applied 3');
+    expect(new URL(res.headers.get('location')!, 'http://x').searchParams.get('undo')).toBe(ids.join(',')); // the message offers Undo
     const box = t.fake.boxSets().find((b) => b.Name === 'Thanksgiving Movies');
     expect(box?.children).toEqual(['m-ptna']);
     expect(box?.ForcedSortName).toBe('!00_Thanksgiving Movies');
@@ -191,11 +192,11 @@ describe('web', () => {
     expect(await (await t.web.request(`/collections/${tgId}?tab=advanced`, { headers: { cookie } })).text()).toMatch(/<div data-panel="titles" hidden/);
     // Home, once something has been approved, offers once to stop asking about routine changes.
     t.app.updateSettings({ onboarding: { ...t.app.settings().onboarding, finished: true } });
-    expect(await (await t.web.request('/', { headers: { cookie } })).text()).toContain('Let routine changes happen by themselves?');
+    expect(await (await t.web.request('/', { headers: { cookie } })).text()).toContain('Stop asking about routine changes?');
     const keep = await t.web.request('/start/automatic', { method: 'POST', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, choice: 'no' }).toString() });
     expect(flash(keep)).toContain('Nothing changes');
     expect(t.app.settings().dryRun).toBe(true);
-    expect(await (await t.web.request('/', { headers: { cookie } })).text()).not.toContain('Let routine changes happen by themselves?');
+    expect(await (await t.web.request('/', { headers: { cookie } })).text()).not.toContain('Stop asking about routine changes?');
     // Plex parity: not connected, then connected (Plex has 3 Thanksgiving films; 1 of them is owned here).
     expect(await (await t.web.request(`/collections/${tgId}/parity`, { headers: { cookie } })).text()).toContain('Connect Plex');
     t.app.updateSettings({ connections: { ...t.app.settings().connections, plexUrl: 'http://plex.test:32400' } });
@@ -203,6 +204,42 @@ describe('web', () => {
     const par = await (await t.web.request(`/collections/${tgId}/parity`, { headers: { cookie } })).text();
     expect(par).toMatch(/<b class="num">3<\/b> in Plex · <b class="num">1<\/b> planned here · <b class="num">1<\/b> in both/);
     expect(par).toContain('In Plex, not in your Jellyfin library (2)');
+  });
+
+  it('takes back a decision from the message it leaves in the Inbox', async () => {
+    await t.web.request('/setup', form({ url: FAKE_URL, apiKey: t.fake.apiKey, setupCode: t.app.setupCode ?? '' }));
+    const { cookie } = await signIn(t.web);
+    const csrf = await csrfOf(t.web, cookie);
+    const now = Date.UTC(2026, 10, 17, 15);
+    const post = (path: string, data: Record<string, string>) => t.web.request(path, { method: 'POST', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...data }).toString() });
+    const waiting = () => (t.app.db.$client.prepare("select id from action where status = 'proposed' order by id").all() as { id: number }[]).map((r) => r.id);
+    await runPipeline(t.app, { job: 'manual', trigger: 'manual', index: true, now });
+    const tg = (t.app.db.$client.prepare("select id from definition where slug = 'seasonal-thanksgiving'").get() as { id: number }).id;
+    expect(waiting()).toHaveLength(3);
+    // Dismiss one, then Undo: it's waiting again straight away, and no longer remembered as dismissed.
+    const one = waiting()[0]!;
+    const dismissed = await post('/review', { tab: 'pending', only: `dismiss:${one}` });
+    const undoIds = new URL(dismissed.headers.get('location')!, 'http://x').searchParams.get('undo')!;
+    expect(undoIds).toBe(String(one));
+    expect(await (await t.web.request(dismissed.headers.get('location')!, { headers: { cookie } })).text()).toMatch(/action="\/review\/undo"[\s\S]{0,300}name="ids" value="\d+"[\s\S]{0,200}Undo<\/button>/);
+    expect(waiting()).toHaveLength(2);
+    expect(flash(await post('/review/undo', { ids: undoIds }))).toContain('1 waiting again');
+    expect(waiting()).toHaveLength(3);
+    expect(t.app.db.$client.prepare('select count(*) n from decision').get()).toEqual({ n: 0 });
+    // Approve all, which creates the collection in Jellyfin, then Undo: it's removed again.
+    const approved = await post('/review', { tab: 'pending', group: `approve:${tg}` });
+    expect(flash(approved)).toContain('Applied 3');
+    expect(t.fake.boxSets().map((b) => b.Name)).toEqual(['Thanksgiving Movies']);
+    const undone = await post('/review/undo', { ids: new URL(approved.headers.get('location')!, 'http://x').searchParams.get('undo')! });
+    expect(flash(undone)).toContain('Undone: 3 reversed in Jellyfin');
+    expect(t.fake.boxSets()).toHaveLength(0);
+    expect(t.fake.items.has('m-ptna')).toBe(true); // the movie stays
+    // Nothing is remembered as dismissed, so the next run lists the same changes again.
+    await runPipeline(t.app, { job: 'manual', trigger: 'manual', index: true, now });
+    expect(waiting()).toHaveLength(3);
+    // A second Undo of the same message has nothing left to do, and garbage is refused.
+    expect(flash(await post('/review/undo', { ids: new URL(approved.headers.get('location')!, 'http://x').searchParams.get('undo')! }))).toMatch(/nothing left to undo|Already undone|can be undone/i);
+    expect(flash(await post('/review/undo', { ids: 'x' }))).toContain('nothing left to undo');
   });
 
   it('reads libraries for Settings and the guide when none are known yet', async () => {

@@ -12,7 +12,7 @@
 | Where | What for |
 |---|---|
 | **Home** | What needs you, what broke, what's next. The timetable lists the next 120 days of collections appearing and going away. |
-| **Inbox** | Everything waiting for a decision, in one place, with one count in the menu. **Collection changes** are grouped by collection: **Approve** applies a change straight away, **Approve all** does a whole collection, **Snooze** means "not now" and **Dismiss** means "never this change". Snoozed and dismissed changes are remembered, and **Bring back** undoes either. **Library health** and **Missing titles** are tabs here too, once they're switched on. |
+| **Inbox** | Everything waiting for a decision, in one place, with one count in the menu. **Collection changes** are grouped by collection: **Approve** applies a change straight away, **Approve all** does a whole collection, **Snooze** means "not now" and **Dismiss** means "never this change". Snoozed and dismissed changes are remembered, and **Bring back** undoes either. Straight after any decision, **Undo** beside its message takes it back: a change already made in Jellyfin is reversed, and the next run lists it again. **Library health** and **Missing titles** are tabs here too, once they're switched on. |
 | **Collections** | Every collection, with a switch each. **Already in Jellyfin** is its second tab. |
 | **History** | Every change made, with who approved it and an **Undo**, and every run with its log. |
 | **Settings** | One page per subject: Connections, Libraries and region, Approvals, Schedule, Extras, Advanced. |

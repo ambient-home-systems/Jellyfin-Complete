@@ -179,7 +179,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--ink); width: 1
 .seg input:checked + label { background: var(--yellow); color: var(--yellow-ink); }
 .seg input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: -2px; }
 .seg input:disabled + label { color: var(--ink-3); cursor: not-allowed; text-decoration: line-through; }
-.seg.inherit input:checked + label { background: transparent; color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.seg.inherit input[value="default"]:checked + label { background: transparent; color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
 
 .tabs { display: flex; gap: var(--s4); border-bottom: 1px solid var(--rule); }
 .tabs a, .tabs button { padding: 8px 0; font: 600 var(--fs-md)/1.2 var(--font); color: var(--ink-2); text-decoration: none; border: 0; background: none; border-bottom: 3px solid transparent; margin-bottom: -1px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
@@ -490,7 +490,8 @@ details.frame img { display: block; margin-top: 4px; width: 240px; height: auto;
 
 
 /* ───────── App-only additions ───────── */
-.flash { padding: 10px var(--s5); border-bottom: 1px solid var(--rule); font-size: var(--fs-sm); display: flex; gap: var(--s2); align-items: center; }
+.flash { padding: 8px var(--s5); min-height: 42px; border-bottom: 1px solid var(--rule); font-size: var(--fs-sm); display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; }
+.flash.ok { font-weight: 550; }
 .flash.err { color: var(--red); }
 .flash.ok { color: var(--ink); }
 .auth { min-height: 100vh; display: grid; place-items: center; padding: var(--s5) max(16px, env(safe-area-inset-left, 0px)); }
@@ -501,7 +502,7 @@ details.frame img { display: block; margin-top: 4px; width: 240px; height: auto;
 .logbox { max-height: 360px; overflow: auto; font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; background: var(--hover); padding: var(--s3); white-space: pre-wrap; }
 .logbox.copy { max-height: none; overflow-wrap: anywhere; user-select: all; }
 /* Settings → Claude access: a new token, shown once */
-.reveal { display: grid; gap: var(--s2); padding: var(--s3); border: 1px solid var(--rule-2); border-left: 4px solid var(--yellow); }
+.reveal { display: grid; gap: var(--s2); padding: var(--s3) 0; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); }
 .inline-form { display: inline; }
 .table-wrap { overflow-x: auto; }
 button.linklike { all: unset; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
@@ -526,8 +527,8 @@ details.family > summary { cursor: pointer; display: grid; gap: 2px; padding: va
 details.family > summary::-webkit-details-marker { display: none; }
 details.family > summary h2 { display: inline; font-size: var(--fs-lg); font-weight: 700; }
 .family h2 .faint { font-size: var(--fs-sm); font-weight: 400; }
-details.family > summary h2::before { content: "▸ "; }
-details.family[open] > summary h2::before { content: "▾ "; }
+details.family > summary h2::before { content: ""; display: inline-block; margin-right: 10px; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-2px) rotate(-45deg); }
+details.family[open] > summary h2::before { transform: translateY(-4px) rotate(45deg); }
 details.family > summary .faint { font-size: var(--fs-sm); }
 td .inline-form { display: inline-block; margin-left: var(--s2); }
 .family .section-head .fam-switches { margin-left: auto; }
@@ -598,7 +599,7 @@ fieldset.plain > legend { padding: 0; margin-bottom: var(--s2); font-weight: 600
 /* Settings → Poster overlays: previews */
 .overlay-previews { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s3); }
 .overlay-previews figure { margin: 0; width: 140px; font-size: var(--fs-xs); }
-.overlay-previews img { display: block; width: 140px; height: auto; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; background: var(--rule); }
+.overlay-previews img { display: block; width: 140px; height: auto; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 2px; background: var(--rule); }
 .overlay-previews figcaption { margin-top: 6px; overflow-wrap: anywhere; }
 
 /* Text for screen readers only (a table's action column heading, say). */
@@ -606,7 +607,7 @@ fieldset.plain > legend { padding: 0; margin-bottom: var(--s2); font-weight: 600
 
 /* Collection editor → Poster (ADR-042) */
 .poster-edit { display: flex; gap: var(--s5); align-items: flex-start; flex-wrap: wrap; }
-.poster-edit img, .poster-edit .poster-none { width: 120px; aspect-ratio: 2 / 3; height: auto; object-fit: cover; border-radius: 6px; background: var(--rule); flex: none; }
+.poster-edit img, .poster-edit .poster-none { width: 120px; aspect-ratio: 2 / 3; height: auto; object-fit: cover; border-radius: 2px; background: var(--rule); flex: none; }
 .poster-edit .poster-none { display: grid; place-items: center; font-size: var(--fs-xs); color: var(--ink-2); }
 .poster-edit form { flex: 1 1 260px; min-width: 0; }
 .poster-edit form .check { display: flex; }
@@ -640,8 +641,8 @@ a.chip:hover { border-color: var(--ink); color: var(--ink); }
 details.how { font-size: var(--fs-sm); }
 details.how > summary { cursor: pointer; color: var(--ink-2); font-weight: 600; width: fit-content; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; list-style: none; }
 details.how > summary::-webkit-details-marker { display: none; }
-details.how > summary::after { content: "▸"; text-decoration: none; display: inline-block; margin-left: 5px; }
-details.how[open] > summary::after { content: "▾"; }
+details.how > summary::after { content: ""; display: inline-block; margin-left: 6px; width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(-45deg); }
+details.how[open] > summary::after { transform: translateY(-3px) rotate(45deg); }
 details.how > summary:hover { color: var(--ink); }
 details.how > :not(summary) { margin-top: var(--s2); color: var(--ink-2); }
 details.how .plain-list { gap: var(--s2); max-width: 80ch; }
@@ -669,13 +670,13 @@ details.how .plain-list { gap: var(--s2); max-width: 80ch; }
 
 /* Inbox */
 .subtabs-row { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); align-items: baseline; margin-bottom: calc(var(--s3) * -1); }
-.subtabs { display: flex; gap: var(--s1); flex-wrap: wrap; }
-.subtabs a { padding: 4px 10px; border: 1px solid var(--rule); border-radius: 99px; text-decoration: none; font-size: var(--fs-sm); font-weight: 550; color: var(--ink-2); }
-.subtabs a:hover { border-color: var(--ink-2); color: var(--ink); }
-.subtabs a[aria-current="page"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-.subtabs .n { font-weight: 500; opacity: 0.75; margin-left: 2px; }
-.callout.note { display: block; margin: 0; font-size: var(--fs-sm); color: var(--ink-2); border-left: 4px solid var(--yellow); }
-.callout.note b { color: var(--ink); }
+.subtabs { display: inline-flex; border: 1px solid var(--rule-2); border-radius: var(--radius); overflow: hidden; }
+.subtabs a { padding: 0 10px; height: 28px; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-size: var(--fs-sm); font-weight: 550; color: var(--ink-2); border-left: 1px solid var(--rule); white-space: nowrap; }
+.subtabs a:first-child { border-left: 0; }
+.subtabs a:hover { background: var(--hover); color: var(--ink); }
+.subtabs a[aria-current="page"] { background: var(--yellow); color: var(--yellow-ink); }
+.subtabs a:focus-visible { outline-offset: -2px; }
+.subtabs .n { font-weight: 500; }
 .callout a { white-space: nowrap; }
 .empty form { margin-top: var(--s2); }
 .bulk .check { margin-right: var(--s3); }
@@ -696,7 +697,7 @@ details.family > summary .faint { max-width: 100ch; }
 /* A collection: what it is at a glance, then tabs. */
 .editor-page { gap: var(--s5); }
 .summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s5); align-items: start; }
-.summary-poster { width: 96px; height: auto; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; background: var(--rule); display: block; }
+.summary-poster { width: 96px; height: auto; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 2px; background: var(--rule); display: block; }
 .summary-poster.none { display: grid; place-items: center; font-size: var(--fs-xs); color: var(--ink-2); }
 .summary-facts { display: grid; gap: var(--s3); max-width: 80ch; }
 .standing { font-size: var(--fs-lg); line-height: 1.4; }
@@ -764,3 +765,23 @@ input.cron { max-width: 14em; margin-bottom: 4px; }
   .grp-head .btn { margin-left: 0; }
   .addsrc .check.ask { padding-top: 0; }
 }
+
+/* ───────── Design pass (ADR-047) ───────── */
+/* Reading measure: prose never runs the full width of a wide page. */
+.form-sec > p, .form-sec .hint, .step-body p, .settings-page p, .empty p, .content > p, .intro p, .choice label span { max-width: 72ch; }
+.field .hint { max-width: 60ch; }
+/* A caret and placeholders from the palette. */
+input, textarea { caret-color: var(--ink); }
+::placeholder { color: var(--ink-3); opacity: 1; }
+/* The Inbox's count on the phone's tab bar sits beside the icon, not over it. */
+@media (max-width: 640px) {
+  .rail nav a { position: relative; }
+  .rail nav a .count { position: absolute; top: 3px; left: calc(50% + 11px); right: auto; margin: 0; }
+  .flash { padding: 8px var(--s4); }
+  .subtabs-row { margin-bottom: 0; }
+}
+/* Nothing wider than the page: grid children may shrink, and tables drop columns instead of scrolling. */
+.content > *, .answers > *, .settings > * { min-width: 0; }
+/* Rows kept out of the way until asked for. */
+details.rest { margin: var(--s2) 0 var(--s4); }
+.notice.ok .dot { margin-top: 5px; }

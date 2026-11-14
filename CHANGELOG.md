@@ -2,6 +2,24 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.21.0 — 14 Nov 2026
+
+- **Undo, right where you decided.** After you approve, snooze or dismiss in the Inbox, the message it leaves has an **Undo** button.
+  - A dismissed or snoozed change, or one approved for a later date, goes straight back to waiting.
+  - A change already made in Jellyfin is reversed there (a created collection is removed, an added title taken out), and the next run lists it in your Inbox again.
+  - History's Undo is unchanged: it still remembers the change as dismissed.
+- **Shorter words everywhere.** Hints, empty pages, notices and Getting started say the same things in about half the text. Longer explanations stay behind **How to fix** and **How checks work**.
+- **Closer to the app's own design rules.**
+  - The Inbox's To approve / Snoozed / Dismissed filter is the same segmented control as everywhere else, with the current one on yellow.
+  - "Approving everything first" is a yellow strip across the top of the Inbox again, not a box with a yellow edge.
+  - A collection's approval that follows Settings is underlined, and one you've set yourself is yellow, so the exception stands out.
+  - One solid button per page. Posters have the same square corners everywhere. Arrows on fold-away sections are drawn, not typed characters.
+  - Text never runs wider than a comfortable line.
+- **Home** shows one Run now before the first run, not two.
+- **Settings → Extras:** home-screen rows that aren't showing fold away behind a count.
+- **Phone:** Library health no longer scrolls sideways (it drops columns instead), and the Inbox's count sits beside its icon.
+- Checked in light and dark, on desktop and phone: every piece of text meets the 4.5:1 contrast the app aims for.
+
 ## 0.20.0 — 14 Nov 2026
 
 The same app, reorganised around what you want to do, in plainer words (ADR-046). Nothing is removed, your settings and collections are untouched, and every old address still works.

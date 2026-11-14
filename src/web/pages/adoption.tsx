@@ -15,14 +15,13 @@ export const Adoption: FC<{ items: AdoptionCandidate[]; csrf: string; error?: st
       </header>
       <div class="content">
         <div class="intro">
-          <p class="lead">Collections Jellyfin already had, under the same name as one of yours. The app leaves each alone until you take it over or delete it.</p>
+          <p class="lead">Collections Jellyfin already has under one of your names. The app leaves each alone until you decide.</p>
           <details class="how">
             <summary>What taking over means</summary>
             <ul class="plain-list">
-              <li><b>Take over.</b> The app starts keeping that collection up to date: its titles, name, poster and dates. What changes goes through your Inbox first. (Jellyfin calls a collection a “box set”.)</li>
-              <li><b>Delete.</b> The collection is removed from Jellyfin, and the app makes its own when the time comes. The titles stay in your library.</li>
-              <li><b>Made by another tool?</b> Stop that tool making it first, or it will keep rewriting it. For Jellyfin-Auto-Collections, remove its line from config.yaml.</li>
-              <li>Also listed: Jellyfin’s own collection for one of your movie series, and collections under an older name for one of yours.</li>
+              <li><b>Take over.</b> The app keeps it up to date from now on. Changes go through your Inbox. (Jellyfin calls a collection a “box set”.)</li>
+              <li><b>Delete.</b> It’s removed from Jellyfin and the app makes its own. Your titles stay.</li>
+              <li><b>Made by another tool?</b> Stop that tool first, or it keeps rewriting it.</li>
             </ul>
           </details>
         </div>
@@ -34,7 +33,7 @@ export const Adoption: FC<{ items: AdoptionCandidate[]; csrf: string; error?: st
           </form>
         ) : null}
         {items.length === 0 ? (
-          <div class="empty"><h3>Nothing to do here</h3><p>Jellyfin has no collection with the same name as one of yours.</p></div>
+          <div class="empty"><h3>Nothing to do</h3><p>Jellyfin has no collection under one of your names.</p></div>
         ) : (
           <div class="table-wrap">
             <table class="tt">

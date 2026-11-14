@@ -25,10 +25,10 @@ export const AutomaticOffer: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
   const auto = APPROVAL_ROWS.filter(([t]) => m.modes[t] === 'auto').map(([, l]) => l.charAt(0).toLowerCase() + l.slice(1));
   return (
     <div class="banner offer" role="region" aria-label="Automatic changes">
-      <span><b>Let routine changes happen by themselves?</b> You’ve approved your first changes. From now on the app can {auto.length ? auto.slice(0, 3).join(', ') : 'make the changes you choose'} without asking; everything else still waits in your Inbox. You can change this any time in Settings → Approvals.</span>
+      <span><b>Stop asking about routine changes?</b> The app would {auto.length ? auto.slice(0, 3).join(', ') : 'make the changes you choose'} on its own. Everything else still waits in your Inbox.</span>
       <form method="post" action="/start/automatic" class="offer-actions">
         <Csrf token={csrf} />
-        <button class="btn sm on-yellow" type="submit" name="choice" value="yes">Yes, automatically</button>
+        <button class="btn sm on-yellow" type="submit" name="choice" value="yes">Yes, stop asking</button>
         <button class="btn sm" type="submit" name="choice" value="no">Keep asking me</button>
       </form>
     </div>
@@ -62,19 +62,19 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
         <h1>Home</h1>
         <div class="actions">
           <span class="clock num">{fmtDate(m.now, m.tz, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · {fmtTime(m.now, m.tz)}</span>
-          <RunProgress p={m.progress} csrf={csrf} />
+          {firstRun && !running ? null : <RunProgress p={m.progress} csrf={csrf} />}
         </div>
       </header>
       <div class="content">
         {!m.configured ? (
-          <div class="empty"><h3>Jellyfin isn’t connected</h3><p>Add its address and an API key, then start a run.</p><a class="btn primary" href="/settings">Open Settings</a></div>
+          <div class="empty"><h3>Jellyfin isn’t connected</h3><p>Add its address and API key.</p><a class="btn primary" href="/settings">Open Settings</a></div>
         ) : null}
         <div class="answers">
           <section class="panel needs" aria-labelledby="needs-h">
             <div class="section-head"><h2 id="needs-h">Needs you</h2></div>
             {!needsAnything ? (
               firstRun
-                ? <p class="lead">{running ? 'The first run is reading your library and lists. Changes to approve appear here when it finishes.' : 'Nothing yet. Start your first run to see what the app would change.'}</p>
+                ? <p class="lead">{running ? 'The first run is still going.' : 'Nothing yet.'}</p>
                 : <p class="lead">You’re all caught up.{nextRun ? ` Next run: ${nextRun}.` : ''}</p>
             ) : (
               <>
@@ -90,13 +90,13 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
                         </li>
                       ))}
                     </ul>
-                    <a class="btn primary" href="/review">Open Inbox</a>
+                    <a class="btn" href="/review">Open Inbox</a>
                   </>
                 ) : null}
                 {m.healthOpen || m.waitingForAdoption ? (
                   <ul class="rows also">
-                    {m.healthOpen ? <li><a href="/health">Library health</a><span class="faint">files or posters that don’t match their title</span><span class="n num">{m.healthOpen}</span></li> : null}
-                    {m.waitingForAdoption ? <li><a href="/adoption">Already in Jellyfin</a><span class="faint">collections that exist there under the same name; take them over or delete them</span><span class="n num">{m.waitingForAdoption}</span></li> : null}
+                    {m.healthOpen ? <li><a href="/health">Library health</a><span class="faint">files or posters that don’t match</span><span class="n num">{m.healthOpen}</span></li> : null}
+                    {m.waitingForAdoption ? <li><a href="/adoption">Already in Jellyfin</a><span class="faint">same name as one of yours</span><span class="n num">{m.waitingForAdoption}</span></li> : null}
                   </ul>
                 ) : null}
               </>
@@ -107,42 +107,42 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
             <div class="section-head"><h2 id="svc-h">Problems</h2><span class="aside">{problems ? plural(problems, 'problem') : 'none'}{m.healthyCount ? ` · ${plural(m.healthyCount, 'source')} OK` : ''}</span></div>
             {serverBad && m.server ? <Notice state="err" label="Unsupported" title={`Jellyfin ${m.server.version}`} line={m.server.note} /> : null}
             {failedRepairs.map((e) => (
-              <Notice state="err" label="Repair failed" title={`${e.name}: couldn’t be put right`} line={<>{e.what} The next run tries again. ({fmtAgo(e.at, m.now)})</>} />
+              <Notice state="err" label="Repair failed" title={`${e.name}: couldn’t be put right`} line={<>{e.what} The next run tries again.</>} />
             ))}
-            {m.hashError ? <Notice state="err" label="Failing" title="IMDb can’t be read" line={<>{m.hashError}. IMDb lists keep their last good results until this recovers.</>} /> : null}
+            {m.hashError ? <Notice state="err" label="Failing" title="IMDb can’t be read" line={<>{m.hashError}. IMDb lists keep their last good results.</>} /> : null}
             {m.failing.map((s) => (
-              <Notice state="err" label="Failing" title={s.label} line={<>{s.error} It has never answered, so nothing is removed from its collections until it does.</>} />
+              <Notice state="err" label="Failing" title={s.label} line={<>{s.error} Nothing is removed from its collections meanwhile.</>} />
             ))}
             {m.stale.map((s) => (
-              <Notice state="warn" label="Using last good results" title={s.label} line={<>{s.error} Using its last good results, from {fmtAgo(s.lastGoodAt, m.now)}. Nothing is removed while a source fails.</>} />
+              <Notice state="warn" label="Using last good results" title={s.label} line={<>{s.error} Using its results from {fmtAgo(s.lastGoodAt, m.now)}.</>} />
             ))}
             {!problems ? (
-              <Notice state="ok" label="OK" title={m.healthyCount ? 'Every source answered' : 'Nothing read yet'} line={m.healthyCount ? `${plural(m.healthyCount, 'source')} read without errors.` : 'Sources are read on the first run.'} />
+              <Notice state="ok" label="OK" title={m.healthyCount ? 'Every source answered' : 'Nothing read yet'} line={m.healthyCount ? undefined : 'Sources are read on the first run.'} />
             ) : null}
 
             {advice ? (
               <div class="advice">
                 <h3>Recommendations</h3>
-                <p class="faint">Nothing here is broken. These are settings in Jellyfin worth a look.</p>
+                <p class="faint">Jellyfin settings worth changing. Nothing is broken.</p>
                 {m.server && m.server.level !== 'verified' && !serverBad ? <Notice state="warn" label={m.server.level} title={`Jellyfin ${m.server.version}`} line={m.server.note} /> : null}
                 {m.autoCollections.length ? (
                   <Notice state="warn" label="Recommendation" title={`Jellyfin makes its own collections in ${m.autoCollections.join(', ')}`}
-                    line="They can pick up the wrong poster and backdrop."
-                    fix="“Automatically add to collection” is on there. Jellyfin finds artwork for those collections with a TMDb name search, which can pick another collection’s poster and backdrop. In Jellyfin: Dashboard → Libraries, open the library’s menu → Manage library, and untick “Automatically add to collection”." />
+                    line="They can get another collection’s poster."
+                    fix="In Jellyfin: Dashboard → Libraries, open the library’s menu → Manage library, and untick “Automatically add to collection”." />
                 ) : null}
                 {m.imageFetcherRisks.length ? (
                   <Notice state="warn" label="Recommendation" title={`Jellyfin can take posters from the video itself in ${m.imageFetcherRisks.map((r) => r.library).join(', ')}`}
-                    line="A random frame, or a picture inside a mislabelled file, can end up as a poster."
-                    fix={<>{m.imageFetcherRisks.map((r) => `${r.library}: ${r.fetchers.join(' and ')}`).join('; ')} {m.imageFetcherRisks.length === 1 ? 'is' : 'are'} on as an image fetcher for movies or shows. In Jellyfin: Dashboard → Libraries, open the library’s menu → Manage library, and untick them under Image fetchers for Movie, Series and Season (episode stills are fine). <a href="/health">Library health</a> lists posters that look like they came from the video or file.</>} />
+                    line="A random frame can end up as a poster."
+                    fix={<>{m.imageFetcherRisks.map((r) => `${r.library}: ${r.fetchers.join(' and ')}`).join('; ')} {m.imageFetcherRisks.length === 1 ? 'is' : 'are'} on. In Jellyfin: Dashboard → Libraries, open the library’s menu → Manage library, and untick them under Image fetchers for Movie, Series and Season. Episode stills are fine.</>} />
                 ) : null}
                 {m.audioPrefRisks.length ? (
                   <Notice state="warn" label="Recommendation" title={m.audioPrefRisks.length === 1 ? `${m.audioPrefRisks[0]!.user} may hear a dub` : `${m.audioPrefRisks.length} Jellyfin users may hear a dub`}
-                    line="A file whose default audio is another language plays in that language."
-                    fix={<>{m.audioPrefRisks.map((u) => `${u.user}: ${u.why}`).join('; ')}. In Jellyfin, each user can set Settings → Playback → Preferred audio language, and untick “Play default audio track regardless of language”. <a href="/health">Library health</a> lists the files.</>} />
+                    line="A file with a foreign default track plays in that language."
+                    fix={<>{m.audioPrefRisks.map((u) => `${u.user}: ${u.why}`).join('; ')}. In Jellyfin, each user sets Settings → Playback → Preferred audio language, and unticks “Play default audio track regardless of language”.</>} />
                 ) : null}
                 {repaired.length ? (
                   <Notice state="ok" label="Repaired" title={`${plural(new Set(repaired.map((e) => e.definitionId)).size, 'collection')} put right this week`}
-                    line="Something other than this app changed their TMDb link, lock or artwork; each was put back as soon as it was found.">
+                    line="Something else changed their link, lock or artwork. Each was put back.">
                     <details class="how"><summary>What was changed</summary><ul class="plain-list">{repaired.slice(0, 10).map((e) => <li><b>{e.name}</b> <span class="faint">{fmtAgo(e.at, m.now)}</span><br />{e.what}</li>)}</ul></details>
                   </Notice>
                 ) : null}
@@ -159,8 +159,8 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
             <section class="next-panel" aria-labelledby="next-h">
               <div class="section-head"><h2 id="next-h">{running ? 'First run in progress' : 'Start your first run'}</h2></div>
               <p class="plan">{running
-                ? 'The app is reading your library and every list. This can take a few minutes. Nothing changes in Jellyfin: what it would do will wait in your Inbox.'
-                : 'The first run reads your library and every list, and works out what it would change. It can take a few minutes. Nothing changes in Jellyfin until you approve it.'}</p>
+                ? 'Reading your library and lists. This takes a few minutes. Nothing changes in Jellyfin.'
+                : 'It reads your library and lists, which takes a few minutes. Nothing changes in Jellyfin until you approve it.'}</p>
               {running ? <a class="btn on-yellow" href="/review">Open Inbox</a> : (
                 <form method="post" action="/runs"><Csrf token={csrf} /><button class="btn on-yellow" type="submit"><Icon name="play" /> Run now</button></form>
               )}
@@ -180,7 +180,7 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
                       </li>
                     ))}
                   </ul>
-                  <p class="plan">On this date: {plural(creates, 'collection')} created in Jellyfin, {deletes} removed.{nextPending ? ` ${plural(nextPending, 'change')} still ${nextPending === 1 ? 'needs' : 'need'} your approval.` : ''}</p>
+                  <p class="plan">{creates} created in Jellyfin, {deletes} removed.{nextPending ? ` ${plural(nextPending, 'change')} to approve first.` : ''}</p>
                   {nextPending ? <a class="btn on-yellow" href="/review"><Icon name="check" /> Approve {plural(nextPending, 'change')}</a> : null}
                 </>
               ) : (
@@ -191,7 +191,7 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
         </div>
 
         <section aria-labelledby="year-h" class="year-wrap">
-          <div class="section-head"><h2 id="year-h">{year} at a glance</h2><span class="aside">{m.strip.bars.length ? `collections appear and go away at midnight, ${m.tz}` : ''}</span></div>
+          <div class="section-head"><h2 id="year-h">{year} at a glance</h2><span class="aside">{m.strip.bars.length ? `changes happen at midnight, ${m.tz.replace(/_/g, ' ')}` : ''}</span></div>
           <div class="hide-sm">
             <div class="year" role="group" aria-label={`Seasonal collections in ${year}`}>
               <div class="months" aria-hidden="true">{months.map((mo) => <span>{mo}</span>)}</div>
@@ -202,7 +202,7 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
                 <span class="today" style={`left:${todayPct.toFixed(3)}%`}><b>Today · {fmtDate(m.now, m.tz, { day: 'numeric', month: 'short' })}</b></span>
               </div>
             </div>
-            <div class="legend" aria-hidden="true"><span><i class="live"></i>Live now</span><span><i class="next"></i>Appears next</span><span><i></i>Later</span><span><i class="short"></i>A few days only (name on hover)</span></div>
+            <div class="legend" aria-hidden="true"><span><i class="live"></i>Live now</span><span><i class="next"></i>Appears next</span><span><i></i>Later</span><span><i class="short"></i>A few days (hover for name)</span></div>
           </div>
           <ul class="rows year-phone show-sm" aria-label="Now and next">
             {m.timetable.slice(0, 5).map((c) => (

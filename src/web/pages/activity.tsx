@@ -16,12 +16,12 @@ export const Activity: FC<{ m: M; tz: string; csrf: string }> = ({ m, tz, csrf }
     <header class="top"><h1>History</h1></header>
     <div class="content">
       <section aria-labelledby="applied-h">
-        <div class="section-head"><h2 id="applied-h">Changes made</h2><span class="aside">last 150 · each change can be undone once</span></div>
+        <div class="section-head"><h2 id="applied-h">Changes made</h2><span class="aside">last 150</span></div>
         <div class="table-wrap">
           <table class="tt">
             <thead><tr><th scope="col">When</th><th scope="col">Collection</th><th scope="col">Change</th><th scope="col" class="hide-sm">By</th><th scope="col" class="r"><span class="sr">Undo</span></th></tr></thead>
             <tbody>
-              {m.applied.length === 0 ? <tr class="empty-row"><td colspan={5}>Nothing has been changed yet. Changes you approve in the Inbox are listed here, each with an Undo.</td></tr> : null}
+              {m.applied.length === 0 ? <tr class="empty-row"><td colspan={5}>Nothing changed yet. Changes you approve are listed here, each with an Undo.</td></tr> : null}
               {m.applied.map((a) => (
                 <tr>
                   <td class="when">{fmtDate(a.appliedAt ?? a.updatedAt, tz)}<span class="t">{fmtTime(a.appliedAt ?? a.updatedAt, tz)}</span></td>

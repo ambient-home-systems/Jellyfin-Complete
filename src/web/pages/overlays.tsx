@@ -34,16 +34,16 @@ export const OverlaysPanel: FC<{ m: OverlaysModel; csrf: string }> = ({ m, csrf 
           ))}
         </fieldset>
       ) : null}
-      <p class="hint">Kometa’s designs, drawn on a copy of each poster. The original is kept and goes back when you turn a badge off. {m.dryRun ? 'While you’re approving everything first, runs only check: use Apply now to change posters.' : 'Each run keeps them up to date.'}</p>
+      <p class="hint">Kometa’s designs, on a copy of each poster. {m.dryRun ? 'While you’re approving everything first, runs only check: use Apply now.' : 'Each run keeps them up to date.'}</p>
       <details class="how"><summary>Which titles get them</summary>
         <ul class="plain-list">
           <li>Only titles in the libraries your collections use, and ticked above.</li>
-          <li>A library counts as a kids’ library when its name says so or most of its titles have children’s ratings. Those get none unless you tick them.</li>
+          <li>Kids’ libraries (by name, or mostly children’s ratings) get none unless ticked.</li>
           <li>Unticking a library takes its overlays off on the next update.</li>
           <li>Originals are kept in <code>/config/overlays/originals</code>. If Jellyfin gets a new poster, the badges go on the new one.</li>
         </ul>
       </details>
-      <div class="save-row"><button class="btn primary" type="submit">Save overlays</button></div>
+      <div class="save-row"><button class="btn" type="submit">Save overlays</button></div>
     </form>
     <p>
       {m.withOverlays === 1 ? '1 poster has overlays.' : `${m.withOverlays} posters have overlays.`}{' '}
