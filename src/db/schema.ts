@@ -30,6 +30,10 @@ export const library = sqliteTable('library', {
   collectionType: text('collection_type'),
   /** Jellyfin's "Automatically add to collection" for this library, which makes unlocked, name-identified box sets (ADR-040). */
   autoCollections: integer('auto_collections', { mode: 'boolean' }),
+  /** The library's own preferred metadata language ("en"), or null to follow the server's (ADR-043). */
+  preferredLanguage: text('preferred_language'),
+  /** Its enabled image fetchers by item type ({ Movie: ["TheMovieDb", "Screen Grabber"] }), from LibraryOptions.TypeOptions. */
+  imageFetchers: json<Record<string, string[]>>('image_fetchers'),
   seenAt: integer('seen_at').notNull(),
 });
 
@@ -63,6 +67,10 @@ export const libraryItem = sqliteTable(
     firstAdded: integer('first_added'),
     /** Series only: Jellyfin's status (Continuing, Ended), the fallback for status overlays when TMDb has none. ADR-039. */
     status: text('status'),
+    /** Films and series: the current poster's tag (it changes with the poster), or null for none (ADR-043). */
+    primaryTag: text('primary_tag'),
+    /** Films: the file's path; series: the show's folder. For checking a TMDb ID against "Title (Year)" (ADR-043). */
+    path: text('path'),
     seenAt: integer('seen_at').notNull(),
   },
   (t) => [index('library_item_imdb').on(t.imdb), index('library_item_tmdb').on(t.tmdb), index('library_item_tvdb').on(t.tvdb), index('library_item_kind').on(t.kind), index('library_item_tmdb_collection').on(t.tmdbCollection)],
@@ -365,20 +373,77 @@ export const mediaCheck = sqliteTable('media_check', {
   titles: json<string[]>('titles').notNull().default([]),
   path: text('path'),
   checkedAt: integer('checked_at').notNull(),
+  /** What the probe read: 1 (0.13), 2 (0.17: audio tracks and embedded pictures too). Older rows are probed again. */
+  probeV: integer('probe_v').notNull().default(1),
+  /** Audio tracks: language (as tagged), whether it's the default, and its title (ADR-043). */
+  audio: json<{ lang: string | null; isDefault: boolean; title: string | null }[]>('audio'),
+  /** A picture embedded in the file (an embedded image stream's size, or an image attachment), if any. */
+  embeddedImage: json<{ w: number | null; h: number | null; via: 'stream' | 'attachment' }>('embedded_image'),
 });
 
-/** A file that may not be what it says (ADR-041): its length or a title tag disagrees with the title. */
+/** What a Library health finding is about (ADR-041, ADR-043). */
+export type HealthKind = 'runtime' | 'title' | 'audio' | 'no_poster' | 'video_poster' | 'language' | 'other_title';
+export const ARTWORK_KINDS = ['no_poster', 'video_poster', 'language', 'other_title'] as const;
+export type ArtworkKind = (typeof ARTWORK_KINDS)[number];
+/** A TMDb image the app would put on instead: its file path on TMDb, language and size. */
+export type ArtworkProposal = { tmdb: string; media: 'movie' | 'tv'; path: string; lang: string | null; w: number; h: number };
+
+/** A file that may not be what it says (ADR-041), or artwork or audio that may be wrong (ADR-043). */
 export const healthFinding = sqliteTable(
   'health_finding',
   {
     jfId: text('jf_id').notNull(),
-    kind: text('kind').$type<'runtime' | 'title'>().notNull(),
+    kind: text('kind').$type<HealthKind>().notNull(),
     detail: text('detail').notNull(),
     /** The file's sig when found: a dismissal lasts until the file changes. */
     sig: text('sig').notNull(),
     firstSeen: integer('first_seen').notNull(),
     dismissedAt: integer('dismissed_at'),
     dismissedBy: text('dismissed_by'),
+    /** Artwork findings: the TMDb poster the fix would put on, when there's a verified TMDb ID to take it from. */
+    proposal: json<ArtworkProposal>('proposal'),
+    /** For what isn't in the library index (a box set): its name and kind, for display. */
+    subject: json<{ name: string; kind: 'boxset' }>('subject'),
   },
   (t) => [primaryKey({ columns: [t.jfId, t.kind] })],
 );
+
+/** Each film's and show's artwork as last checked (ADR-043): checked again when its poster or IDs change, or monthly. */
+export const artworkCheck = sqliteTable('artwork_check', {
+  jfId: text('jf_id').primaryKey(),
+  /** The poster tag and IDs it was checked with. */
+  sig: text('sig').notNull(),
+  checkedAt: integer('checked_at').notNull(),
+  /** The TMDb ID the artwork may be taken from, and how it was confirmed; null when it couldn't be. */
+  verifiedTmdb: text('verified_tmdb'),
+  verifiedBy: text('verified_by').$type<'imdb' | 'tvdb' | 'path'>(),
+  /** What the poster is: one of TMDb's for this title (and its language), none, a video frame, or not known. */
+  poster: json<{ source: 'tmdb' | 'none' | 'frame' | 'unknown'; lang?: string | null; path?: string | null; aspect?: number | null }>('poster'),
+  /** Anything worth saying that isn't a finding ("TMDb has no English poster for this title"). */
+  note: text('note'),
+});
+
+/** A TMDb image's fingerprint (a 64-bit difference hash), by its file path, which never changes. */
+export const imageHash = sqliteTable('image_hash', {
+  path: text('path').primaryKey(),
+  hash: text('hash').notNull(),
+});
+
+/** Artwork the app replaced from TMDb, with the old images backed up so it can be undone (ADR-043). */
+export const artworkFix = sqliteTable('artwork_fix', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  at: integer('at').notNull(),
+  jfId: text('jf_id').notNull(),
+  title: text('title').notNull(),
+  /** The finding it fixed. */
+  kind: text('kind').$type<ArtworkKind>().notNull(),
+  /** Who: a user's name, "Claude (token)", or "automatic". */
+  by: text('by').notNull(),
+  tmdb: text('tmdb').notNull(),
+  /** What it put on, in words. */
+  what: text('what').notNull(),
+  /** For each image type replaced, the backed-up files (under /config/artwork/backups), or [] if there was none. */
+  backups: json<Record<string, string[]>>('backups').notNull(),
+  undoneAt: integer('undone_at'),
+  undoneBy: text('undone_by'),
+});

@@ -2,6 +2,7 @@
 // a kids' TMNT episode holding an adult drama, "Wakanda Forever" holding Bewitched, "The Spy Who Loved Me" holding
 // The Lucky One, and "The Search for General Tso" holding a Trans-Siberian Orchestra concert. Lookalikes must not be.
 import { describe, it, expect } from 'vitest';
+import sharp from 'sharp';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +20,7 @@ import type { FetchLike } from '../src/clients/http.js';
 import { setup, signIn, csrfOf, form, flash } from './helpers/web.js';
 
 const NOW = Date.UTC(2026, 10, 20, 15);
+const portrait = () => sharp({ create: { width: 200, height: 300, channels: 3, background: { r: 90, g: 60, b: 30 } } }).jpeg().toBuffer().then((b) => new Uint8Array(b));
 const DAY = 86_400_000;
 const TICKS_PER_MIN = 600_000_000;
 
@@ -134,7 +136,9 @@ function world(opts: { health?: boolean } = {}) {
   return { fake, app, calls };
 }
 const run = (app: ReturnType<typeof world>['app'], now = NOW) => runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now });
-const findings = (app: ReturnType<typeof world>['app']) => Object.fromEntries(app.db.select().from(healthFinding).all().map((f) => [`${f.jfId} ${f.kind}`, f.detail]));
+// The file findings (ADR-041); artwork findings have their own tests (artwork-health.test.ts).
+const fileKinds = (k: string) => k === 'runtime' || k === 'title' || k === 'audio';
+const findings = (app: ReturnType<typeof world>['app']) => Object.fromEntries(app.db.select().from(healthFinding).all().filter((f) => fileKinds(f.kind)).map((f) => [`${f.jfId} ${f.kind}`, f.detail]));
 
 describe('Library health', () => {
   it('finds the four files from the audit, and none of the lookalikes', async () => {
@@ -152,7 +156,7 @@ describe('Library health', () => {
     });
     const rows = healthRows(app);
     expect(rows.find((x) => x.jfId === 'e-shredder')).toMatchObject({ title: 'Teenage Mutant Ninja Turtles S02E01 · Return of the Shredder', library: 'Shows', rating: 'TV-Y7', path: '/kids/TMNT/S02E01.mkv' });
-    expect(String(Dashboard({ m: dashboardModel(app, NOW), csrf: 'x' }))).toContain('7 files may not be what they say');
+    expect(String(Dashboard({ m: dashboardModel(app, NOW), csrf: 'x' }))).toMatch(/\d+ things to check in Library health/);
   });
 
   it('checks each file once, and again when it changes; a finding marked fine stays hidden until then', async () => {
@@ -211,13 +215,13 @@ describe('marking several findings fine', () => {
     }
     t.fake.add({ Id: 'm-odd', Name: 'Odd Film', Type: 'Movie', ParentId: 'lib-movies', ProductionYear: 2020, DateCreated: '2026-11-01T00:00:00Z', MediaSources: [{ RunTimeTicks: 90 * TICKS_PER_MIN, Path: '/movies/odd.mkv', MediaStreams: [{ Type: 'Video', Title: 'Something Else (1999)' }] }] } as never);
     await runPipeline(t.app, { job: 'manual', trigger: 'manual', index: true });
-    expect(healthRows(t.app).map((r) => `${r.jfId} ${r.kind}`).sort()).toEqual(['e-long-4 runtime', 'e-long-5 runtime', 'e-long-6 runtime', 'm-odd title']);
+    expect(healthRows(t.app).filter((r) => fileKinds(r.kind)).map((r) => `${r.jfId} ${r.kind}`).sort()).toEqual(['e-long-4 runtime', 'e-long-5 runtime', 'e-long-6 runtime', 'm-odd title']);
     const { cookie } = await signIn(t.web);
     const csrf = await csrfOf(t.web, cookie, '/health');
     const page = await (await t.web.request('/health', { headers: { cookie } })).text();
     expect(page).toContain('Mark selected fine');
     expect(page).toMatch(/<option value="s-long">Long Show \(3\)<\/option>/);
-    expect(page).toContain('form="bulk-fine" name="sel" value="e-long-4|runtime"');
+    expect(page).toContain('form="bulk" name="sel" value="e-long-4|runtime"');
     const post = (body: Record<string, string | string[]>) => {
       const b = new URLSearchParams({ _csrf: csrf });
       for (const [k, v] of Object.entries(body)) for (const x of ([] as string[]).concat(v)) b.append(k, x);
@@ -225,8 +229,8 @@ describe('marking several findings fine', () => {
     };
     expect(flash(await post({ what: 'selected' }))).toContain('Tick the findings');
     expect(flash(await post({ what: 'selected', sel: ['e-long-4|runtime', 'm-odd|title'] }))).toContain('2 findings marked as fine');
-    expect(flash(await post({ what: 'series', series: 's-long' }))).toContain('2 findings marked as fine'); // E5 and E6 were left
-    expect(healthRows(t.app)).toEqual([]);
+    expect(flash(await post({ what: 'series', series: 's-long' }))).toContain('3 findings marked as fine'); // E5, E6 and the show's missing poster
+    expect(healthRows(t.app).filter((r) => fileKinds(r.kind))).toEqual([]);
     expect(healthRows(t.app, { dismissed: true }).every((r) => r.dismissedBy === 'admin')).toBe(true);
   });
 });
@@ -236,6 +240,8 @@ describe('Library health page and Claude', () => {
     const t = setup();
     await t.web.request('/setup', form({ url: FAKE_URL, apiKey: t.fake.apiKey, setupCode: t.app.setupCode ?? '' }));
     t.fake.add({ Id: 'm-odd', Name: 'Odd Film', Type: 'Movie', ParentId: 'lib-movies', ProductionYear: 2020, DateCreated: '2026-11-01T00:00:00Z', MediaSources: [{ RunTimeTicks: 90 * TICKS_PER_MIN, Path: '/movies/odd.mkv', MediaStreams: [{ Type: 'Video', Title: 'Something Else (1999)' }] }] } as never);
+    // Posters for every film and show, so the artwork check has nothing to say here (artwork-health.test.ts covers it).
+    for (const it of t.fake.items.values()) if (it.Type === 'Movie' || it.Type === 'Series') t.fake.setImage(it.Id, await portrait());
     await runPipeline(t.app, { job: 'manual', trigger: 'manual', index: true });
     const { cookie } = await signIn(t.web);
     const csrf = await csrfOf(t.web, cookie, '/health');
@@ -248,7 +254,7 @@ describe('Library health page and Claude', () => {
     expect(t.app.db.select().from(healthFinding).where(eq(healthFinding.jfId, 'm-odd')).get()!.dismissedBy).toBe('admin');
     // The dashboard: nothing left to review, one reviewed (by whom), and how much of the library is checked.
     const after = await (await t.web.request('/health', { headers: { cookie } })).text();
-    expect(after).toMatch(/<b class="num big">0<\/b> files/);
+    expect(after).toMatch(/<b class="num big">0<\/b> findings/);
     expect(after).toMatch(/<b class="num big">1<\/b> marked fine/);
     expect(after).toContain('100%</b> of 2 files');
     expect(after).toMatch(/Odd Film \(2020\)[\s\S]*admin[\s\S]*Review again/);
@@ -257,7 +263,7 @@ describe('Library health page and Claude', () => {
     // Review again puts it back.
     const again = await t.web.request('/health/reopen', { ...form({ _csrf: csrf, jfId: 'm-odd', kind: 'title' }), headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' } });
     expect(flash(again)).toContain('Back in Needs review');
-    expect(await (await t.web.request('/health', { headers: { cookie } })).text()).toMatch(/<b class="num big bad">1<\/b> file/);
+    expect(await (await t.web.request('/health', { headers: { cookie } })).text()).toMatch(/<b class="num big bad">1<\/b> finding/);
     // The menu item counts what needs review, on every page.
     expect(await (await t.web.request('/', { headers: { cookie } })).text()).toMatch(/href="\/health"[\s\S]{0,600}aria-label="1 to review"/);
   });

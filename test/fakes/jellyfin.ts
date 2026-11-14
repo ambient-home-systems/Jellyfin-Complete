@@ -34,7 +34,7 @@ export type FakeItem = {
   images?: Record<string, number>; // type -> byte length
 };
 
-export type FakeUser = { Id: string; Name: string; Password: string; Policy: { IsAdministrator: boolean; BlockedTags: string[] } };
+export type FakeUser = { Id: string; Name: string; Password: string; Policy: { IsAdministrator: boolean; BlockedTags: string[]; IsDisabled?: boolean }; Configuration?: { AudioLanguagePreference?: string | null; PlayDefaultAudioTrack?: boolean } };
 
 /** Jellyfin 12.4 SortName normalisation, as observed: lowercase, strip , & - { } ', '.+%' → space, pad digits to 10. */
 export function normaliseSortName(s: string): string {
@@ -62,6 +62,8 @@ export class FakeJellyfin {
     { Name: 'Collections', CollectionType: 'boxsets', ItemId: 'lib-collections' },
   ];
   apiKey = 'fake-api-key-123456';
+  /** The server's preferred metadata language (Dashboard → Libraries → Metadata), which libraries follow by default. */
+  serverLanguage = 'en';
   /** Image files by "<itemId>/<type>"; an item's image tag is derived from its bytes, as Jellyfin's changes with the image. */
   imageData = new Map<string, { bytes: Uint8Array; type: string }>();
   /** Every image upload, in order. */
@@ -182,7 +184,8 @@ export class FakeJellyfin {
       this.bustCacheCalls++;
       return c.json({ newCounter: this.bustCacheCalls });
     });
-    app.get('/Users', (c) => c.json(this.users.map(({ Password, ...u }) => u)));
+    app.get('/Users', (c) => c.json(this.users.map(({ Password, ...u }) => ({ ...u, Configuration: { PlayDefaultAudioTrack: true, ...u.Configuration } }))));
+    app.get('/System/Configuration', (c) => c.json({ PreferredMetadataLanguage: this.serverLanguage, MetadataCountryCode: 'US' }));
     app.get('/Users/:id', (c) => {
       const u = this.users.find((x) => x.Id === c.req.param('id'));
       if (!u) return c.text('Not found', 404);
@@ -321,10 +324,20 @@ export class FakeJellyfin {
       const text = await c.req.text();
       const bytes = Buffer.from(text, 'base64');
       if (!bytes.length || bytes.toString('base64') !== text.replace(/\s/g, '')) return c.text('Body must be base64', 400);
-      item.images = { ...(item.images ?? {}), [c.req.param('type')]: bytes.length };
-      this.imageData.set(`${item.Id}/${c.req.param('type')}`, { bytes: new Uint8Array(bytes), type: c.req.header('content-type')! });
+      if (c.req.param('type') === 'Backdrop') {
+        // Jellyfin adds a backdrop as the next one.
+        this.backdrops.set(item.Id, [...(this.backdrops.get(item.Id) ?? []), new Uint8Array(bytes)]);
+      } else {
+        item.images = { ...(item.images ?? {}), [c.req.param('type')]: bytes.length };
+        this.imageData.set(`${item.Id}/${c.req.param('type')}`, { bytes: new Uint8Array(bytes), type: c.req.header('content-type')! });
+      }
       this.uploads.push({ id: item.Id, type: c.req.param('type'), bytes: new Uint8Array(bytes) });
       return c.body(null, 204);
+    });
+    app.get('/Items/:id/Images/:type/:index', (c) => {
+      if (c.req.param('type') !== 'Backdrop') return c.text('Not found', 404);
+      const b = (this.backdrops.get(c.req.param('id')) ?? [])[Number(c.req.param('index'))];
+      return b ? c.body(Buffer.from(b), 200, { 'content-type': 'image/jpeg' }) : c.text('Not found', 404);
     });
     app.get('/Items/:id/Images/:type', (c) => {
       const d = this.imageData.get(`${c.req.param('id')}/${c.req.param('type')}`);

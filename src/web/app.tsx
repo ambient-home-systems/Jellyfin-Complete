@@ -65,6 +65,11 @@ import { kidsLibraries } from '../overlays/badges.js';
 import { OverlaysPanel } from './pages/overlays.js';
 import { HealthPage } from './pages/health.js';
 import { dismissFinding, dismissFindings, healthDashboard, reopenFinding } from '../library/health.js';
+import { artworkSummary, backupPoster, IMAGE_TYPES, resetArtwork, undoArtworkFix, type ImageType } from '../library/artwork.js';
+import type { HealthKind } from '../db/schema.js';
+
+const HEALTH_KINDS: HealthKind[] = ['runtime', 'title', 'audio', 'no_poster', 'video_poster', 'language', 'other_title'];
+const ARTWORK_RESETS_PER_REQUEST = 50;
 
 const MODES = new Set(['off', 'review', 'auto']);
 
@@ -486,10 +491,10 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
 
   // ── missing (Phase 2): what collections list that you don't own; send to Radarr/Sonarr ──
   // ── Library health (ADR-041) ──
-  web.get('/health', (c) => page(c, 'Library health', 'health', <HealthPage m={healthDashboard(app)} tz={app.settings().timezone} csrf={userOf(c).csrf} />));
+  web.get('/health', (c) => page(c, 'Library health', 'health', <HealthPage m={healthDashboard(app)} a={artworkSummary(app)} tz={app.settings().timezone} csrf={userOf(c).csrf} />));
   web.post('/health/dismiss', async (c) => {
     const b = await c.req.parseBody();
-    const kind = b.kind === 'title' ? 'title' : 'runtime';
+    const kind = HEALTH_KINDS.includes(String(b.kind) as HealthKind) ? (String(b.kind) as HealthKind) : 'runtime';
     const ok = dismissFinding(app, String(b.jfId ?? ''), kind, userOf(c).name);
     return back(c, '/health', ok ? { ok: 'Marked as fine. It comes back if the file changes.' } : { err: 'That finding is gone.' });
   });
@@ -497,15 +502,54 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   web.post('/health/dismiss-many', async (c) => {
     const b = await c.req.parseBody({ all: true });
     const list = ([] as unknown[]).concat(b.sel ?? []).map(String);
-    const findings = list.map((v) => v.split('|')).filter((x) => x.length === 2 && (x[1] === 'runtime' || x[1] === 'title')).map(([jfId, kind]) => ({ jfId: jfId!, kind: kind as 'runtime' | 'title' }));
+    const findings = list.map((v) => v.split('|')).filter((x) => x.length === 2 && HEALTH_KINDS.includes(x[1] as HealthKind)).map(([jfId, kind]) => ({ jfId: jfId!, kind: kind as HealthKind }));
     const seriesIds = b.what === 'series' && b.series ? [String(b.series)] : [];
     if (b.what !== 'series' && !findings.length) return back(c, '/health#needs-h', { err: 'Tick the findings to mark fine first.' });
     const n = dismissFindings(app, b.what === 'series' ? { seriesIds } : { findings }, userOf(c).name);
     return back(c, '/health#needs-h', n ? { ok: `${n} ${n === 1 ? 'finding' : 'findings'} marked as fine. Each comes back if its file changes.` } : { err: 'Those findings are gone.' });
   });
+  // Reset artwork from TMDb (ADR-043): the one finding asked for, or the ones ticked. Never the whole library.
+  web.post('/health/artwork/reset', async (c) => {
+    const b = await c.req.parseBody({ all: true });
+    const ids = b.one ? [String(b.one)] : [...new Set(([] as unknown[]).concat(b.sel ?? []).map((v) => String(v).split('|')[0]!).filter(Boolean))];
+    if (!ids.length) return back(c, '/health#needs-h', { err: 'Tick the findings whose artwork to reset first.' });
+    if (ids.length > ARTWORK_RESETS_PER_REQUEST) return back(c, '/health#needs-h', { err: `Up to ${ARTWORK_RESETS_PER_REQUEST} at a time, please.` });
+    const types = ([] as unknown[]).concat(b.also ?? []).map(String).filter((t): t is ImageType => (IMAGE_TYPES as readonly string[]).includes(t) && t !== 'Primary');
+    const results = [];
+    for (const id of ids) {
+      try {
+        results.push(await resetArtwork(app, id, { by: userOf(c).name, types }));
+      } catch (e) {
+        results.push({ ok: false, message: `${id}: ${(e as Error).message}` });
+      }
+    }
+    const done = results.filter((r) => r.ok), failed = results.filter((r) => !r.ok);
+    const msg = [done.length === 1 ? done[0]!.message : done.length ? `${done.length} reset from TMDb.` : '', failed.map((r) => r.message).join(' ')].filter(Boolean).join(' ');
+    return back(c, done.length ? '/health#fixed-h' : '/health#needs-h', done.length ? { ok: msg } : { err: msg });
+  });
+  web.post('/health/artwork/undo/:id', async (c) => {
+    const r = await undoArtworkFix(app, Number(c.req.param('id')), userOf(c).name).catch((e: Error) => ({ ok: false, message: e.message }));
+    return back(c, '/health#fixed-h', r.ok ? { ok: r.message } : { err: r.message });
+  });
+  // Thumbnails, through the app: the browser never needs Jellyfin's key or a request to another site.
+  const imageReply = (img: { bytes: Uint8Array; contentType?: string; type?: string } | null) =>
+    img ? new Response(Buffer.from(img.bytes), { headers: { 'content-type': img.contentType ?? img.type ?? 'image/jpeg', 'cache-control': 'private, max-age=86400' } }) : new Response('Not found', { status: 404 });
+  web.get('/health/img/jf/:id', async (c) => {
+    const jf = app.jellyfin();
+    if (!jf) return c.notFound();
+    return imageReply(await jf.primaryThumb(c.req.param('id'), 180).catch(() => null));
+  });
+  web.get('/health/img/tmdb/:file', async (c) => {
+    const file = c.req.param('file');
+    if (!/^[A-Za-z0-9_-]{1,64}\.(jpg|jpeg|png|webp)$/.test(file)) return c.notFound();
+    const res = await app.fetch(`https://image.tmdb.org/t/p/w154/${file}`).catch(() => null);
+    if (!res?.ok) return c.notFound();
+    return imageReply({ bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get('content-type') ?? 'image/jpeg' });
+  });
+  web.get('/health/img/backup/:id', (c) => imageReply(backupPoster(app, Number(c.req.param('id')))));
   web.post('/health/reopen', async (c) => {
     const b = await c.req.parseBody();
-    const ok = reopenFinding(app, String(b.jfId ?? ''), b.kind === 'title' ? 'title' : 'runtime');
+    const ok = reopenFinding(app, String(b.jfId ?? ''), HEALTH_KINDS.includes(String(b.kind) as HealthKind) ? (String(b.kind) as HealthKind) : 'runtime');
     return back(c, '/health', ok ? { ok: 'Back in Needs review.' } : { err: 'That finding is gone.' });
   });
 
@@ -700,13 +744,13 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   };
 
   web.post('/settings/general', async (c) => {
-    const b = await c.req.parseBody();
+    const b = await c.req.parseBody({ all: true });
     const neighbours = String(b.neighbours ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
       const m = l.match(/^(.*?)\s+(\d{1,2}:\d{2})$/);
       return m ? { name: m[1]!.trim(), time: m[2]! } : { name: l, time: '' };
     });
     const snooze = ['window', '7d', '30d'].includes(String(b.defaultSnooze)) ? (String(b.defaultSnooze) as Settings['defaultSnooze']) : 'window';
-    return save(c, 'run', { timezone: String(b.timezone ?? ''), leadDays: Number(b.leadDays), arrCapPerRun: Number(b.arrCapPerRun), dryRun: b.dryRun === '1', neighbours, defaultSnooze: snooze, releasedOnly: b.releasedOnly === '1', streamingRegion: b.streamingRegion === undefined ? undefined : String(b.streamingRegion), healthEnabled: b.healthEnabled === '1' }, 'Saved.');
+    return save(c, 'run', { timezone: String(b.timezone ?? ''), leadDays: Number(b.leadDays), arrCapPerRun: Number(b.arrCapPerRun), dryRun: b.dryRun === '1', neighbours, defaultSnooze: snooze, releasedOnly: b.releasedOnly === '1', streamingRegion: b.streamingRegion === undefined ? undefined : String(b.streamingRegion), healthEnabled: b.healthEnabled === '1', ...(b.autoFixSent === '1' ? { healthAutoFixLibraryIds: ([] as unknown[]).concat(b.autoFixLib ?? []).map(String) } : {}) }, 'Saved.');
   });
 
   web.post('/settings/modes', async (c) => {

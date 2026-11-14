@@ -700,7 +700,73 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - The editor shows the poster through the app, so any address works under the page's content security policy.
 - **Consequences.** Back up `/config/posters` with the rest of `/config`.
 
+### ADR-043 Artwork and audio checks: Decided (14 Nov)
+- **Context.** From the artwork incident (ADR-040) and a kids'-safety audit of a real library:
+  - a kids' film showing a video still as its poster
+  - Donald Duck shorts with French posters
+  - box sets linked to another title's TMDb collection
+  - about 25 kids' films that start in a French, Chinese, Spanish, Portuguese, Danish or Turkish dub although they include English
+
+  You asked for artwork checks on the Library health page, with a safe fix, instead of copying Kometa's `mass_poster_update`. Jellyfin already picks TMDb posters by language, and a blind library-wide reset is the kind of operation behind the incident.
+- **Decision.**
+  - **Five new finding kinds**, on the same page with the same "It's fine" flow. A dismissal lasts until the poster or IDs change.
+    - **No poster:** the film or show has no Primary image.
+    - **Poster from the video or file.** Jellyfin doesn't record which fetcher made an image, so:
+      - A Primary on a film or show that's wide (aspect 1.2 or more) is a frame.
+      - A poster that matches none of TMDb's posters for the title is from the file when it has the same shape (within 2%) as the file's embedded picture stream, or the file has an image attachment.
+
+      Comparing against actual frames of the video needs the file itself: the optional read-only media mount planned for 0.18.0.
+    - **Poster language.** Jellyfin doesn't record an image's language either. The current poster's 64-bit difference hash is matched (within 10 bits) against the title's TMDb posters, which carry their language. TMDb's `w92` thumbnails are a few KB, and their hashes are kept for good, since a TMDb file path never changes.
+      - The likeliest are tried first, up to 40: the library's language, textless, the original language, English, then the rest.
+      - A match in another language is flagged when TMDb has a poster in the library's language (the library's own, else the server's).
+      - When it has none, the poster is kept, and a note says so ("TMDb has no English poster for it"). It isn't flagged, and isn't checked again until the poster changes or a month passes.
+    - **Artwork from another title.** Jellyfin's TMDb ID doesn't match the confirmed one (below), or, for a box set the app doesn't manage, its TMDb link isn't the collection its films belong to (`TmdbCollection`).
+    - **Audio** (from the probe, now version 2: audio tracks and embedded pictures): the default audio track isn't in the library's language, and another track is.
+      - The default is the flagged one, else the first. Languages compare across ISO 639-1 and 639-2 codes (`fr`, `fre`, `fra`).
+      - **Severity:** it's *for information* when every enabled Jellyfin user prefers the library's language and doesn't play the default track. Otherwise it counts as needing review.
+  - **The confirmed TMDb ID: never a name search.**
+    - Jellyfin's TMDb ID is confirmed when TMDb's record for it carries the same IMDb ID Jellyfin has (shows: or TVDB ID).
+    - When they disagree, the IMDb (or TVDB) ID's own TMDb title is found with `/find`, by ID. The file's folder or file name (`Title (Year)`, a strict name match: at least 80% of words shared, year within one) decides.
+    - With no IMDb or TVDB ID, the folder name alone can confirm Jellyfin's ID.
+    - When nothing confirms either, the finding is shown with no fix offered.
+    - TMDb's details, external IDs and images (every language: asked for on their own) are cached for 30 days.
+  - **Fix: "Reset from TMDb"**, for one finding or the ones ticked. There's no library-wide button, and at most 50 per request.
+    1. **Re-check.** It re-reads the item, and stops (leaving the finding) if its poster or IDs changed since the check. It then confirms the TMDb ID again.
+    2. **Choose.** It picks TMDb's best-rated poster in the library's language. For no poster and video posters, it falls back to textless, then the original language, then any; for the language finding it uses only the library's language. Optionally it also replaces:
+       - **backdrop:** textless first
+       - **logo:** the library's language first
+       - **thumb:** a backdrop in the library's language, which carries the title
+    3. **Replace.** It downloads them first (so nothing changes if TMDb can't be read), backs up what it replaces to `/config/artwork/backups`, and uploads.
+       - **Overlays:** a poster carrying the app's overlays is backed up as its saved original. Its check also looks at the original.
+    4. **Record.** It re-reads the item, records the new poster tag, and logs the fix (`artwork_fix`).
+    5. **Undo** puts the backups back.
+  - **Fixing by itself:** a per-library setting fixes "No poster" and "Poster from the video or file" on each run, 50 a run at most, only while dry run is off. Everything else waits for you.
+  - **Box sets:** the app's own sets keep ADR-040's nightly repair. Its log now also shows on this page as "Collection artwork changed". Box sets it doesn't manage are only reported, with a link to adopt them, as you asked: it touches only box sets it created or you adopted.
+  - **Dashboard:**
+    - It warns when a film or TV library has Screen Grabber or Embedded Image Extractor on as an image fetcher for Movie, Series or Season. Episodes are left out: their stills are frames by design.
+    - It warns about Jellyfin users with no preferred audio language, or "Play default audio track" on.
+  - **Data** (migration 0011):
+    - libraries' preferred language and image fetchers
+    - each film's and show's poster tag and path
+    - the probe's audio tracks and embedded picture
+    - `artwork_check`, `image_hash` and `artwork_fix`
+    - findings gain the proposed image and, for box sets, a name to show
+  - **Cost:** 300 titles a run, new or changed first, then any not checked for 30 days. Box sets the app doesn't manage: 100 a run. Files probed before 0.17 are probed again once, a few thousand a night, without counting as unchecked.
+  - **New Jellyfin calls**, checked against 10.10.7, 10.11.0, 10.11.8 and 12.4.0:
+    - `GET /System/Configuration` (the server's language)
+    - `GET /Items/{id}/Images/{type}?maxWidth` (thumbnails)
+    - `GET /Items/{id}/Images/Backdrop/{index}` (backups)
+  - **Claude:**
+    - `list_library_health` lists every kind, with `resetFromTmdb` where there's a fix, and recent fixes.
+    - `reset_artwork` and `undo_artwork_fix` work at the review level and above.
+    - `update_settings` takes `libraryHealth` (checking on or off, and the libraries that fix posters by themselves).
+- **Consequences.**
+  - **Unverifiable titles aren't fixed:** a poster Jellyfin got from TMDb for a title with no IMDb or TVDB ID, and a folder name that doesn't say, is reported but not offered a fix.
+  - **Posters from elsewhere aren't flagged:** a poster from another provider (fanart.tv) or one you uploaded matches none of TMDb's. It isn't flagged unless the file's embedded picture or an attachment points to the file.
+  - **The first pass on a big library** takes a few nights, and fetches each title's TMDb thumbnails once.
+
 ---
+
 
 ## Open questions
 

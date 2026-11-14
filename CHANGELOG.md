@@ -2,6 +2,32 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.17.0 — 14 Nov 2026
+
+- **Artwork checks on Library health.** Each film and show is checked for:
+  - **No poster**
+  - **a poster from the video or file:** a frame, or the file's own picture
+  - **a poster in another language** when TMDb has one in the library's language
+  - **artwork from another title:** Jellyfin linked to a different TMDb title than its IMDb ID and folder name say
+
+  Box sets the app doesn't manage are checked too, and reported only. Each finding shows the current poster beside TMDb's.
+- **Reset from TMDb**, one finding at a time or for the ones you tick (never the whole library).
+  - It takes TMDb's best-rated poster in the library's language, and optionally the backdrop, logo and thumb.
+  - It goes by the title's confirmed TMDb ID, never a name search.
+  - It reads the title again first, and stops if anything changed.
+  - Old artwork is kept, with **Undo**.
+  - Libraries can be set to fix missing and video-frame posters by themselves (Settings → Run and review).
+- **Audio.** Files that play in another language by default, though they have a track in the library's language. These are listed for information when every user's settings already pick the library's language.
+- **Dashboard warnings:**
+  - film or TV libraries with Screen Grabber or Embedded Image Extractor on
+  - Jellyfin users with no preferred audio language, or "Play default audio track" on
+- **Collection artwork changed:** the nightly repairs to the app's own box sets now show on Library health.
+- **Claude:**
+  - `list_library_health` lists the new findings, with what a reset would put on, and recent fixes.
+  - New tools `reset_artwork` and `undo_artwork_fix`.
+  - `update_settings` takes `libraryHealth`.
+- After updating, files already checked are probed once more (a few thousand a night) to read their audio tracks and pictures.
+
 ## 0.16.0 — 14 Nov 2026
 
 - **Recently Added Movies no longer fills with upgrades.**

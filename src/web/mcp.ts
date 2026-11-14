@@ -38,6 +38,7 @@ import { startOverlayRun } from './overlay-actions.js';
 import { overlayCount } from '../overlays/sync.js';
 import { overlayLibraries } from './overlay-actions.js';
 import { dismissFindings, healthDashboard, healthRows } from '../library/health.js';
+import { recentFixes, resetArtwork, undoArtworkFix, type ResetResult } from '../library/artwork.js';
 import { CONNECTIONS } from './pages/settings.js';
 import { JOBS, type JobName } from '../jobs/schedules.js';
 import { nextRuns } from '../jobs/scheduler.js';
@@ -213,12 +214,18 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('list_library_health', {
     title: 'Library health',
-    description: 'Films and episodes whose file may not be what it says (Library health page): the file runs much longer or shorter than it should (TMDb\'s runtime, or for episodes the season\'s typical length when TMDb lists the whole season at another length), or a title tag inside it names another title. Episodes carry their show and seriesId, for marking a whole show fine. Each with its library, rating and file path. The app never moves or deletes files; tell the user which to check by playing them.',
+    description: 'Library health findings: files that may not be what they say (kind runtime: much longer or shorter than they should be; title: a title tag naming another title; audio: plays in another language by default), and artwork (no_poster; video_poster: a frame of the video or a picture from the file; language: a poster in another language when TMDb has one in the library\'s; other_title: artwork or a TMDb link from a different title, including box sets the app doesn\'t manage). Artwork findings with resetFromTmdb can be fixed with reset_artwork, by the title\'s confirmed TMDb ID. Episodes carry their show and seriesId, for marking a whole show fine. Each with its library, rating and file path. The app never moves or deletes files; tell the user which to check by playing them.',
     inputSchema: { includeMarkedFine: z.boolean().optional().describe('Also list findings someone marked as fine.') },
     annotations: read,
   }, async (a) => ok({
     checking: app.settings().health.enabled,
-    findings: healthRows(app).map((r) => ({ id: r.jfId, kind: r.kind, title: r.title, ...(r.seriesJfId ? { show: r.show, seriesId: r.seriesJfId } : {}), library: r.library, rating: r.rating, whatDoesntMatch: r.detail, file: r.path, found: at(r.firstSeen) })),
+    findings: healthRows(app).map((r) => ({
+      id: r.jfId, kind: r.kind, title: r.title, ...(r.seriesJfId ? { show: r.show, seriesId: r.seriesJfId } : {}), ...(r.boxSet ? { boxSet: true } : {}),
+      library: r.library, rating: r.rating, whatDoesntMatch: r.detail, file: r.path, found: at(r.firstSeen),
+      ...(r.info ? { forInformation: 'Every Jellyfin user\'s audio settings already pick the library\'s language, so nobody hears this track.' } : {}),
+      ...(r.proposal ? { resetFromTmdb: { tmdbId: r.proposal.tmdb, poster: `https://image.tmdb.org/t/p/w342${r.proposal.path}`, language: r.proposal.lang ?? 'textless' } } : {}),
+    })),
+    artworkFixedLast30Days: recentFixes(app).map((f) => ({ fixId: f.id, id: f.jfId, title: f.title, kind: f.kind, what: f.what, by: f.by, when: at(f.at), undone: f.undoneAt ? at(f.undoneAt) : null })),
     ...(a.includeMarkedFine ? { markedFine: healthRows(app, { dismissed: true }).map((r) => ({ id: r.jfId, kind: r.kind, title: r.title, whatDoesntMatch: r.detail, markedFine: at(r.dismissedAt) })) } : { markedFineCount: healthRows(app, { dismissed: true }).length }),
   }));
 
@@ -269,6 +276,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       homeRows: { enabled: s.homeRows.enabled, position: s.homeRows.orderIndex, view: s.homeRows.viewMode },
       filmSeries: s.filmSeries,
       streamingCountry: s.streaming.region,
+      libraryHealth: { checking: s.health.enabled, fixPostersByThemselvesIn: (s.health.autoFixLibraryIds ?? []).map((id) => librariesModel(app).find((l) => l.id === id)?.name ?? id) },
       posterOverlays: { status: s.overlays.status, imdbTop250Ribbon: s.overlays.imdbTop250, postersWithOverlays: overlayCount(app), libraries: overlayLibraries(app).libraries.map((l) => ({ id: l.id, name: l.name, kidsLibrary: l.kids, overlays: l.on })) },
       schedules: app.db.select().from(jobSchedule).all().map((j) => ({ job: j.job, what: JOBS[j.job as JobName]?.detail ?? null, cron: j.cron, on: j.enabled, next: at(runs.find((r) => r.job === j.job)?.next?.getTime()) })),
       otherToolsSchedules: s.neighbours,
@@ -355,10 +363,10 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('mark_library_health_fine', {
     title: 'Mark library health findings as fine',
-    description: 'After the user has checked files from list_library_health and says they are what they claim, hide those findings. Each comes back if its file changes. Nothing changes in Jellyfin. Mark one (id and kind), several at once (ids, optionally limited to one kind), or every open finding for the episodes of a show (seriesId: its Jellyfin ID, as list_library_health gives it), but only for findings the user has approved.',
+    description: 'After the user has checked findings from list_library_health and says they are fine, hide them. Each comes back if its file (or, for artwork, its poster) changes. Nothing changes in Jellyfin. Mark one (id and kind), several at once (ids, optionally limited to one kind), or every open finding for the episodes of a show (seriesId: its Jellyfin ID, as list_library_health gives it), but only for findings the user has approved.',
     inputSchema: {
       id: z.string().optional().describe('One finding\'s item ID (with kind).'),
-      kind: z.enum(['runtime', 'title']).optional().describe('Which finding for that item (or, with ids, for each). Without it, every open finding for the items.'),
+      kind: z.enum(['runtime', 'title', 'audio', 'no_poster', 'video_poster', 'language', 'other_title']).optional().describe('Which finding for that item (or, with ids, for each). Without it, every open finding for the items.'),
       ids: z.array(z.string()).max(1000).optional().describe('Several items\' IDs.'),
       seriesId: z.string().optional().describe('Every open finding for this show\'s episodes.'),
     },
@@ -368,6 +376,31 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
     if (!items.length && !a.seriesId) return fail('Give id (with kind), ids, or seriesId.');
     const n = dismissFindings(app, { findings: items.map((jfId) => ({ jfId, kind: a.kind })), seriesIds: a.seriesId ? [a.seriesId] : [] }, `Claude (${token.name})`);
     return n ? ok(`${n} ${n === 1 ? 'finding' : 'findings'} marked as fine. Each comes back if its file changes.`) : fail('No open findings matched.');
+  });
+
+  server.registerTool('reset_artwork', {
+    title: 'Reset artwork from TMDb',
+    description: 'For artwork findings from list_library_health that have resetFromTmdb, and only ones the user has approved: replace the poster (and, if asked, backdrop, logo and thumb) with TMDb\'s best-rated image in the library\'s language, by the title\'s confirmed TMDb ID, never by a name search. The item is re-read and its TMDb ID confirmed again first; anything that changed stops it. The old images are kept so undo_artwork_fix can put them back. Changes Jellyfin straight away, dry run or not.',
+    inputSchema: {
+      ids: z.array(z.string()).min(1).max(50).describe('Item ids from list_library_health.'),
+      alsoReplace: z.array(z.enum(['Backdrop', 'Logo', 'Thumb'])).optional().describe('Also replace these images (the poster always is).'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  }, async ({ ids: list, alsoReplace }) => {
+    const out: ResetResult[] = [];
+    for (const id of list) out.push(await resetArtwork(app, id, { by: `Claude (${token.name})`, types: alsoReplace }).catch((e: Error): ResetResult => ({ ok: false, message: `${id}: ${e.message}` })));
+    const done = out.filter((r) => r.ok);
+    return ok({ reset: done.map((r) => ({ fixId: r.fixId, result: r.message })), notReset: out.filter((r) => !r.ok).map((r) => r.message) });
+  });
+
+  server.registerTool('undo_artwork_fix', {
+    title: 'Undo an artwork fix',
+    description: 'Put back the artwork an artwork fix replaced (fixId from reset_artwork or list_library_health), from the copy kept when it was replaced. Changes Jellyfin straight away. Ask the user first.',
+    inputSchema: { fixId: z.number().int().positive() },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  }, async ({ fixId }) => {
+    const r = await undoArtworkFix(app, fixId, `Claude (${token.name})`);
+    return r.ok ? ok(r.message) : fail(r.message);
   });
 
   server.registerTool('snooze_proposals', {
@@ -430,6 +463,10 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       otherToolsSchedules: z.array(z.object({ name: z.string(), time: z.string() })).optional().describe('Replaces the list of other tools\' run times shown beside this app\'s jobs, e.g. [{"name":"Kometa (Plex)","time":"05:00"}].'),
       filmSeries: z.object({ enabled: z.boolean(), minimum: z.number().int().min(2).max(20).optional() }).optional().describe('Film series: one collection for each TMDb film series with at least `minimum` (default 2) owned films. Turning it on or off also turns every film series collection on or off; the next run adds new series.'),
       streamingCountry: z.string().optional().describe('Two-letter country code (US, GB, CA…) whose streaming services the streaming collections (Netflix Movies and so on) count.'),
+      libraryHealth: z.object({
+        checking: z.boolean().optional().describe('Check files (length, title tags, default audio) and artwork each run.'),
+        fixPostersByThemselvesIn: z.array(z.string()).optional().describe('Library names or ids where "No poster" and "Poster from the video or file" are fixed from TMDb without asking, while dry run is off. [] for none.'),
+      }).optional(),
       posterOverlays: z.object({
         status: z.boolean().optional(), imdbTop250Ribbon: z.boolean().optional(),
         librariesWithout: z.array(z.string()).nullable().optional().describe('Library ids (from get_settings) whose titles get no overlays; null for the default, every kids\' library.'),
@@ -447,6 +484,8 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
         homeRows: a.homeRows ? { enabled: a.homeRows.enabled, orderIndex: a.homeRows.position, viewMode: a.homeRows.view } : undefined,
         neighbours: a.otherToolsSchedules, streamingRegion: a.streamingCountry,
         overlays: a.posterOverlays ? { status: a.posterOverlays.status, imdbTop250: a.posterOverlays.imdbTop250Ribbon, skipLibraryIds: a.posterOverlays.librariesWithout } : undefined,
+        healthEnabled: a.libraryHealth?.checking,
+        healthAutoFixLibraryIds: a.libraryHealth?.fixPostersByThemselvesIn?.map((w) => librariesModel(app).find((l) => l.id === w || l.name.toLowerCase() === w.trim().toLowerCase())?.id ?? w),
       });
       if (a.filmSeries) setFilmSeries(app, a.filmSeries.enabled, a.filmSeries.minimum);
       if (r.timezoneChanged) opts.restartScheduler?.();

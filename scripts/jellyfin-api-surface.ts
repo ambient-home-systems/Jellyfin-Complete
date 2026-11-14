@@ -6,7 +6,7 @@
 // Published specs: https://api.jellyfin.org/openapi/stable/jellyfin-openapi-<version>.json (10.x) and
 // https://api.jellyfin.org/openapi/jellyfin-openapi-stable.json (current), or /api-docs/openapi.json on a server.
 import { readFileSync } from 'node:fs';
-import { JELLYFIN_CALLS, ENUM_VALUES } from '../src/clients/jellyfin/compat.js';
+import { JELLYFIN_CALLS, ENUM_VALUES, SCHEMA_PROPERTIES } from '../src/clients/jellyfin/compat.js';
 
 type Spec = {
   info: { version: string };
@@ -34,7 +34,7 @@ const props = (name: string) => Object.keys(spec.components.schemas[name]?.prope
 const out = {
   version: spec.info.version,
   paths,
-  schemas: { BaseItemDto: props('BaseItemDto'), UserPolicy: props('UserPolicy'), VirtualFolderInfo: props('VirtualFolderInfo'), LibraryOptions: props('LibraryOptions'), MediaSourceInfo: props('MediaSourceInfo'), MediaStream: props('MediaStream') },
+  schemas: Object.fromEntries(['BaseItemDto', 'UserPolicy', ...Object.keys(SCHEMA_PROPERTIES)].map((n) => [n, props(n)])),
   enums: Object.fromEntries(Object.keys(ENUM_VALUES).map((e) => [e, spec.components.schemas[e]?.enum ?? []])),
 };
 process.stdout.write(`${JSON.stringify(out, null, 1)}\n`);

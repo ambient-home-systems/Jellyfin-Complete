@@ -78,6 +78,13 @@
       "when": 1794613098040,
       "tag": "0010_multi_episode_files",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1794613950485,
+      "tag": "0011_artwork_checks",
+      "breakpoints": true
     }
   ]
 }

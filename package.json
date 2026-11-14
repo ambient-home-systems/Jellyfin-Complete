@@ -1,6 +1,6 @@
 {
   "name": "maverick-jellyfin-complete",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Kometa-style seasonal collections for Jellyfin, with a plan → review → apply pipeline.",
   "license": "MIT",
   "private": true,

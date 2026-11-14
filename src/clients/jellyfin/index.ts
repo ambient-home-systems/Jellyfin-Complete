@@ -67,6 +67,12 @@ export class JellyfinClient {
     return this.get('/Users');
   }
 
+  /** The server's own preferred metadata language ("en"), which a library follows unless it sets its own (ADR-043). */
+  async preferredLanguage(): Promise<string | null> {
+    const c = await this.get<{ PreferredMetadataLanguage?: string | null }>('/System/Configuration');
+    return c.PreferredMetadataLanguage?.trim() || null;
+  }
+
   /**
    * Make sure every user's policy blocks this tag (ADR-010 tag-gate). POST /Users/{id}/Policy replaces the whole policy,
    * so each one is read, changed and written back in full (the ADR-019 rule). Returns the names of users changed.
@@ -204,14 +210,20 @@ export class JellyfinClient {
    * Each item's file as Jellyfin probed it (ADR-041): its own duration, path, and the title tags on its streams.
    * MediaSources are heavy, so 50 items a request.
    */
-  async mediaDetails(ids: string[]): Promise<Map<string, { durationTicks: number | null; path: string | null; titles: string[] }>> {
-    const out = new Map<string, { durationTicks: number | null; path: string | null; titles: string[] }>();
+  async mediaDetails(ids: string[]): Promise<Map<string, MediaDetails>> {
+    const out = new Map<string, MediaDetails>();
     for (const batch of chunk(ids, 50)) {
       for (const it of await this.allItems({ Ids: batch.join(','), Fields: 'MediaSources,Path' })) {
         if (!it.Id) continue;
         const src = it.MediaSources?.[0];
-        const titles = [...new Set((src?.MediaStreams ?? []).map((m) => m.Title?.trim()).filter((t): t is string => Boolean(t)))];
-        out.set(it.Id, { durationTicks: src?.RunTimeTicks ?? null, path: src?.Path ?? it.Path ?? null, titles });
+        const streams = src?.MediaStreams ?? [];
+        const titles = [...new Set(streams.filter((m) => m.Type !== 'EmbeddedImage').map((m) => m.Title?.trim()).filter((t): t is string => Boolean(t)))];
+        // ADR-043: audio tracks (the default plays unless a user's settings pick another), and any picture in the file.
+        const audio = streams.filter((m) => m.Type === 'Audio').map((m) => ({ lang: m.Language?.trim().toLowerCase() || null, isDefault: Boolean(m.IsDefault), title: m.Title?.trim() || null }));
+        const pic = streams.find((m) => m.Type === 'EmbeddedImage');
+        const attached = (src?.MediaAttachments ?? []).some((a) => (a.MimeType ?? '').startsWith('image/'));
+        const embeddedImage = pic ? { w: pic.Width ?? null, h: pic.Height ?? null, via: 'stream' as const } : attached ? { w: null, h: null, via: 'attachment' as const } : null;
+        out.set(it.Id, { durationTicks: src?.RunTimeTicks ?? null, path: src?.Path ?? it.Path ?? null, titles, audio, embeddedImage });
       }
     }
     return out;
@@ -233,6 +245,24 @@ export class JellyfinClient {
     return { bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get('content-type')?.split(';')[0] || 'image/jpeg' };
   }
 
+  /** One image of an item as stored (a backdrop by index), or null if it has none. For backups before replacing (ADR-043). */
+  async downloadImage(id: string, type: string, index?: number): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+    const url = this.url(`/Items/${id}/Images/${type}${index === undefined ? '' : `/${index}`}`);
+    const res = await request(this.f, url, { headers: { authorization: authHeader(this.opts.apiKey), accept: 'image/*' }, retries: 1 });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new HttpError(res.status, url, (await res.text()).slice(0, 300));
+    return { bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get('content-type')?.split(';')[0] || 'image/jpeg' };
+  }
+
+  /** An item's poster scaled down to a width (Jellyfin keeps its shape), for checking it and for thumbnails. */
+  async primaryThumb(id: string, maxWidth: number): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+    const url = this.url(`/Items/${id}/Images/Primary`, { maxWidth });
+    const res = await request(this.f, url, { headers: { authorization: authHeader(this.opts.apiKey), accept: 'image/*' }, retries: 1 });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new HttpError(res.status, url, (await res.text()).slice(0, 300));
+    return { bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get('content-type')?.split(';')[0] || 'image/jpeg' };
+  }
+
   /** Each item's current poster tag (it changes whenever the poster does), 100 items a request. Missing items are left out. */
   async posterTags(ids: string[]): Promise<Map<string, string | null>> {
     const out = new Map<string, string | null>();
@@ -244,15 +274,27 @@ export class JellyfinClient {
 
   /** The server wraps the body in a base64 transform: send base64 text with an image/* content type. */
   async uploadPrimaryImage(id: string, bytes: Uint8Array, contentType = 'image/jpeg'): Promise<void> {
-    const res = await request(this.f, this.url(`/Items/${id}/Images/Primary`), {
+    return this.uploadImage(id, 'Primary', bytes, contentType);
+  }
+
+  /** Set an item's image of a type (a backdrop is added as the next one). Base64 body, as for the poster. */
+  async uploadImage(id: string, type: string, bytes: Uint8Array, contentType = 'image/jpeg'): Promise<void> {
+    const res = await request(this.f, this.url(`/Items/${id}/Images/${type}`), {
       method: 'POST',
       headers: { authorization: authHeader(this.opts.apiKey), 'content-type': contentType },
       body: Buffer.from(bytes).toString('base64'),
       retries: 1,
     });
-    if (!res.ok) throw new HttpError(res.status, this.url(`/Items/${id}/Images/Primary`), (await res.text()).slice(0, 300));
+    if (!res.ok) throw new HttpError(res.status, this.url(`/Items/${id}/Images/${type}`), (await res.text()).slice(0, 300));
   }
 }
+
+/** A file as Jellyfin probed it (ADR-041, ADR-043). */
+export type MediaDetails = {
+  durationTicks: number | null; path: string | null; titles: string[];
+  audio: { lang: string | null; isDefault: boolean; title: string | null }[];
+  embeddedImage: { w: number | null; h: number | null; via: 'stream' | 'attachment' } | null;
+};
 
 export function chunk<T>(xs: T[], size: number): T[][] {
   const out: T[][] = [];

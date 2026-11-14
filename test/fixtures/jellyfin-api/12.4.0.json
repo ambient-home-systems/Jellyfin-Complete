@@ -178,6 +178,46 @@
     "width"
    ]
   },
+  "/items/{}/images/{}/{}": {
+   "delete": [],
+   "post": [],
+   "get": [
+    "backgroundColor",
+    "blur",
+    "fillHeight",
+    "fillWidth",
+    "foregroundLayer",
+    "format",
+    "height",
+    "maxHeight",
+    "maxWidth",
+    "percentPlayed",
+    "quality",
+    "tag",
+    "unplayedCount",
+    "width"
+   ],
+   "head": [
+    "backgroundColor",
+    "blur",
+    "fillHeight",
+    "fillWidth",
+    "foregroundLayer",
+    "format",
+    "height",
+    "maxHeight",
+    "maxWidth",
+    "percentPlayed",
+    "quality",
+    "tag",
+    "unplayedCount",
+    "width"
+   ]
+  },
+  "/system/configuration": {
+   "get": [],
+   "post": []
+  },
   "/collections": {
    "post": [
     "ids",
@@ -460,6 +500,16 @@
    "TypeOptions",
    "UseCustomTagDelimiters"
   ],
+  "TypeOptions": [
+   "ImageFetcherOrder",
+   "ImageFetchers",
+   "ImageOptions",
+   "MetadataFetcherOrder",
+   "MetadataFetchers",
+   "SimilarItemProviderOrder",
+   "SimilarItemProviders",
+   "Type"
+  ],
   "MediaSourceInfo": [
    "AnalyzeDurationMs",
    "Bitrate",
@@ -575,6 +625,107 @@
    "VideoRange",
    "VideoRangeType",
    "Width"
+  ],
+  "MediaAttachment": [
+   "Codec",
+   "CodecTag",
+   "Comment",
+   "DeliveryUrl",
+   "FileName",
+   "Index",
+   "MimeType"
+  ],
+  "UserDto": [
+   "Configuration",
+   "EnableAutoLogin",
+   "HasConfiguredEasyPassword",
+   "HasConfiguredPassword",
+   "HasPassword",
+   "Id",
+   "LastActivityDate",
+   "LastLoginDate",
+   "Name",
+   "Policy",
+   "PrimaryImageAspectRatio",
+   "PrimaryImageTag",
+   "ServerId",
+   "ServerName"
+  ],
+  "UserConfiguration": [
+   "AudioLanguagePreference",
+   "CastReceiverId",
+   "DisplayCollectionsView",
+   "DisplayMissingEpisodes",
+   "EnableLocalPassword",
+   "EnableNextEpisodeAutoPlay",
+   "GroupedFolders",
+   "HidePlayedInLatest",
+   "LatestItemsExcludes",
+   "MyMediaExcludes",
+   "OrderedViews",
+   "PlayDefaultAudioTrack",
+   "RememberAudioSelections",
+   "RememberSubtitleSelections",
+   "SubtitleLanguagePreference",
+   "SubtitleMode"
+  ],
+  "ServerConfiguration": [
+   "ActivityLogRetentionDays",
+   "AllowClientLogUpload",
+   "CachePath",
+   "CacheSize",
+   "CastReceiverApplications",
+   "ChapterImageResolution",
+   "CodecsUsed",
+   "ContentTypes",
+   "CorsHosts",
+   "DisableLiveTvChannelUserDataName",
+   "DisplaySpecialsWithinSeasons",
+   "DummyChapterDuration",
+   "EnableCaseSensitiveItemIds",
+   "EnableExternalContentInSuggestions",
+   "EnableFolderView",
+   "EnableGroupingMoviesIntoCollections",
+   "EnableGroupingShowsIntoCollections",
+   "EnableLegacyAuthorization",
+   "EnableMetrics",
+   "EnableNormalizedItemByNameIds",
+   "EnableSlowResponseWarning",
+   "ImageExtractionTimeoutMs",
+   "ImageSavingConvention",
+   "InactiveSessionThreshold",
+   "IsPortAuthorized",
+   "IsStartupWizardCompleted",
+   "LibraryMetadataRefreshConcurrency",
+   "LibraryMonitorDelay",
+   "LibraryScanFanoutConcurrency",
+   "LibraryUpdateDuration",
+   "LogFileRetentionDays",
+   "MaxAudiobookResume",
+   "MaxResumePct",
+   "MetadataCountryCode",
+   "MetadataOptions",
+   "MetadataPath",
+   "MinAudiobookResume",
+   "MinResumeDurationSeconds",
+   "MinResumePct",
+   "ParallelImageEncodingLimit",
+   "PathSubstitutions",
+   "PluginRepositories",
+   "PreferredMetadataLanguage",
+   "PreviousVersion",
+   "PreviousVersionStr",
+   "QuickConnectAvailable",
+   "RemoteClientBitrateLimit",
+   "SaveMetadataHidden",
+   "ServerName",
+   "SkipDeserializationForBasicTypes",
+   "SlowResponseThresholdMs",
+   "SortRemoveCharacters",
+   "SortRemoveWords",
+   "SortReplaceCharacters",
+   "TrickplayOptions",
+   "UICulture"
   ]
  },
  "enums": {
@@ -693,6 +844,14 @@
    "Chapter",
    "BoxRear",
    "Profile"
+  ],
+  "MediaStreamType": [
+   "Audio",
+   "Video",
+   "Subtitle",
+   "EmbeddedImage",
+   "Data",
+   "Lyric"
   ]
  }
 }

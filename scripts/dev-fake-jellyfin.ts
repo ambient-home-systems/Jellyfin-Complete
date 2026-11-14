@@ -45,4 +45,11 @@ for (const [id, a, b] of colours) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="680" height="1000"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>`;
   fake.setImage(id, new Uint8Array(await sharp(Buffer.from(svg)).jpeg({ quality: 88 }).toBuffer()));
 }
+// Artwork and audio checks (ADR-043): a film whose poster is a frame of the video, a kids' film that starts in a French
+// dub, and a films library with Screen Grabber on.
+const dieHard = [...fake.items.values()].find((i) => i.Name === 'Die Hard')!;
+const frame = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="100%" height="100%" fill="#223"/><circle cx="900" cy="300" r="180" fill="#e85d04"/><rect y="520" width="1280" height="200" fill="#111"/></svg>`;
+fake.setImage(dieHard.Id, new Uint8Array(await sharp(Buffer.from(frame)).jpeg({ quality: 85 }).toBuffer()));
+fake.add({ Id: 'm-minions', Name: 'Minions', Type: 'Movie', ParentId: 'lib-animated', ProductionYear: 2015, OfficialRating: 'PG', DateCreated: daysAgo(30), MediaSources: [{ RunTimeTicks: 91 * 600_000_000, Path: '/kids/Minions (2015)/Minions.mkv', MediaStreams: [{ Type: 'Video' }, { Type: 'Audio', Language: 'fre', IsDefault: true }, { Type: 'Audio', Language: 'eng' }] }] } as Parameters<typeof fake.add>[0]);
+fake.libraries[0] = { ...fake.libraries[0]!, LibraryOptions: { TypeOptions: [{ Type: 'Movie', ImageFetchers: ['TheMovieDb', 'Screen Grabber'] }] } } as (typeof fake.libraries)[number];
 serve({ fetch: fake.app().fetch, port: Number(process.env.FAKE_PORT ?? 8096) }, (i) => console.log(`fake Jellyfin on :${i.port} (admin / pw, key ${fake.apiKey})`));

@@ -14,7 +14,9 @@ export const JELLYFIN_CALLS: { method: 'get' | 'post' | 'delete'; path: string; 
   { method: 'get', path: '/Items/{itemId}', query: ['userId'] },
   { method: 'post', path: '/Items/{itemId}' },
   { method: 'delete', path: '/Items/{itemId}' },
-  { method: 'get', path: '/Items/{itemId}/Images/{imageType}' },
+  { method: 'get', path: '/Items/{itemId}/Images/{imageType}', query: ['maxWidth'] },
+  { method: 'get', path: '/Items/{itemId}/Images/{imageType}/{imageIndex}' },
+  { method: 'get', path: '/System/Configuration' },
   { method: 'delete', path: '/Items/{itemId}/Images/{imageType}', query: ['imageIndex'] },
   { method: 'post', path: '/Items/{itemId}/Images/{imageType}' },
   { method: 'post', path: '/Collections', query: ['name', 'ids', 'isLocked'] },
@@ -30,22 +32,30 @@ export const ITEM_PROPERTIES = [
   'Id', 'Name', 'ForcedSortName', 'SortName', 'Overview', 'Tags', 'LockData', 'LockedFields', 'ProviderIds', 'ImageTags',
   'ChildCount', 'DisplayOrder', 'SeriesId', 'ParentIndexNumber', 'IndexNumber', 'ProductionYear', 'OfficialRating', 'Genres', 'Studios', 'DateCreated', 'PremiereDate', 'Status', 'Type', 'BackdropImageTags', 'MediaSources', 'Path', 'RunTimeTicks',
 ];
-export const POLICY_PROPERTIES = ['IsAdministrator', 'BlockedTags'];
+export const POLICY_PROPERTIES = ['IsAdministrator', 'BlockedTags', 'IsDisabled'];
 /**
  * Other schemas the app reads: library settings ("Automatically add to collection" makes unlocked box sets Jellyfin
- * identifies by name, ADR-040) and each file's media source (its own duration and stream title tags, ADR-041).
+ * identifies by name, ADR-040; the preferred language and image fetchers, ADR-043), each file's media source (its own
+ * duration and stream title tags, ADR-041; audio tracks and embedded pictures, ADR-043), users' audio settings and the
+ * server's preferred language (ADR-043).
  */
-export const SCHEMA_PROPERTIES: Record<'VirtualFolderInfo' | 'LibraryOptions' | 'MediaSourceInfo' | 'MediaStream', string[]> = {
+export const SCHEMA_PROPERTIES: Record<string, string[]> = {
   VirtualFolderInfo: ['ItemId', 'Name', 'CollectionType', 'LibraryOptions'],
-  LibraryOptions: ['AutomaticallyAddToCollection'],
-  MediaSourceInfo: ['RunTimeTicks', 'Path', 'MediaStreams'],
-  MediaStream: ['Type', 'Title'],
+  LibraryOptions: ['AutomaticallyAddToCollection', 'PreferredMetadataLanguage', 'TypeOptions'],
+  TypeOptions: ['Type', 'ImageFetchers'],
+  MediaSourceInfo: ['RunTimeTicks', 'Path', 'MediaStreams', 'MediaAttachments'],
+  MediaStream: ['Type', 'Title', 'Language', 'IsDefault', 'Width', 'Height'],
+  MediaAttachment: ['MimeType'],
+  UserDto: ['Id', 'Name', 'Policy', 'Configuration'],
+  UserConfiguration: ['AudioLanguagePreference', 'PlayDefaultAudioTrack'],
+  ServerConfiguration: ['PreferredMetadataLanguage'],
 };
 export const ENUM_VALUES: Record<string, string[]> = {
   ItemFields: ['ProviderIds', 'Genres', 'Tags', 'Studios', 'SortName', 'DateCreated', 'ParentId', 'MediaSources', 'Path'],
   MetadataField: ['Name', 'Overview', 'Tags'],
   BaseItemKind: ['Movie', 'Series', 'Episode', 'BoxSet'],
   ImageType: ['Primary', 'Art', 'Backdrop', 'Banner', 'Logo', 'Thumb', 'Disc', 'Box', 'BoxRear', 'Menu'],
+  MediaStreamType: ['Audio', 'Video', 'EmbeddedImage'],
 };
 
 /** Versions whose published API spec has the whole surface above (the compatibility test keeps this honest). */

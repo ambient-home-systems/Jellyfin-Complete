@@ -10,11 +10,14 @@
 // Files are probed once (again when the file changes), a few thousand a run; TMDb runtimes are cached for months.
 import { and, eq, inArray } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
-import { healthFinding, libraryItem, mediaCheck } from '../db/schema.js';
-import { getCached } from '../cache.js';
+import { healthFinding, library, libraryItem, mediaCheck, type ArtworkProposal, type HealthKind } from '../db/schema.js';
+import { getCached, putCached } from '../cache.js';
+import { lang2, languageName, sameLanguage } from './languages.js';
 import { log } from '../log.js';
 
 export const HEALTH_LIMITS = { probesPerRun: 3000, movieLookupsPerRun: 400, seasonLookupsPerRun: 150 };
+/** What a probe reads: 2 adds audio tracks and embedded pictures (ADR-043). */
+export const PROBE_V = 2;
 export const RUNTIME_TOLERANCE = { minutes: 12, fraction: 0.15 };
 
 const fmtMin = (m: number) => {
@@ -49,7 +52,7 @@ export function claimedTitle(tag: string): { title: string; year: number } | nul
 }
 
 /** True when a claimed title is the same as any of these names (mostly the same words, or one inside the other). */
-function sameTitle(claimed: string, names: string[]): boolean {
+export function sameTitle(claimed: string, names: string[]): boolean {
   const c = words(claimed);
   if (!c.length) return true;
   return names.some((n) => {
@@ -157,6 +160,35 @@ export function medianVerdict(fileMin: number, medianMin: number, scope: 'season
   return `The file runs ${fmtMin(fileMin)}; this ${scope}’s episodes typically run ${fmtMin(medianMin)}.`;
 }
 
+/** The findings worked out from the files themselves (the rest are artwork findings, ADR-043). */
+export const FILE_KINDS = ['runtime', 'title', 'audio'] as const;
+export type FileKind = (typeof FILE_KINDS)[number];
+/** A Jellyfin user's audio settings, as last read (for the audio findings' severity and the Dashboard). */
+export type AudioPref = { name: string; lang: string | null; playDefault: boolean };
+export const AUDIO_PREFS_KEY = 'jf-audio-prefs';
+
+/**
+ * A default audio track that isn't in the library's language, when another track is (ADR-043): "plays in French by
+ * default; it has an English track too". The default is the track flagged default, else the first. Null if fine,
+ * or if the language isn't known.
+ */
+export function audioVerdict(tracks: { lang: string | null; isDefault: boolean }[], want: string | null): string | null {
+  if (!want || tracks.length < 2) return null;
+  const def = tracks.find((t) => t.isDefault) ?? tracks[0]!;
+  if (!lang2(def.lang) || sameLanguage(def.lang, want)) return null;
+  if (!tracks.some((t) => sameLanguage(t.lang, want))) return null;
+  return `It plays in ${languageName(def.lang)} by default; it has a${/^[AEIOU]/.test(languageName(want)) ? 'n' : ''} ${languageName(want)} track too.`;
+}
+
+/**
+ * Whether Jellyfin's users' own settings already pick the library's language over a file's default track: every
+ * user prefers that language and doesn't play the default track. Null when the users haven't been read yet.
+ */
+export function audioHandled(prefs: AudioPref[] | null, want: string | null): boolean | null {
+  if (!prefs) return null;
+  return prefs.length > 0 && prefs.every((u) => !u.playDefault && sameLanguage(u.lang, want));
+}
+
 export type HealthStats = { probed: number; lookedUp: number; open: number; found: number; compared: number };
 
 /** Probe files not yet checked, look up runtimes, and record what disagrees. Never fails the run. */
@@ -168,15 +200,17 @@ export async function checkLibraryHealth(app: AppContext, opts: { now: number; s
   const sigOf = (r: (typeof rows)[number]) => String(r.dateAdded ?? 0);
   const checks = new Map(app.db.select().from(mediaCheck).all().map((c) => [c.jfId, c]));
 
-  // 1. Probe files Jellyfin hasn't been asked about, or whose file changed.
-  const todo = rows.filter((r) => checks.get(r.jfId)?.sig !== sigOf(r)).slice(0, HEALTH_LIMITS.probesPerRun);
+  // 1. Probe files Jellyfin hasn't been asked about, whose file changed, or probed before audio tracks and pictures
+  //    were read too (probe 2, ADR-043): new and changed files first.
+  const stale = (r: (typeof rows)[number]) => { const c = checks.get(r.jfId); return !c || c.sig !== sigOf(r) ? 2 : c.probeV < PROBE_V ? 1 : 0; };
+  const todo = rows.filter((r) => stale(r) > 0).sort((a, b) => stale(b) - stale(a)).slice(0, HEALTH_LIMITS.probesPerRun);
   if (todo.length) {
     opts.step?.(`Checking ${todo.length} files’ length and title tags`);
     const details = await jf.mediaDetails(todo.map((r) => r.jfId));
     for (const r of todo) {
       const d = details.get(r.jfId);
       if (!d) continue;
-      const values = { sig: sigOf(r), durationMin: d.durationTicks ? d.durationTicks / 600_000_000 : null, titles: d.titles, path: d.path, checkedAt: opts.now };
+      const values = { sig: sigOf(r), durationMin: d.durationTicks ? d.durationTicks / 600_000_000 : null, titles: d.titles, path: d.path, checkedAt: opts.now, probeV: PROBE_V, audio: d.audio, embeddedImage: d.embeddedImage };
       app.db.insert(mediaCheck).values({ jfId: r.jfId, ...values }).onConflictDoUpdate({ target: mediaCheck.jfId, set: values }).run();
       checks.set(r.jfId, { jfId: r.jfId, ...values });
       out.probed++;
@@ -214,11 +248,26 @@ export async function checkLibraryHealth(app: AppContext, opts: { now: number; s
   }
   out.lookedUp = films + seasons;
 
+  // The languages files should play in (ADR-043): each library's, else the server's; and users' audio settings, which
+  // decide whether a default track in another language is just information or will really play.
+  const serverLang = await jf.preferredLanguage().catch(() => null);
+  putCached(app.db, 'jf-server-language', serverLang, 365, opts.now);
+  try {
+    const users = await jf.users();
+    putCached(app.db, AUDIO_PREFS_KEY, users.filter((u) => !u.Policy?.IsDisabled).map((u): AudioPref => ({
+      name: u.Name ?? '?', lang: u.Configuration?.AudioLanguagePreference?.trim() || null, playDefault: u.Configuration?.PlayDefaultAudioTrack !== false,
+    })), 365, opts.now);
+  } catch (e) {
+    log.warn(`Couldn’t read Jellyfin users’ audio settings: ${(e as Error).message}`);
+  }
+  const libLang = new Map(app.db.select({ id: library.id, lang: library.preferredLanguage }).from(library).all().map((l) => [l.id, l.lang ?? serverLang]));
+  const langOf = (r: (typeof rows)[number]) => libLang.get(r.kind === 'episode' ? series.get(r.seriesJfId ?? '')?.libraryId ?? '' : r.libraryId) ?? serverLang;
+
   // 3. Findings: what disagrees now. A dismissal lasts until the file changes; findings that no longer hold go.
   const durations = new Map([...checks].filter(([, c]) => c.durationMin).map(([id, c]) => [id, c.durationMin!]));
   const lengths = lengthVerdicts(rows, durations, runtimeOf);
   out.compared = lengths.size;
-  const now = new Map<string, { kind: 'runtime' | 'title'; detail: string; sig: string }>();
+  const now = new Map<string, { kind: FileKind; detail: string; sig: string }>();
   for (const [jfId, c] of checks) {
     const r = byId.get(jfId);
     if (!r) continue;
@@ -228,12 +277,16 @@ export async function checkLibraryHealth(app: AppContext, opts: { now: number; s
     const names = [r.name, ...(show ? [show.name] : [])];
     const tv = titleVerdict(c.titles, { names, year: r.kind === 'episode' ? null : r.year });
     if (tv) now.set(`${jfId}|title`, { kind: 'title', detail: tv, sig: c.sig });
+    const au = c.audio ? audioVerdict(c.audio, langOf(r)) : null;
+    if (au) now.set(`${jfId}|audio`, { kind: 'audio', detail: au, sig: c.sig });
   }
-  const existing = new Map(app.db.select().from(healthFinding).all().map((f) => [`${f.jfId}|${f.kind}`, f]));
+  // Only the findings about files are worked out here; artwork findings are the artwork check's (artwork.ts).
+  const existing = new Map(app.db.select().from(healthFinding).all().filter((f) => (FILE_KINDS as readonly string[]).includes(f.kind)).map((f) => [`${f.jfId}|${f.kind}`, f]));
   for (const [key, f] of existing) {
-    // Gone from the library, or no longer true (and not just waiting on a lookup): forget it.
+    // Gone from the library, or no longer true (and not just waiting on a lookup or a probe): forget it.
     const jfId = key.split('|')[0]!;
-    if (!byId.has(jfId) || (!now.has(key) && (f.kind === 'title' || lengths.has(jfId)))) {
+    const known = f.kind === 'title' || (f.kind === 'runtime' && lengths.has(jfId)) || (f.kind === 'audio' && Boolean(checks.get(jfId)?.audio));
+    if (!byId.has(jfId) || (!now.has(key) && known)) {
       app.db.delete(healthFinding).where(and(eq(healthFinding.jfId, f.jfId), eq(healthFinding.kind, f.kind))).run();
     }
   }
@@ -254,11 +307,25 @@ export async function checkLibraryHealth(app: AppContext, opts: { now: number; s
 }
 
 export type HealthRow = {
-  jfId: string; kind: 'runtime' | 'title'; detail: string; firstSeen: number; dismissedAt: number | null; dismissedBy: string | null;
+  jfId: string; kind: HealthKind; detail: string; firstSeen: number; dismissedAt: number | null; dismissedBy: string | null;
   title: string; library: string | null; rating: string | null; path: string | null;
   /** Episodes: their show's Jellyfin ID and name. */
   seriesJfId: string | null; show: string | null;
+  /** Artwork findings: the TMDb image the fix would put on (none without a verified TMDb ID). */
+  proposal: ArtworkProposal | null;
+  /** The current poster's tag (for its thumbnail), and whether this is a box set rather than a title. */
+  primaryTag: string | null; boxSet: boolean;
+  /** Audio findings Jellyfin's users' own settings already take care of: shown for information, not counted. */
+  info: boolean;
 };
+
+/** Each library's language (its own, else the server's), for the audio findings. */
+function languages(app: AppContext): { of: (libraryId: string | null | undefined) => string | null; prefs: AudioPref[] | null } {
+  const server = (() => { const h = getCached<string | null>(app.db, 'jf-server-language'); return h.hit ? h.value : null; })();
+  const libs = new Map(app.db.select({ id: library.id, lang: library.preferredLanguage }).from(library).all().map((l) => [l.id, l.lang]));
+  const prefs = (() => { const h = getCached<AudioPref[]>(app.db, AUDIO_PREFS_KEY); return h.hit ? h.value : null; })();
+  return { of: (id) => (id ? libs.get(id) ?? null : null) ?? server, prefs };
+}
 
 /** Findings with what they're about, for the page, the Dashboard and Claude. */
 export function healthRows(app: AppContext, opts: { dismissed?: boolean } = {}): HealthRow[] {
@@ -270,23 +337,29 @@ export function healthRows(app: AppContext, opts: { dismissed?: boolean } = {}):
   const shows = new Map(showIds.length ? app.db.select().from(libraryItem).where(inArray(libraryItem.jfId, showIds)).all().map((r) => [r.jfId, r]) : []);
   const libs = new Map(app.db.$client.prepare('select id, name from library').all().map((l) => [(l as { id: string }).id, (l as { name: string }).name]));
   const checks = new Map(app.db.select().from(mediaCheck).where(inArray(mediaCheck.jfId, ids)).all().map((c) => [c.jfId, c]));
+  const lang = languages(app);
   return findings.map((f) => {
     const r = items.get(f.jfId);
     const show = r?.seriesJfId ? shows.get(r.seriesJfId) : undefined;
-    const title = !r ? f.jfId : r.kind === 'episode'
+    const title = !r ? (f.subject ? `${f.subject.name} (box set)` : f.jfId) : r.kind === 'episode'
       ? `${show?.name ?? 'Unknown show'} S${String(r.season ?? 0).padStart(2, '0')}E${String(r.episode ?? 0).padStart(2, '0')} · ${r.name}`
       : `${r.name}${r.year ? ` (${r.year})` : ''}`;
     const libId = r?.kind === 'episode' ? show?.libraryId : r?.libraryId;
     return {
       jfId: f.jfId, kind: f.kind, detail: f.detail, firstSeen: f.firstSeen, dismissedAt: f.dismissedAt ?? null, dismissedBy: f.dismissedBy ?? null,
-      title, library: libId ? libs.get(libId) ?? null : null, rating: r?.officialRating ?? show?.officialRating ?? null, path: checks.get(f.jfId)?.path ?? null,
+      title, library: libId ? libs.get(libId) ?? null : null, rating: r?.officialRating ?? show?.officialRating ?? null, path: checks.get(f.jfId)?.path ?? (r?.kind !== 'episode' ? r?.path ?? null : null),
       seriesJfId: r?.kind === 'episode' ? r.seriesJfId ?? null : null, show: show?.name ?? null,
+      proposal: f.proposal ?? null, primaryTag: r?.primaryTag ?? null, boxSet: Boolean(f.subject),
+      info: f.kind === 'audio' && audioHandled(lang.prefs, lang.of(libId)) === true,
     };
   }).sort((a, b) => (opts.dismissed ? (b.dismissedAt ?? 0) - (a.dismissedAt ?? 0) : b.firstSeen - a.firstSeen) || a.title.localeCompare(b.title));
 }
 
+/** Open findings that need someone to look (audio ones users' settings take care of don't), for the menu and Dashboard. */
+export const openFindingCount = (app: AppContext): number => healthRows(app).filter((r) => !r.info).length;
+
 /** Mark a finding as checked and fine. It comes back if the file changes. */
-export function dismissFinding(app: AppContext, jfId: string, kind: 'runtime' | 'title', by: string): boolean {
+export function dismissFinding(app: AppContext, jfId: string, kind: HealthKind, by: string): boolean {
   const r = app.db.update(healthFinding).set({ dismissedAt: Date.now(), dismissedBy: by }).where(and(eq(healthFinding.jfId, jfId), eq(healthFinding.kind, kind))).run();
   return r.changes > 0;
 }
@@ -295,7 +368,7 @@ export function dismissFinding(app: AppContext, jfId: string, kind: 'runtime' | 
  * Mark several findings fine at once: given findings (an item and, optionally, one kind), every open finding for the
  * episodes of given shows, or both. Returns how many were marked.
  */
-export function dismissFindings(app: AppContext, opts: { findings?: { jfId: string; kind?: 'runtime' | 'title' }[]; seriesIds?: string[] }, by: string): number {
+export function dismissFindings(app: AppContext, opts: { findings?: { jfId: string; kind?: HealthKind }[]; seriesIds?: string[] }, by: string): number {
   const open = app.db.select().from(healthFinding).all().filter((f) => !f.dismissedAt);
   const wanted = new Set<string>();
   for (const f of opts.findings ?? []) for (const o of open) if (o.jfId === f.jfId && (!f.kind || o.kind === f.kind)) wanted.add(`${o.jfId}|${o.kind}`);
@@ -307,7 +380,7 @@ export function dismissFindings(app: AppContext, opts: { findings?: { jfId: stri
   const at = Date.now();
   app.db.transaction((tx) => {
     for (const k of wanted) {
-      const [jfId, kind] = k.split('|') as [string, 'runtime' | 'title'];
+      const [jfId, kind] = k.split('|') as [string, HealthKind];
       tx.update(healthFinding).set({ dismissedAt: at, dismissedBy: by }).where(and(eq(healthFinding.jfId, jfId), eq(healthFinding.kind, kind))).run();
     }
   });
@@ -315,7 +388,7 @@ export function dismissFindings(app: AppContext, opts: { findings?: { jfId: stri
 }
 
 /** Put a finding marked fine back up for review. */
-export function reopenFinding(app: AppContext, jfId: string, kind: 'runtime' | 'title'): boolean {
+export function reopenFinding(app: AppContext, jfId: string, kind: HealthKind): boolean {
   const r = app.db.update(healthFinding).set({ dismissedAt: null, dismissedBy: null }).where(and(eq(healthFinding.jfId, jfId), eq(healthFinding.kind, kind))).run();
   return r.changes > 0;
 }
@@ -324,16 +397,19 @@ export type HealthDashboard = {
   enabled: boolean;
   /** Films and episodes in the library, how many have been checked (as they are now), and how many wait. */
   files: number; checked: number; waiting: number;
-  /** Checked files with a TMDb runtime to compare their length with (the rest are checked by title tags only). */
+  /** Checked files with a length to compare with (TMDb's runtime, or the season's typical length). */
   compared: number | null;
+  /** Open findings someone should look at; audio ones users' settings take care of are counted apart (`info`). */
   needsReview: number; reviewed: number;
-  byKind: { runtime: number; title: number };
+  byKind: Record<HealthKind, number>;
   byLibrary: { library: string; files: number; checked: number; needsReview: number; reviewed: number }[];
   lastChecked: number | null;
   open: HealthRow[]; done: HealthRow[];
+  /** Audio findings Jellyfin's users' settings already take care of: for information. */
+  info: HealthRow[];
 };
 
-/** Everything the Library health page shows. */
+/** Everything the Library health page shows about files and findings (artwork extras: artwork.ts artworkSummary). */
 export function healthDashboard(app: AppContext): HealthDashboard {
   const rows = app.db.select().from(libraryItem).where(inArray(libraryItem.kind, ['movie', 'episode', 'series'])).all();
   const seriesLib = new Map(rows.filter((r) => r.kind === 'series').map((r) => [r.jfId, r.libraryId]));
@@ -341,7 +417,6 @@ export function healthDashboard(app: AppContext): HealthDashboard {
   const libOf = (r: (typeof rows)[number]) => (r.kind === 'episode' ? seriesLib.get(r.seriesJfId ?? '') : r.libraryId) ?? null;
   const checks = new Map(app.db.select({ jfId: mediaCheck.jfId, sig: mediaCheck.sig, at: mediaCheck.checkedAt }).from(mediaCheck).all().map((c) => [c.jfId, c]));
   const isChecked = (r: (typeof rows)[number]) => checks.get(r.jfId)?.sig === String(r.dateAdded ?? 0);
-  const findings = app.db.select().from(healthFinding).all();
   const libNames = new Map(app.db.$client.prepare('select id, name from library').all().map((l) => [(l as { id: string }).id, (l as { name: string }).name]));
   const per = new Map<string, { library: string; files: number; checked: number; needsReview: number; reviewed: number }>();
   const bucket = (lib: string | null) => {
@@ -349,30 +424,30 @@ export function healthDashboard(app: AppContext): HealthDashboard {
     if (!per.has(name)) per.set(name, { library: name, files: 0, checked: 0, needsReview: 0, reviewed: 0 });
     return per.get(name)!;
   };
-  const byId = new Map(files.map((r) => [r.jfId, r]));
+  const byId = new Map(rows.map((r) => [r.jfId, r]));
   let checked = 0;
   for (const r of files) {
     const b = bucket(libOf(r));
     b.files++;
     if (isChecked(r)) { b.checked++; checked++; }
   }
-  for (const f of findings) {
-    const r = byId.get(f.jfId);
-    const b = bucket(r ? libOf(r) : null);
-    if (f.dismissedAt) b.reviewed++; else b.needsReview++;
-  }
-  const open = findings.filter((f) => !f.dismissedAt);
-  // The latest run's count of files compared with a TMDb runtime.
+  const all = healthRows(app);
+  const open = all.filter((r) => !r.info);
+  const info = all.filter((r) => r.info);
+  const done = healthRows(app, { dismissed: true });
+  for (const f of open) { const r = byId.get(f.jfId); bucket(r ? libOf(r) : null).needsReview++; }
+  for (const f of done) { const r = byId.get(f.jfId); bucket(r ? libOf(r) : null).reviewed++; }
+  // The latest run's count of files compared with a length.
   const runs = app.db.$client.prepare("select stats from run where status = 'ok' order by started_at desc limit 20").all() as { stats: string }[];
   const compared = runs.map((r) => (JSON.parse(r.stats) as { healthCompared?: number }).healthCompared).find((n) => n !== undefined) ?? null;
   const last = [...checks.values()].reduce((m, c) => Math.max(m, c.at), 0);
+  const byKind = Object.fromEntries((['runtime', 'title', 'audio', 'no_poster', 'video_poster', 'language', 'other_title'] as HealthKind[]).map((k) => [k, open.filter((f) => f.kind === k).length])) as Record<HealthKind, number>;
   return {
     enabled: app.settings().health.enabled,
     files: files.length, checked, waiting: files.length - checked, compared,
-    needsReview: open.length, reviewed: findings.length - open.length,
-    byKind: { runtime: open.filter((f) => f.kind === 'runtime').length, title: open.filter((f) => f.kind === 'title').length },
+    needsReview: open.length, reviewed: done.length, byKind,
     byLibrary: [...per.values()].filter((b) => b.files || b.needsReview || b.reviewed).sort((a, b) => b.needsReview - a.needsReview || a.library.localeCompare(b.library)),
     lastChecked: last || null,
-    open: healthRows(app), done: healthRows(app, { dismissed: true }),
+    open, done, info,
   };
 }

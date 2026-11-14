@@ -24,6 +24,7 @@ import { refreshWatchProviders, type ProviderKind } from '../sources/watch-provi
 import { overlayCount, syncOverlays } from '../overlays/sync.js';
 import { checkIntegrity, identityCtx } from './boxset-identity.js';
 import { checkLibraryHealth } from '../library/health.js';
+import { checkArtwork } from '../library/artwork.js';
 import { postersDir } from '../domain/posters.js';
 import { adoptionCandidates } from './adoption.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
@@ -297,6 +298,17 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
         if (h.found) log.warn(`Library health: ${h.found} new ${h.found === 1 ? 'file' : 'files'} may not be what ${h.found === 1 ? 'it says' : 'they say'} (Library health page)`);
       } catch (e) {
         log.warn(`Library health not checked: ${(e as Error).message}`);
+      }
+      // Artwork (ADR-043): posters missing, from the video or file, in another language, or from another title. Fixes
+      // only what a library is set to have fixed by itself, and only while dry run is off.
+      step('Checking artwork');
+      try {
+        const a = await checkArtwork(app, { now, apply: !settings.dryRun, step });
+        Object.assign(stats, { artworkChecked: a.checked, artworkFound: a.found, artworkBoxSetsChecked: a.boxSetsChecked, artworkAutoFixed: a.autoFixed });
+        if (a.found) log.warn(`Library health: ${a.found} new artwork ${a.found === 1 ? 'finding' : 'findings'} (Library health page)`);
+        if (a.autoFixed) log.info(`Library health: fixed ${a.autoFixed} ${a.autoFixed === 1 ? 'poster' : 'posters'} from TMDb by themselves`);
+      } catch (e) {
+        log.warn(`Artwork not checked: ${(e as Error).message}`);
       }
     }
 

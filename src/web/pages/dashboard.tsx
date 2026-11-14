@@ -59,8 +59,16 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
             {m.autoCollections.length ? (
               <div class="notice"><Dot state="err" label="Risk" /><b>Jellyfin makes its own box sets in {m.autoCollections.join(', ')}</b><p>“Automatically add to collection” is on there. Jellyfin creates those box sets unlocked and finds their artwork with a TMDb name search, which can pick the wrong collection and show another collection’s poster and backdrop. Turn it off in Jellyfin: Dashboard → Libraries, open the library’s menu → Manage library, and untick “Automatically add to collection”.</p></div>
             ) : null}
+            {m.imageFetcherRisks.length ? (
+              <div class="notice"><Dot state="err" label="Risk" /><b>Jellyfin can take posters from the video or the file in {m.imageFetcherRisks.map((r) => r.library).join(', ')}</b>
+                <p>{m.imageFetcherRisks.map((r) => `${r.library}: ${r.fetchers.join(' and ')}`).join('; ')} {m.imageFetcherRisks.length === 1 ? 'is' : 'are'} on as an image fetcher for films or shows. When TMDb has no poster, Jellyfin can use a random frame from the video, or a picture embedded in a mislabelled file, which can put the wrong picture on a kids’ screen. Turn them off in Jellyfin: Dashboard → Libraries, open the library’s menu → Manage library, and untick them under Image fetchers for Movie, Series and Season (episode stills are fine). <a href="/health">Library health</a> lists posters that look like they came from the video or file.</p></div>
+            ) : null}
+            {m.audioPrefRisks.length ? (
+              <div class="notice"><Dot state="warn" label="Check" /><b>{m.audioPrefRisks.length === 1 ? `${m.audioPrefRisks[0]!.user} may hear a dub` : `${m.audioPrefRisks.length} Jellyfin users may hear a dub`}</b>
+                <p>{m.audioPrefRisks.map((u) => `${u.user}: ${u.why}`).join('; ')}. A file whose default track is another language (a French or Spanish dub on a kids’ film) then plays in that language. In Jellyfin, each user can set Settings → Playback → Preferred audio language, and untick “Play default audio track regardless of language”. <a href="/health">Library health</a> lists the files.</p></div>
+            ) : null}
             {m.healthOpen ? (
-              <div class="notice"><Dot state="err" label="Check" /><b>{m.healthOpen === 1 ? '1 file may not be what it says' : `${m.healthOpen} files may not be what they say`}</b><p>Its length or a title tag inside doesn’t match the title. Play it to check: <a href="/health">Library health</a>.</p></div>
+              <div class="notice"><Dot state="err" label="Check" /><b>{m.healthOpen === 1 ? '1 thing to check in Library health' : `${m.healthOpen} things to check in Library health`}</b><p>Files whose length, title tags or default audio don’t match the title, and posters that are missing, from the video or file, in another language or from another title: <a href="/health">Library health</a>.</p></div>
             ) : null}
             {m.integrity.filter((e) => !e.ok).map((e) => (
               <div class="notice"><Dot state="err" label="Repair failed" /><b>{e.name}: box set check failed</b><p>{e.what} The next run tries again. ({fmtAgo(e.at, m.now)})</p></div>

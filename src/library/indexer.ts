@@ -7,7 +7,7 @@ import { library, libraryItem } from '../db/schema.js';
 import type { JellyfinClient, BaseItemDto } from '../clients/jellyfin/index.js';
 
 // Not OfficialRating or ProductionYear: Jellyfin returns those anyway, and they aren't valid Fields values.
-const FIELDS = 'ProviderIds,Genres,Tags,Studios,SortName,DateCreated,ParentId';
+const FIELDS = 'ProviderIds,Genres,Tags,Studios,SortName,DateCreated,ParentId,Path';
 
 export type IndexStats = { libraries: number; movies: number; series: number; episodes: number; removed: number };
 
@@ -24,8 +24,13 @@ export async function syncLibraries(db: DB, jf: JellyfinClient, at = Date.now())
   for (const f of folders) {
     if (!f.ItemId || !f.Name) continue;
     const autoCollections = f.LibraryOptions?.AutomaticallyAddToCollection ?? null;
-    db.insert(library).values({ id: f.ItemId, name: f.Name, collectionType: f.CollectionType ?? null, autoCollections, seenAt: at })
-      .onConflictDoUpdate({ target: library.id, set: { name: f.Name, collectionType: f.CollectionType ?? null, autoCollections, seenAt: at } }).run();
+    // ADR-043: the library's language (for artwork and audio checks) and its image fetchers (the Dashboard warns about
+    // fetchers that take pictures from the video or file).
+    const preferredLanguage = f.LibraryOptions?.PreferredMetadataLanguage?.trim() || null;
+    const types = f.LibraryOptions?.TypeOptions ?? [];
+    const imageFetchers = types.length ? Object.fromEntries(types.filter((t) => t.Type).map((t) => [t.Type!, t.ImageFetchers ?? []])) : null;
+    const values = { name: f.Name, collectionType: f.CollectionType ?? null, autoCollections, preferredLanguage, imageFetchers, seenAt: at };
+    db.insert(library).values({ id: f.ItemId, ...values }).onConflictDoUpdate({ target: library.id, set: values }).run();
   }
   return folders;
 }
@@ -67,6 +72,8 @@ export async function indexLibrary(db: DB, jf: JellyfinClient, onProgress?: (msg
             dateAdded: it.DateCreated ? Date.parse(it.DateCreated) : null,
             premiereDate: it.PremiereDate ? Date.parse(it.PremiereDate) : null,
             status: kind === 'series' ? it.Status ?? null : null,
+            primaryTag: kind === 'episode' ? null : it.ImageTags?.Primary ?? null,
+            path: kind === 'episode' ? null : it.Path ?? null,
             seenAt: startedAt,
           };
           tx.insert(libraryItem).values({ jfId: it.Id, ...row }).onConflictDoUpdate({ target: libraryItem.jfId, set: row }).run();

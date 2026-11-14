@@ -74,7 +74,7 @@ describe('Claude access (MCP)', () => {
     const client = await connect(t.web, token);
     const names = (await client.listTools()).tools.map((x) => x.name).sort();
     expect(names).toEqual(['compare_with_plex', 'explain_collection', 'get_collection', 'get_radarr_sonarr_options', 'get_run', 'get_settings', 'get_status', 'list_activity', 'list_collections', 'list_existing_box_sets', 'list_library_health', 'list_missing', 'list_review']);
-    expect(json(await client.callTool({ name: 'list_library_health', arguments: {} }))).toEqual({ checking: true, findings: [], markedFineCount: 0 });
+    expect(json(await client.callTool({ name: 'list_library_health', arguments: {} }))).toEqual({ checking: true, findings: [], markedFineCount: 0, artworkFixedLast30Days: [] });
     const status = json(await client.callTool({ name: 'get_status', arguments: {} }));
     expect(status.app.dryRun).toBe(true);
     expect(status.app.timezone).toBe('America/New_York');

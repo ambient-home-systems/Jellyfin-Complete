@@ -2,6 +2,8 @@
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
 import { action, run, sourceResult, imdbHash, managedCollection, membership, definition, library, integrityEvent, healthFinding } from '../db/schema.js';
+import { AUDIO_PREFS_KEY, openFindingCount, type AudioPref } from '../library/health.js';
+import { getCached } from '../cache.js';
 import type { WindowDef } from '../db/schema.js';
 import { loadDefinitions, type LoadedDefinition } from '../domain/definitions.js';
 import { localDay, transitions, localMidnight, occurrence, fromDayNumber, dayNumber } from '../domain/windows.js';
@@ -15,7 +17,7 @@ export function shellModel(app: AppContext) {
   const pending = app.db.select({ n: sql<number>`count(*)` }).from(action).where(eq(action.status, 'proposed')).get()?.n ?? 0;
   const last = app.db.select().from(run).where(sql`${run.status} != 'running'`).orderBy(desc(run.startedAt)).limit(1).get();
   const s = app.settings();
-  const healthOpen = app.db.select({ n: sql<number>`count(*)` }).from(healthFinding).where(isNull(healthFinding.dismissedAt)).get()?.n ?? 0;
+  const healthOpen = openFindingCount(app);
   return {
     dryRun: s.dryRun,
     pending,
@@ -157,7 +159,8 @@ export function dashboardModel(app: AppContext, now = Date.now()) {
     integrity: app.db.select().from(integrityEvent).where(gte(integrityEvent.at, now - 7 * 86_400_000)).orderBy(desc(integrityEvent.at)).limit(50).all(),
     autoCollections: app.db.select().from(library).all().filter((l) => l.autoCollections).map((l) => l.name),
     // ADR-041: files that may not be what they say, not yet marked as fine.
-    healthOpen: app.db.select().from(healthFinding).all().filter((f) => !f.dismissedAt).length,
+    healthOpen: openFindingCount(app),
+    ...artworkRisks(app),
   };
 }
 
@@ -229,3 +232,24 @@ export function sourceRows(app: AppContext, keys: string[]) {
 }
 
 export { fmtAgo, and };
+
+/** Image fetchers that take pictures from the video or the file itself (ADR-043). */
+export const RISKY_FETCHERS = ['Screen Grabber', 'Embedded Image Extractor'];
+
+/**
+ * Dashboard warnings (ADR-043): film and TV libraries whose image fetchers take a poster from the video (a random frame)
+ * or the file (a mislabelled file's own picture), and Jellyfin users whose audio settings play a file's default track
+ * whatever its language. Episodes are left out: their pictures normally are frames.
+ */
+export function artworkRisks(app: AppContext): { imageFetcherRisks: { library: string; fetchers: string[] }[]; audioPrefRisks: { user: string; why: string }[] } {
+  const imageFetcherRisks = app.db.select().from(library).all()
+    .filter((l) => l.collectionType === 'movies' || l.collectionType === 'tvshows')
+    .map((l) => ({ library: l.name, fetchers: [...new Set(['Movie', 'Series', 'Season'].flatMap((t) => (l.imageFetchers?.[t] ?? []).filter((f) => RISKY_FETCHERS.includes(f))))] }))
+    .filter((x) => x.fetchers.length);
+  const prefs = (() => { const h = getCached<AudioPref[]>(app.db, AUDIO_PREFS_KEY); return h.hit ? h.value : []; })();
+  const audioPrefRisks = prefs.flatMap((u) => {
+    const why = [!u.lang && 'no preferred audio language', u.playDefault && '“Play default audio track” on'].filter(Boolean).join(' and ');
+    return why ? [{ user: u.name, why }] : [];
+  });
+  return { imageFetcherRisks, audioPrefRisks };
+}

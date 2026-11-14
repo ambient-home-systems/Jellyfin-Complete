@@ -21,6 +21,21 @@ const title = (x: PagedItem, media: 'movie' | 'tv'): TmdbTitle => {
 
 export type CollectionDetails = { name: string; overview: string | null; posterPath: string | null; parts: { tmdb: string; title: string; year: number | undefined }[] };
 
+/** One TMDb image: its file path, language (null for none), rating and size. */
+export type TmdbImage = { path: string; lang: string | null; vote: number; votes: number; w: number; h: number };
+/** A film's or show's identity and images on TMDb, for the artwork checks (ADR-043). */
+export type TmdbArtwork = {
+  media: 'movie' | 'tv'; id: string; title: string; originalTitle: string | null; year: number | null; originalLanguage: string | null;
+  imdb: string | null; tvdb: string | null; posters: TmdbImage[]; backdrops: TmdbImage[]; logos: TmdbImage[];
+};
+type RawImage = { file_path?: string; iso_639_1?: string | null; vote_average?: number; vote_count?: number; width?: number; height?: number };
+/** Best first: TMDb's rating, then how many rated it. */
+export const byRating = (a: TmdbImage, b: TmdbImage) => b.vote - a.vote || b.votes - a.votes;
+const images = (xs: RawImage[] | undefined, keep: number): TmdbImage[] => (xs ?? [])
+  .filter((x): x is RawImage & { file_path: string } => Boolean(x.file_path))
+  .map((x) => ({ path: x.file_path, lang: x.iso_639_1 && x.iso_639_1 !== 'xx' ? x.iso_639_1 : null, vote: x.vote_average ?? 0, votes: x.vote_count ?? 0, w: x.width ?? 0, h: x.height ?? 0 }))
+  .sort(byRating).slice(0, keep);
+
 export class TmdbClient {
   private limiter = new RateLimiter(35, 10_000);
   constructor(private db: DB, private apiKey: string, private f: FetchLike = fetch) {}
@@ -47,6 +62,38 @@ export class TmdbClient {
       const e = r.tv_episode_results[0];
       if (e) return { kind: 'episode', showTmdb: String(e.show_id), season: e.season_number, episode: e.episode_number };
       return null;
+    });
+  }
+
+  /** TVDB ID → TMDb show. Cached for 90 days. */
+  findTvdb(tvdbId: string): Promise<string | null> {
+    return cached(this.db, `find-tvdb:${tvdbId}`, 90, async () => {
+      const r = await this.get<{ tv_results: { id: number }[] }>(`/find/${encodeURIComponent(tvdbId)}?external_source=tvdb_id`);
+      return r.tv_results[0] ? String(r.tv_results[0].id) : null;
+    });
+  }
+
+  /**
+   * A film's or show's title, year, original language, IMDb/TVDB IDs and images in every language (ADR-043), or null
+   * if TMDb doesn't have it. Two requests (details with external IDs, then images, which come in every language only
+   * when asked for on their own). Cached for 30 days, so new posters on TMDb show up within a month.
+   */
+  artwork(media: 'movie' | 'tv', id: string): Promise<TmdbArtwork | null> {
+    return cached(this.db, `artwork:${media}:${id}`, 30, async () => {
+      try {
+        type Details = { title?: string; name?: string; original_title?: string; original_name?: string; release_date?: string; first_air_date?: string; original_language?: string; imdb_id?: string | null; external_ids?: { imdb_id?: string | null; tvdb_id?: number | null } };
+        const d = await this.get<Details>(`/${media}/${encodeURIComponent(id)}?append_to_response=external_ids`);
+        const im = await this.get<{ posters?: RawImage[]; backdrops?: RawImage[]; logos?: RawImage[] }>(`/${media}/${encodeURIComponent(id)}/images`);
+        const date = d.release_date || d.first_air_date;
+        return {
+          media, id, title: d.title ?? d.name ?? '', originalTitle: d.original_title ?? d.original_name ?? null, year: date ? Number(date.slice(0, 4)) : null,
+          originalLanguage: d.original_language ?? null, imdb: d.imdb_id ?? d.external_ids?.imdb_id ?? null, tvdb: d.external_ids?.tvdb_id ? String(d.external_ids.tvdb_id) : null,
+          posters: images(im.posters, 80), backdrops: images(im.backdrops, 30), logos: images(im.logos, 30),
+        };
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) return null;
+        throw e;
+      }
     });
   }
 

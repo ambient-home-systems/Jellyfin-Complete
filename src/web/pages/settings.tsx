@@ -72,7 +72,11 @@ export const SettingsPage: FC<{
                 <div class="field"><label for="nb">Other tools’ schedules</label><textarea id="nb" name="neighbours" rows={3} placeholder={'Jellyfin-Auto-Collections 04:00\nKometa (Plex) 05:00'}>{s.neighbours.map((n) => `${n.name} ${n.time}`).join('\n')}</textarea><span class="hint">Shown beside this app’s jobs so they don’t collide.</span></div>
               </div>
               <div class="grid3">
-                <div class="field"><span class="label">Library health</span><label class="check"><input type="checkbox" name="healthEnabled" value="1" checked={s.health.enabled} /> Check files against their titles</label><span class="hint">Flags films and episodes whose length or title tags don’t match TMDb. Read-only. <a href="/health">Library health</a></span></div>
+                <div class="field"><span class="label">Library health</span><label class="check"><input type="checkbox" name="healthEnabled" value="1" checked={s.health.enabled} /> Check files and artwork</label><span class="hint">Flags films and episodes whose length, title tags or default audio don’t match, and posters that are missing, from the video or file, in another language or from another title. Files are never changed. <a href="/health">Library health</a></span></div>
+                <div class="field"><span class="label">Fix posters by themselves in</span>
+                  <input type="hidden" name="autoFixSent" value="1" />
+                  {libraries.length ? libraries.map((l) => <label class="check"><input type="checkbox" name="autoFixLib" value={l.id} checked={(s.health.autoFixLibraryIds ?? []).includes(l.id)} /> {l.name}</label>) : <span class="faint">No libraries yet.</span>}
+                  <span class="hint">Only “No poster” and “Poster from the video or file”, from TMDb, by the title’s confirmed TMDb ID, while dry run is off. The old one is kept, to undo. Everything else waits for you.</span></div>
                 <div class="field"><label for="region">Streaming country</label><input id="region" name="streamingRegion" type="text" value={s.streaming.region} maxlength={2} pattern="[A-Za-z]{2}" class="num" autocomplete="off" /><span class="hint">Streaming collections count the services offered here. Two letters, such as US, GB or CA. Streaming data from JustWatch, through TMDb.</span></div>
               </div>
               <div><button class="btn primary" type="submit">Save</button></div>

@@ -41,7 +41,11 @@ export type Settings = {
     skipLibraryIds?: string[] | null;
   };
   /** Library health (ADR-041): flag files whose length or title tags don't match the title. Read-only; on by default. */
-  health: { enabled: boolean };
+  health: {
+    enabled: boolean;
+    /** Libraries where "No poster" and "Poster from the video or file" are fixed from TMDb without asking (ADR-043). */
+    autoFixLibraryIds?: string[];
+  };
   /** The Jellyfin version seen at the last run (Phase 4 compatibility). */
   server: { version: string | null; seenAt: number | null };
 };
@@ -86,7 +90,7 @@ export function defaultSettings(timezone: string): Settings {
     filmSeries: { enabled: false, minimum: 2 },
     streaming: { region: 'US' },
     overlays: { status: false, imdbTop250: false, skipLibraryIds: null },
-    health: { enabled: true },
+    health: { enabled: true, autoFixLibraryIds: [] },
     server: { version: null, seenAt: null },
   };
 }

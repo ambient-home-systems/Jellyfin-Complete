@@ -156,13 +156,39 @@ If another tool builds the same collections, remove them from that tool first so
 
 ## Library health
 
-The app checks each film and episode against its title. **Library health** in the menu (with a count of files needing review) shows how much of the library has been checked, what needs review and what's been reviewed, by library. It flags a file for:
+The app checks each film and episode against its title, and each film's and show's artwork. **Library health** in the menu (with a count of findings needing review) shows how much of the library has been checked, what needs review and what's been reviewed, by library. It flags a file for:
 
 - **Length:** the file runs more than 12 minutes or 15% (whichever is larger) longer or shorter than it should. A two-hour film has to be 18 minutes out; an episode, 12.
   - A film is measured against TMDb's runtime.
   - An episode is measured against TMDb's runtime too, unless TMDb lists the whole season at a different length. Some networks list the TV slot, ads included: *Dirty Jobs* at 60 minutes for 42-minute files. Then the episode is measured against the season's typical (median) file length, so only the odd ones out are flagged: an episode with the ads left in, two episodes in one file, a double-length crossover. A season with fewer than three files uses the whole show's typical length. When TMDb has no runtimes, the typical length is used too.
   - A file about twice the typical length says it may contain two episodes, and whether the next episode also has its own file. A file Jellyfin already knows holds two episodes ("S07E13-E14") is expected to be twice as long.
 - **Title tags:** a title tag inside the file names another title, for example "Bewitched (2005)" on *Black Panther: Wakanda Forever*. A tag with the same year is treated as a translated title and left alone.
+- **Audio:** the file plays in another language by default, though it has a track in the library's language (a French dub on a kids' film that has English too).
+  - If every Jellyfin user's settings already pick the library's language, it's listed **For information** and not counted. Those settings are a preferred audio language, with "Play default audio track" off.
+  - The Dashboard names users without those settings.
+
+And each film's and show's **artwork**:
+
+- **No poster.**
+- **Poster from the video or file:** a wide 16:9 picture, like a frame from the video. Or a poster that isn't one of TMDb's for the title and has the same shape as the picture embedded in the file (or the file has one attached).
+- **Poster language:** the poster is TMDb's poster in another language, and TMDb has one in the library's language.
+  - The library's own language is used, else the server's (Jellyfin: Dashboard → Libraries).
+  - If TMDb has none in that language, the poster is kept and a note says so; it isn't flagged.
+- **Artwork from another title:** Jellyfin links the title to a different TMDb title than the one its IMDb ID and folder name point to, as with *Inside Out* linked to a lookalike. Also: a box set the app doesn't manage, linked to a TMDb collection its films aren't in.
+
+**Reset from TMDb** fixes an artwork finding: on one row, or **Reset artwork for selected** for the ones you tick. Nothing resets the whole library.
+- It takes TMDb's best-rated poster in the library's language, and optionally the backdrop, logo and thumb too.
+- It goes by the title's **confirmed** TMDb ID, never a name search.
+  - An ID is confirmed when TMDb's record for it carries the same IMDb ID (or, for shows, TVDB ID) as Jellyfin's, or the folder name ("Inside Out (2015)") says so.
+  - Without a confirmed ID there's no reset, only the finding.
+- Just before replacing, it reads the title again and checks its ID again. If anything changed since the check, it stops and leaves the finding.
+- The old images are kept in `/config/artwork/backups`. **Artwork fixed** lists what was replaced, before and after, with **Undo**.
+- A poster with the app's overlays is backed up as its clean original, and the badges go back on the new one.
+- Box sets the app doesn't manage are only reported. **Adopt it** has the app rebuild one cleanly.
+
+**Fixing posters by themselves:** in Settings → Run and review, choose libraries where "No poster" and "Poster from the video or file" are fixed on each run, the same way, while dry run is off. Everything else waits for you.
+
+**Collection artwork changed** lists the repairs the app made to its own box sets in the last 30 days (see Box set artwork).
 
 Each finding shows the library, the rating and the file's path. Check it by playing it.
 - **It's fine** moves it to Reviewed, with who marked it and when, until the file changes.
@@ -172,7 +198,11 @@ Each finding shows the library, the rating and the file's path. Check it by play
 
 The app never moves, deletes or hides files.
 
-Each file is checked once, and again when it changes, a few thousand a night, so a big library is covered over a few nights. Extended editions much longer than TMDb's runtime show up too: mark them fine once. Turn the check off in Settings → Run and review.
+Each file is checked once, and again when it changes, a few thousand a night, so a big library is covered over a few nights. Artwork is checked a few hundred titles a night: new or changed first, then each title again after a month. Extended editions much longer than TMDb's runtime show up too: mark them fine once. Turn the checks off in Settings → Run and review.
+
+**Dashboard warnings.**
+- **Image fetchers:** a film or TV library with **Screen Grabber** or **Embedded Image Extractor** turned on as an image fetcher, for Movie, Series or Season. Jellyfin then uses a random frame, or a mislabelled file's own picture, when TMDb has no poster. Turn them off in Jellyfin under the library's Image fetchers. Episode stills are fine.
+- **Audio settings:** Jellyfin users with no preferred audio language, or with "Play default audio track" on.
 
 ## Missing titles, Radarr and Sonarr
 

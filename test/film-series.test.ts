@@ -46,7 +46,7 @@ function world(opts: { jellyfinKnowsSeries?: boolean } = {}) {
       const c = COLLECTIONS[coll[1]!];
       return c ? new Response(JSON.stringify({ ...c, overview: `All of ${c.name}`, parts: c.parts.map((id) => ({ id, title: `Film ${id}`, release_date: '2000-01-01' })) })) : new Response('{}', { status: 404 });
     }
-    const movie = url.match(/api\.themoviedb\.org\/3\/movie\/(\d+)/);
+    const movie = url.match(/api\.themoviedb\.org\/3\/movie\/(\d+)\?(?!append_to_response)/); // not the artwork check's (ADR-043)
     if (movie) {
       tmdbCalls.push(`movie ${movie[1]}`);
       const series = Object.entries(COLLECTIONS).find(([, c]) => c.parts.includes(Number(movie[1])))?.[0];
