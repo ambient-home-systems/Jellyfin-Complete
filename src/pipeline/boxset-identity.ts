@@ -49,6 +49,56 @@ const describeIds = (ids: Record<string, string | null | undefined> | null | und
   return Object.keys(c).length ? Object.entries(c).map(([k, v]) => `${k === 'tmdb' ? 'TMDb' : k} ${v}`).join(', ') : 'none';
 };
 
+/** An image Jellyfin attached, in a word: "a thumbnail", "a logo". */
+const imageWord = (type: string) => ({ Thumb: 'a thumbnail', Logo: 'a logo', Banner: 'a banner', Art: 'clear art', Disc: 'a disc image', Box: 'a box image' } as Record<string, string>)[type] ?? `a ${type.toLowerCase()} image`;
+
+/** "a, b and c" */
+const listed = (parts: string[]) => (parts.length <= 1 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`);
+
+/** What a repair did, as one short sentence: "Removed a backdrop and a thumbnail, and put its own poster back." */
+export function repairSentence(done: string[]): string {
+  if (!done.length) return 'Nothing needed changing.';
+  // Removals read as one, where the first stood: "removed a backdrop" + "removed a thumbnail" → "removed a backdrop and a thumbnail".
+  const isRemoval = (d: string) => /^removed (a backdrop|\d+ backdrops|a thumbnail|a logo|a banner|clear art|a \w+ image)/.test(d);
+  const removed = done.filter(isRemoval).flatMap((d) => d.replace(/^removed /, '').split(', '));
+  const parts: string[] = [];
+  for (const d of done) {
+    if (!isRemoval(d)) parts.push(d);
+    else if (!parts.some((p) => p.startsWith('removed ') && isRemoval(p))) parts.push(`removed ${listed(removed)}`);
+  }
+  // "a, b and c", with a comma before the last "and" when a part has an "and" of its own.
+  const text = parts.length > 1 && parts.some((p) => p.includes(' and ')) ? `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}` : listed(parts);
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+}
+
+/**
+ * A repair note as the pages show it. Notes written before 0.21.1 listed what was found and then what was fixed
+ * ("First check: a backdrop the app didn't add; … Fixed: removed a backdrop; …"); this reads those as the same
+ * short sentence new notes are stored as.
+ */
+export function tidyRepair(what: string): string {
+  const m = what.match(/Fixed: ([\s\S]*?)\.?$/);
+  if (!m) return what;
+  const done = m[1]!.split('; ').filter((d) => d && d !== 'nothing needed').map((d) => d
+    .replace(/^replaced a poster the app didn’t upload$/, 'put its own poster back')
+    .replace(/^uploaded its poster$/, 'added its poster')
+    .replace(/^put on its new poster$/, 'updated its poster')
+    .replace(/^removed a poster the app doesn’t supply$/, 'removed a poster it shouldn’t have')
+    .replace(/^TMDb link set to (.*) \(was (.*)\)$/, 'relinked it to $1 (was $2)')
+    .replace(/^name restored to (.*)$/, 'put its name back ($1)')
+    .replace(/^overview restored$/, 'put its description back')
+    .replace(/^replaced it with a fresh locked box set \(.*\) with the same titles$/, 'replaced it with a fresh locked copy holding the same titles')
+    .replace(/^removed ((?:Thumb|Logo|Banner|Art|Disc|Box)(?:, \w+)*)$/, (_, names: string) => `removed ${names.split(', ').map(imageWord).join(', ')}`));
+  return repairSentence(done);
+}
+
+/** Repairs grouped by what was done, so fifty collections with the same fix read as one line. */
+export function groupRepairs<T extends { name: string; what: string }>(events: T[]): { what: string; names: string[] }[] {
+  const by = new Map<string, Set<string>>();
+  for (const e of events) { const k = tidyRepair(e.what); (by.get(k) ?? by.set(k, new Set()).get(k)!).add(e.name); }
+  return [...by.entries()].map(([what, names]) => ({ what, names: [...names] })).sort((a, b) => b.names.length - a.names.length);
+}
+
 /** What's wrong with a managed box set's identity and artwork, in words; empty if nothing. */
 export function identityDrift(item: BaseItemDto, def: Def, state: ArtworkState | null): string[] {
   const out: string[] = [];
@@ -92,16 +142,16 @@ export async function secureArtwork(x: IdentityCtx, def: Def, boxsetId: string, 
   const overview = prior?.overview !== undefined && (item.Overview ?? '') !== (prior.overview ?? '') ? prior.overview ?? '' : undefined;
   if (!sameIds(item.ProviderIds, want) || name !== undefined || overview !== undefined) {
     await jf.updateItem(boxsetId, (dto) => ({ ...dto, ProviderIds: want, ...(name !== undefined ? { Name: name } : {}), ...(overview !== undefined ? { Overview: overview } : {}) }));
-    if (!sameIds(item.ProviderIds, want)) done.push(`TMDb link set to ${describeIds(want)} (was ${describeIds(item.ProviderIds)})`);
-    if (name !== undefined) done.push(`name restored to “${name}”`);
-    if (overview !== undefined) done.push('overview restored');
+    if (!sameIds(item.ProviderIds, want)) done.push(`relinked it to ${describeIds(want)} (was ${describeIds(item.ProviderIds)})`);
+    if (name !== undefined) done.push(`put its name back (“${name}”)`);
+    if (overview !== undefined) done.push('put its description back');
   }
   const backdrops = item.BackdropImageTags?.length ?? 0;
   for (let i = backdrops - 1; i >= 0; i--) await jf.deleteImage(boxsetId, 'Backdrop', i);
   if (backdrops) done.push(`removed ${backdrops === 1 ? 'a backdrop' : `${backdrops} backdrops`}`);
   const extras = Object.keys(item.ImageTags ?? {}).filter((t) => t !== 'Primary');
   for (const t of extras) await jf.deleteImage(boxsetId, t);
-  if (extras.length) done.push(`removed ${extras.join(', ')}`);
+  if (extras.length) done.push(`removed ${extras.map(imageWord).join(', ')}`);
 
   const state = stateOf(x.db, def.id);
   const key = posterKey(def.poster);
@@ -113,15 +163,15 @@ export async function secureArtwork(x: IdentityCtx, def: Def, boxsetId: string, 
       const img = (await readPoster(def.poster, x))!;
       await jf.uploadPrimaryImage(boxsetId, img.bytes, img.type);
       posterUrl = key;
-      done.push(!primary ? 'uploaded its poster' : ours ? 'put on its new poster' : 'replaced a poster the app didn’t upload');
+      done.push(!primary ? 'added its poster' : ours ? 'updated its poster' : 'put its own poster back');
     } catch (e) {
       // The app's poster can't be read now: don't keep one it can't vouch for. The next run tries again.
-      if (primary && !ours) { await jf.deleteImage(boxsetId, 'Primary'); done.push(`removed a poster the app didn’t upload (its own couldn’t be read: ${(e as Error).message})`); }
+      if (primary && !ours) { await jf.deleteImage(boxsetId, 'Primary'); done.push(`removed a poster that wasn’t its own (its own couldn’t be read: ${(e as Error).message})`); }
       else if (primary) { posterUrl = state!.posterUrl; done.push(`kept its current poster (the new one couldn’t be read: ${(e as Error).message})`); }
     }
   } else if (!key && primary) {
     await jf.deleteImage(boxsetId, 'Primary');
-    done.push(ours ? 'removed its poster' : 'removed a poster the app doesn’t supply');
+    done.push(ours ? 'removed its poster' : 'removed a poster it shouldn’t have');
   }
   const after = await jf.getItem(boxsetId);
   const artwork: ArtworkState = { providerIds: want, posterUrl, primaryTag: after?.ImageTags?.Primary ?? null, at: Date.now(), name: after?.Name ?? null, overview: after?.Overview ?? '' };
@@ -183,7 +233,7 @@ export async function recheckCreated(x: IdentityCtx, created: { def: Def; boxset
       const drift = identityDrift(item, def, stateOf(x.db, def.id)).filter((d) => d !== 'not locked');
       if (!drift.length) continue;
       const done = await secureArtwork(x, def, boxsetId);
-      recordIntegrity(x.db, def, `Just after it was created: ${drift.join('; ')}. Fixed: ${done.join('; ') || 'nothing needed'}.`, true);
+      recordIntegrity(x.db, def, repairSentence(done), true);
     } catch (e) {
       recordIntegrity(x.db, def, `Check after creating failed: ${(e as Error).message}`, false);
     }
@@ -216,15 +266,16 @@ export async function checkIntegrity(x: IdentityCtx, defs: Def[], now = Date.now
       if (!item.LockData) {
         const newId = await rebuildBoxSet(x, def, m.jfBoxsetId, { hidden: m.state === 'hidden' });
         rebuilt.push({ def, boxsetId: newId });
-        done = [`replaced it with a fresh locked box set (${newId}) with the same titles`];
+        done = ['replaced it with a fresh locked copy holding the same titles'];
+        log.info(`Collection ${def.name}: wasn’t locked; rebuilt as ${newId}`);
       } else {
         done = await secureArtwork(x, def, m.jfBoxsetId);
       }
       if (!notable.length) { out.baselined++; log.info(`Box set ${def.name}: first check; ${done.join('; ') || 'nothing to change'}`); continue; }
-      recordIntegrity(x.db, def, `${m.artwork ? '' : 'First check: '}${notable.join('; ')}. Fixed: ${done.join('; ') || 'nothing needed'}.`, true, now);
+      recordIntegrity(x.db, def, repairSentence(done), true, now);
       out.repaired++;
     } catch (e) {
-      recordIntegrity(x.db, def, `Couldn’t check or repair it: ${(e as Error).message}`, false, now);
+      recordIntegrity(x.db, def, `Couldn’t be checked: ${(e as Error).message}.`, false, now);
       out.failed++;
     }
   }

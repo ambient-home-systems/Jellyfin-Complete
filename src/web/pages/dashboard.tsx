@@ -3,7 +3,8 @@ import type { Child, FC } from 'hono/jsx';
 import { Icon, Dot, Csrf, fmtDate, fmtTime, fmtAgo, plural } from '../ui.js';
 import type { dashboardModel } from '../model.js';
 import { RunProgress } from './run-progress.js';
-import { APPROVAL_ROWS, DATE_CHANGE, whenNext } from '../terms.js';
+import { APPROVAL_ROWS, APPROVAL_DOING, DATE_CHANGE, names, sentence, whenNext } from '../terms.js';
+import { groupRepairs } from '../../pipeline/boxset-identity.js';
 
 type M = ReturnType<typeof dashboardModel>;
 
@@ -22,10 +23,11 @@ const Notice: FC<{ state: 'ok' | 'warn' | 'err'; label: string; title: Child; li
  * change waits for approval, and nothing about approvals needs learning.
  */
 export const AutomaticOffer: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
-  const auto = APPROVAL_ROWS.filter(([t]) => m.modes[t] === 'auto').map(([, l]) => l.charAt(0).toLowerCase() + l.slice(1));
+  const auto = APPROVAL_ROWS.filter(([t]) => m.modes[t] === 'auto').map(([t]) => APPROVAL_DOING[t]!);
+  const list = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
   return (
     <div class="banner offer" role="region" aria-label="Automatic changes">
-      <span><b>Stop asking about routine changes?</b> The app would {auto.length ? auto.slice(0, 3).join(', ') : 'make the changes you choose'} on its own. Everything else still waits in your Inbox.</span>
+      <span><b>Stop asking about routine changes?</b> {auto.length ? `${list(auto).charAt(0).toUpperCase()}${list(auto).slice(1)}` : 'The changes you choose'} would happen on {auto.length === 1 ? 'its' : 'their'} own. Everything else still waits in your Inbox.</span>
       <form method="post" action="/start/automatic" class="offer-actions">
         <Csrf token={csrf} />
         <button class="btn sm on-yellow" type="submit" name="choice" value="yes">Yes, stop asking</button>
@@ -52,7 +54,9 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
   const repaired = m.integrity.filter((e) => e.ok);
   const serverBad = m.server?.level === 'unsupported';
   const problems = m.failing.length + m.stale.length + failedRepairs.length + (m.hashError ? 1 : 0) + (serverBad ? 1 : 0);
-  const advice = m.autoCollections.length || m.imageFetcherRisks.length || m.audioPrefRisks.length || repaired.length || (m.server && m.server.level !== 'verified' && !serverBad);
+  const advice = m.autoCollections.length || m.imageFetcherRisks.length || m.audioPrefRisks.length || (m.server && m.server.level !== 'verified' && !serverBad);
+  const tidied = groupRepairs(repaired);
+  const tidiedCount = new Set(repaired.map((e) => e.definitionId)).size;
   const showVia = m.timetable.some((c) => c.via);
   const cols = showVia ? 5 : 4;
   let lastMonth = '';
@@ -107,17 +111,26 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
             <div class="section-head"><h2 id="svc-h">Problems</h2><span class="aside">{problems ? plural(problems, 'problem') : 'none'}{m.healthyCount ? ` · ${plural(m.healthyCount, 'source')} OK` : ''}</span></div>
             {serverBad && m.server ? <Notice state="err" label="Unsupported" title={`Jellyfin ${m.server.version}`} line={m.server.note} /> : null}
             {failedRepairs.map((e) => (
-              <Notice state="err" label="Repair failed" title={`${e.name}: couldn’t be put right`} line={<>{e.what} The next run tries again.</>} />
+              <Notice state="err" label="Repair failed" title={`${e.name}: couldn’t be put right`} line={<>{sentence(e.what)} The next run tries again.</>} />
             ))}
-            {m.hashError ? <Notice state="err" label="Failing" title="IMDb can’t be read" line={<>{m.hashError}. IMDb lists keep their last good results.</>} /> : null}
+            {m.hashError ? <Notice state="err" label="Failing" title="IMDb can’t be read" line={<>{sentence(m.hashError)} IMDb lists keep their last good results.</>} /> : null}
             {m.failing.map((s) => (
-              <Notice state="err" label="Failing" title={s.label} line={<>{s.error} Nothing is removed from its collections meanwhile.</>} />
+              <Notice state="err" label="Failing" title={s.label} line={<>{sentence(s.error)} Nothing is removed from its collections meanwhile.</>} />
             ))}
             {m.stale.map((s) => (
-              <Notice state="warn" label="Using last good results" title={s.label} line={<>{s.error} Using its results from {fmtAgo(s.lastGoodAt, m.now)}.</>} />
+              <Notice state="warn" label="Using last good results" title={s.label} line={<>{sentence(s.error)} Using its results from {fmtAgo(s.lastGoodAt, m.now)}.</>} />
             ))}
             {!problems ? (
               <Notice state="ok" label="OK" title={m.healthyCount ? 'Every source answered' : 'Nothing read yet'} line={m.healthyCount ? undefined : 'Sources are read on the first run.'} />
+            ) : null}
+
+            {tidied.length ? (
+              // Not a problem and not advice: the app noticed and put it right. One line per kind of fix, not per collection.
+              <Notice state="ok" label="Tidied" title={`${plural(tidiedCount, 'collection')} tidied this week`} line="Jellyfin had changed them. The app put them back.">
+                <details class="how"><summary>What was done</summary>
+                  <ul class="plain-list">{tidied.map((g) => <li>{g.what} <span class="faint">{names(g.names)}</span></li>)}</ul>
+                </details>
+              </Notice>
             ) : null}
 
             {advice ? (
@@ -139,12 +152,6 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
                   <Notice state="warn" label="Recommendation" title={m.audioPrefRisks.length === 1 ? `${m.audioPrefRisks[0]!.user} may hear a dub` : `${m.audioPrefRisks.length} Jellyfin users may hear a dub`}
                     line="A file with a foreign default track plays in that language."
                     fix={<>{m.audioPrefRisks.map((u) => `${u.user}: ${u.why}`).join('; ')}. In Jellyfin, each user sets Settings → Playback → Preferred audio language, and unticks “Play default audio track regardless of language”.</>} />
-                ) : null}
-                {repaired.length ? (
-                  <Notice state="ok" label="Repaired" title={`${plural(new Set(repaired.map((e) => e.definitionId)).size, 'collection')} put right this week`}
-                    line="Something else changed their link, lock or artwork. Each was put back.">
-                    <details class="how"><summary>What was changed</summary><ul class="plain-list">{repaired.slice(0, 10).map((e) => <li><b>{e.name}</b> <span class="faint">{fmtAgo(e.at, m.now)}</span><br />{e.what}</li>)}</ul></details>
-                  </Notice>
                 ) : null}
               </div>
             ) : null}

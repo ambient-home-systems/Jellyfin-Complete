@@ -93,6 +93,9 @@ export type MissingPageModel = {
   dryRun: boolean;
 };
 
+/** "imdb:tt0099785" → "IMDb tt0099785" */
+const idLabel = (key: string) => { const [k, v] = key.split(':'); return `${({ imdb: 'IMDb', tmdb: 'TMDb', tvdb: 'TVDB' } as Record<string, string>)[k ?? ''] ?? k} ${v ?? ''}`.trim(); };
+
 const STATUS: Record<MissingStatus, { text: (app: string) => string; cls: string }> = {
   not_in_arr: { text: (a) => `Not in ${a}`, cls: '' },
   in_arr: { text: (a) => `In ${a}`, cls: 'faint' },
@@ -156,8 +159,8 @@ export const Missing: FC<{ m: MissingPageModel; csrf: string; inbox: InboxCounts
               <Csrf token={csrf} />
               <input type="hidden" name="def" value={String(m.defId)} /><input type="hidden" name="tab" value={m.tab} />
               <section aria-labelledby="miss-h">
-                <div class="section-head"><h2 id="miss-h">{m.defName}: {m.total} missing</h2>
-                  <span class="aside">{Object.entries(m.counts).filter(([, n]) => n).map(([k, n]) => { const t = STATUS[k as MissingStatus].text(app); return `${n} ${t[0]!.toLowerCase()}${t.slice(1)}`; }).join(' · ')}</span></div>
+                <div class="section-head"><h2 id="miss-h">{m.total.toLocaleString('en-US')} missing from {m.defName}</h2>
+                  <span class="aside">{!m.connected ? '' : Object.entries(m.counts).filter(([, n]) => n).map(([k, n]) => { const t = STATUS[k as MissingStatus].text(app); return `${n} ${t[0]!.toLowerCase()}${t.slice(1)}`; }).join(' · ')}</span></div>
                 <div class="table-wrap">
                   <table class="tt">
                     <thead><tr><th scope="col"><span class="sr">Select</span></th><th scope="col">Title</th><th scope="col" class="hide-sm">Listed by</th><th scope="col">{app}</th></tr></thead>
@@ -165,9 +168,9 @@ export const Missing: FC<{ m: MissingPageModel; csrf: string; inbox: InboxCounts
                       {m.rows.map((r) => (
                         <tr class={sendable(r) ? '' : 'faint'}>
                           <td><input type="checkbox" name="ids" value={r.id} disabled={!sendable(r) || !m.connected} aria-label={`Select ${r.title ?? r.id}`} /></td>
-                          <td><b>{r.title ?? r.imdb ?? r.tmdb ?? r.tvdb}</b>{r.year ? <span class="y num"> {r.year}</span> : null}<br /><span class="faint">{r.keys.join(' · ')}</span></td>
+                          <td><b>{r.title ?? r.imdb ?? r.tmdb ?? r.tvdb}</b>{r.year ? <span class="y num"> {r.year}</span> : null}<br /><span class="faint">{r.keys.map(idLabel).join(' · ')}</span></td>
                           <td class="hide-sm">{r.sources.map((s) => <span class="chip">{s.label} #{s.rank}</span>)}</td>
-                          <td class="nowrap"><span class={`chip ${STATUS[r.status].cls}`}>{STATUS[r.status].text(app)}</span></td>
+                          <td class="nowrap">{m.connected ? <span class={`chip ${STATUS[r.status].cls}`}>{STATUS[r.status].text(app)}</span> : <span class="faint">—</span>}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -169,7 +169,7 @@ describe('web', () => {
     for (const id of ids) body.append('ids', id);
     const res = await t.web.request('/review', { method: 'POST', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: body.toString() });
     expect(res.status).toBe(302);
-    expect(flash(res)).toContain('Applied 3');
+    expect(flash(res)).toContain('3 changes approved and made in Jellyfin');
     expect(new URL(res.headers.get('location')!, 'http://x').searchParams.get('undo')).toBe(ids.join(',')); // the message offers Undo
     const box = t.fake.boxSets().find((b) => b.Name === 'Thanksgiving Movies');
     expect(box?.children).toEqual(['m-ptna']);
@@ -228,7 +228,7 @@ describe('web', () => {
     expect(t.app.db.$client.prepare('select count(*) n from decision').get()).toEqual({ n: 0 });
     // Approve all, which creates the collection in Jellyfin, then Undo: it's removed again.
     const approved = await post('/review', { tab: 'pending', group: `approve:${tg}` });
-    expect(flash(approved)).toContain('Applied 3');
+    expect(flash(approved)).toContain('3 changes approved and made in Jellyfin');
     expect(t.fake.boxSets().map((b) => b.Name)).toEqual(['Thanksgiving Movies']);
     const undone = await post('/review/undo', { ids: new URL(approved.headers.get('location')!, 'http://x').searchParams.get('undo')! });
     expect(flash(undone)).toContain('Undone: 3 reversed in Jellyfin');

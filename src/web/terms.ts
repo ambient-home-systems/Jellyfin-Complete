@@ -22,6 +22,22 @@ export const APPROVAL_ROWS: [ActionType, string][] = [
 /** The four a single collection can override. */
 export const COLLECTION_APPROVAL_ROWS = APPROVAL_ROWS.slice(0, 4);
 
+/** The same kinds of change as something that happens: "adding titles". */
+export const APPROVAL_DOING: Record<string, string> = {
+  'collection.create': 'creating and removing collections', 'collection.add_items': 'adding titles', 'collection.remove_items': 'removing titles',
+  'collection.update_metadata': 'updating names and posters', 'radarr.add_movie': 'sending movies to Radarr', 'sonarr.add_series': 'sending shows to Sonarr',
+  'radarr.monitor_collection': 'monitoring series in Radarr',
+};
+
+/** A message from elsewhere (a source's error, say) as a sentence: it ends with a full stop. */
+export const sentence = (text: string | null | undefined): string => { const t = (text ?? '').trim(); return !t || /[.!?…]\)?$/.test(t) ? t : `${t}.`; };
+
+/** A list of names kept short: the first few, then how many more. */
+export function names(all: string[], show = 6): string {
+  if (all.length <= show) return all.join(', ');
+  return `${all.slice(0, show).join(', ')} and ${all.length - show} more`;
+}
+
 /** A change waiting in the Inbox, as a heading. */
 export const CHANGE_LABEL: Record<string, string> = {
   'collection.create': 'Create in Jellyfin',

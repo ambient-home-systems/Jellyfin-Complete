@@ -27,21 +27,24 @@ export async function reviewVerdict(app: AppContext, ids: number[], verdict: Ver
       : [];
     const all = [...ids, ...companions];
     const decided = decide(app.db, all, 'approve', by);
-    const also = companions.length ? ` (including ${companions.length} title and detail change${companions.length === 1 ? '' : 's'} for the new collection${creating.length === 1 ? '' : 's'})` : '';
+    const also = companions.length ? ` (${companions.length} came with the new collection${creating.length === 1 ? '' : 's'})` : '';
     const due = app.db.select().from(action).where(inArray(action.id, all)).all().filter((a) => a.status === 'approved' && (a.applyAt === null || a.applyAt <= Date.now())).map((a) => a.id);
     if (due.length) {
       try {
         const r = await applyNow(app, due);
-        return { ok: true, decided, ids: all, message: `Approved ${decided}${also}. Applied ${r.applied}${r.waiting ? `, ${r.waiting} waiting for other approvals (a collection is only created once it has titles)` : ''}${r.failed ? `, ${r.failed} failed (see History)` : ''}.` };
+        const plain = !r.waiting && !r.failed;
+        return { ok: true, decided, ids: all, message: plain
+          ? `${r.applied} ${r.applied === 1 ? 'change' : 'changes'} approved and made in Jellyfin${also}.`
+          : `${decided} approved${also}: ${r.applied} made in Jellyfin${r.waiting ? `, ${r.waiting} waiting for the collection’s other changes` : ''}${r.failed ? `, ${r.failed} failed (see History)` : ''}.` };
       } catch (e) {
         return { ok: false, decided, message: `Approved, but applying failed: ${(e as Error).message}` };
       }
     }
-    return { ok: true, decided, ids: all, message: decided ? `Approved ${decided}${also}. They happen on the day the collection appears.` : 'Nothing to approve: those changes aren’t waiting any more.' };
+    return { ok: true, decided, ids: all, message: decided ? `${decided} approved${also}. ${decided === 1 ? 'It happens' : 'They happen'} on the day the collection appears.` : 'Nothing to approve: those changes aren’t waiting any more.' };
   }
   if (verdict === 'dismiss') {
     const decided = decide(app.db, ids, 'dismiss', by);
-    return { ok: true, decided, ids, message: `Dismissed ${decided}. They won’t be suggested again.` };
+    return { ok: true, decided, ids, message: `${decided} dismissed. ${decided === 1 ? 'It' : 'They'} won’t be suggested again.` };
   }
   const choice = opts.snooze ?? app.settings().defaultSnooze;
   const s = app.settings();
@@ -56,7 +59,7 @@ export async function reviewVerdict(app: AppContext, ids: number[], verdict: Ver
     }
     decided += decide(app.db, [a.id], 'snooze', by, { until });
   }
-  return { ok: true, decided, ids, message: `Snoozed ${decided}.` };
+  return { ok: true, decided, ids, message: `${decided} snoozed.` };
 }
 
 /**

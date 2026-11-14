@@ -782,6 +782,9 @@ input, textarea { caret-color: var(--ink); }
 }
 /* Nothing wider than the page: grid children may shrink, and tables drop columns instead of scrolling. */
 .content > *, .answers > *, .settings > * { min-width: 0; }
+/* Said in a column on wide screens, under the title on a phone. */
+.show-sm-inline { display: none; }
+@media (max-width: 640px) { .show-sm-inline { display: inline; } }
 /* Rows kept out of the way until asked for. */
 details.rest { margin: var(--s2) 0 var(--s4); }
 .notice.ok .dot { margin-top: 5px; }

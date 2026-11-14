@@ -108,9 +108,12 @@ export const Review: FC<{ m: M; csrf: string; tz: string; inbox: InboxCounts; st
                                 <tr class={approvedWaiting ? 'sel' : ''}>
                                   {pending ? <td class="cb">{approvedWaiting ? null : <input type="checkbox" name="ids" value={String(a.id)} data-group={String(gid)} aria-label={`Select ${title}`} />}</td> : null}
                                   <td><b>{title}</b>{a.item?.year ? <span class="muted num"> {a.item.year}</span> : null}<br />
-                                    <span class="faint">{approvedWaiting ? `Approved · happens ${fmtDate(a.applyAt, tz)} ${fmtTime(a.applyAt, tz)}` : a.applyAt && a.applyAt > Date.now() ? `Happens ${fmtDate(a.applyAt, tz)}` : a.reason}</span></td>
+                                    {approvedWaiting || (a.applyAt && a.applyAt > Date.now())
+                                      ? <span class="faint">{approvedWaiting ? `Approved · happens ${fmtDate(a.applyAt, tz)} ${fmtTime(a.applyAt, tz)}` : `Happens ${fmtDate(a.applyAt, tz)}`}</span>
+                                      // The Why column says it on a wide screen; on a phone that column is dropped, so it's said here.
+                                      : <span class="faint show-sm-inline">{a.reason}</span>}</td>
                                   <td><span class={TAKES_AWAY.has(type) ? 'act-rem' : 'act-add'}><Icon name={TAKES_AWAY.has(type) ? 'minus' : 'plus'} />{CHANGE_VERB[type] ?? 'Update'}</span>{suggested ? <> <span class="chip">suggested</span></> : null}</td>
-                                  <td class="hide-sm">{a.item?.provenance?.sources.map((s) => <span class="chip">{s.label} #{s.rank}</span>)}{a.item?.provenance?.match && a.item.provenance.sources.length ? <span class="chip">{a.item.provenance.match}</span> : null}{!a.item ? <span class="faint">{a.reason}</span> : null}</td>
+                                  <td class="hide-sm">{a.item?.provenance?.sources.length ? a.item.provenance.sources.map((s) => <span class="chip" title={`Number ${s.rank} on that source. Matched by ${a.item!.provenance!.match}.`}>{s.label}</span>) : <span class="faint">{a.reason}</span>}</td>
                                   <td><div class="act">
                                     {pending && !approvedWaiting ? (
                                       <>

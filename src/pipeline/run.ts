@@ -73,7 +73,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
 
     const haveIndex = app.db.select({ id: libraryItem.jfId }).from(libraryItem).limit(1).get();
     if (opts.index || !haveIndex) {
-      step('Indexing the Jellyfin library');
+      step('Reading your Jellyfin library');
       const s = await indexLibrary(app.db, jf, step);
       Object.assign(stats, { indexedMovies: s.movies, indexedSeries: s.series, indexedEpisodes: s.episodes });
       // When each title first arrived, so a replaced file doesn't count as newly added (ADR-038).
@@ -118,7 +118,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
     for (const d of defs.filter((x) => x.enabled)) {
       // Kometa's cache_builders: 1 for collections that matter now; out-of-season ones refresh weekly.
       const active = liveDefs.has(d.id) || isOpen(d.window, today) || opensWithin(d.window, today, settings.leadDays + 2) !== null;
-      step(`Resolving sources for ${d.name}`);
+      step(`Reading the lists for ${d.name}`);
       const results: ResolvedSource[] = [];
       for (const s of d.sources) {
         const spec = { type: s.type, config: s.config };
@@ -145,7 +145,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
     const tmdb = app.tmdb();
     const worth = index.findWorthwhile();
     if (tmdb && (worth.movies || worth.episodes)) {
-      step('Resolving IMDb IDs through TMDb');
+      step('Matching titles through TMDb');
       const pending = new Set<string>();
       for (const list of resolved.values()) for (const r of list) for (const it of r.items) {
         // Only where /find can help: episodes when some lack IMDb IDs, films when some have only a TMDb ID.
@@ -159,7 +159,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
     }
 
     // Box set integrity (ADR-040): provider IDs, lock and images are the app's own; differences are repaired now.
-    step('Checking your collections’ artwork and TMDb links');
+    step('Checking your collections in Jellyfin');
     try {
       const ig = await checkIntegrity(identityCtx(app), defs, now);
       Object.assign(stats, { boxSetsChecked: ig.checked, boxSetsRepaired: ig.repaired, boxSetRepairsFailed: ig.failed });
@@ -167,7 +167,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
       log.error(`Box set integrity check failed: ${(e as Error).message}`);
     }
 
-    step('Reading managed collections from Jellyfin');
+    step('Reading your collections from Jellyfin');
     const live = new Map<number, LiveCollection>();
     const saved = new Map<number, ReturnType<typeof getSaved>>();
     const getSaved = (row: typeof managedCollection.$inferSelect) => row.savedMeta ?? null;
@@ -207,7 +207,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
       log.warn(`Couldn’t check for existing box sets: ${(e as Error).message}`);
     }
 
-    step('Planning');
+    step('Working out changes');
     const { actions, plans } = plan({ now, tz: settings.timezone, leadDays: settings.leadDays, definitions: defs, index, movieLibraryIds, showLibraryIds, resolved, live, saved, found, adoptable });
     savePlanSummary(app.db, {
       at: now,
@@ -246,7 +246,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
     const persisted = persistPlan(app.db, runRow.id, routed, now);
     Object.assign(stats, { planned: actions.length, dropped: dropped.length, newProposals: persisted.inserted, superseded: persisted.superseded });
 
-    step('Applying approved actions');
+    step('Making approved changes');
     const exec: ExecStats = await executeDue(app.db, jf, app.fetch, now, undefined, postersDir(app.config.configDir));
     const arrExec = await executeArrDue(app, now);
     Object.assign(stats, { applied: exec.applied + arrExec.applied, failed: exec.failed + arrExec.failed.length, waiting: exec.waiting, arrSkipped: arrExec.skipped.length });
@@ -269,7 +269,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
     if (app.db.select().from(managedCollection).all().some((m) => m.state === 'hidden')) {
       const exposed = await jf.usersNotBlocking(GATE_TAG);
       if (exposed.length && !settings.dryRun) {
-        step(`Blocking the hidden-collections tag for ${exposed.join(', ')}`);
+        step(`Hiding hidden collections from ${exposed.join(', ')}`);
         await jf.blockTagForAllUsers(GATE_TAG);
       } else if (exposed.length) {
         log.warn(`Hidden box sets are visible to ${exposed.join(', ')}; dry run is on, so their policies weren't changed`);

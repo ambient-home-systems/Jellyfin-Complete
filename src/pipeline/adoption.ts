@@ -25,7 +25,6 @@ export type AdoptionCandidate = {
   verified: boolean | null;
 };
 
-const REPLACES = 'Taking it over replaces it with a fresh collection holding the same titles, with this app’s name, description and poster.';
 
 /**
  * Box sets that match a turned-on collection. With `verify`, each film series set's TMDb link is checked against the
@@ -72,11 +71,11 @@ export async function adoptionCandidates(app: AppContext, opts: { verify?: boole
     const seriesId = def?.presetKey?.startsWith(SERIES_PREFIX) ? def.presetKey.slice(SERIES_PREFIX.length) : null;
     if (seriesId && opts.verify) verified = await verifySeriesLink(app, b.Id, tmdbId ? String(tmdbId) : null, seriesId);
     const link = !seriesId ? '' : verified === true ? ' Its TMDb link and titles match this series.'
-      : verified === false ? ` Jellyfin linked it to ${tmdbId ? `TMDb collection ${tmdbId}` : 'no TMDb collection'}, not this series (${seriesId}), or its titles disagree: its artwork and description can’t be trusted.` : '';
-    if (orphan) { suggestion = 'delete'; why = 'Left over from an older Jellyfin-Auto-Collections setup; nothing updates it'; }
-    else if (exact) { suggestion = 'adopt'; why = `${jac ? 'Same name as one of your collections. Jellyfin-Auto-Collections makes it: remove its line from that tool’s config first.' : 'Same name as one of your collections.'}${link} ${REPLACES}`; }
-    else if (series !== undefined) { suggestion = 'adopt'; why = `Jellyfin’s own collection for this movie series.${link} ${REPLACES}`; }
-    else { suggestion = 'delete'; why = 'An older name for this collection'; }
+      : verified === false ? ` Jellyfin linked it to ${tmdbId ? `TMDb collection ${tmdbId}` : 'no TMDb collection'}, not this series (${seriesId}), so its artwork can’t be trusted.` : '';
+    if (orphan) { suggestion = 'delete'; why = 'Left over from Jellyfin-Auto-Collections. Nothing updates it.'; }
+    else if (exact) { suggestion = 'adopt'; why = `${jac ? 'Same name as one of yours. Jellyfin-Auto-Collections makes it: remove it from that tool first.' : 'Same name as one of yours.'}${link}`; }
+    else if (series !== undefined) { suggestion = 'adopt'; why = `Jellyfin’s own collection for this movie series.${link}`; }
+    else { suggestion = 'delete'; why = 'An older name for one of yours.'; }
     out.push({ boxsetId: b.Id, name, jac, childCount: b.ChildCount ?? null, definitionId: def?.id ?? null, definitionName: def?.name ?? null, suggestion, why, tmdbLink: tmdbId ? String(tmdbId) : null, verified });
   }
   return out;

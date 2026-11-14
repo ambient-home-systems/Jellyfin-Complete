@@ -145,7 +145,7 @@ export const ADAPTERS: Record<string, Adapter> = {
   imdb_search: {
     label: (c) => {
       const s = (c.search ?? {}) as KometaImdbSearch;
-      if (s['list.any']) return `IMDb lists ×${arr(s['list.any']).length}`;
+      if (s['list.any']) return count(arr(s['list.any']).length, 'IMDb list');
       if (s['keyword.any']) return `IMDb keyword ${arr(s['keyword.any']).join(', ')}`;
       return 'IMDb search';
     },
@@ -292,7 +292,7 @@ export const ADAPTERS: Record<string, Adapter> = {
   },
 
   tmdb_collection: {
-    label: (c) => `TMDb collections ×${arr(c.ids).length}`,
+    label: (c) => count(arr(c.ids).length, 'TMDb collection'),
     async resolve(c, ctx) {
       if (!ctx.tmdb) throw new SourceError('TMDb key not set (Settings → Connections)', 'NO_KEY');
       const items: SourceItem[] = [];
@@ -327,12 +327,12 @@ export const ADAPTERS: Record<string, Adapter> = {
   },
 
   tmdb_movie: {
-    label: (c) => `TMDb movies ×${arr(c.ids).length}`,
+    label: (c) => count(arr(c.ids).length, 'TMDb movie'),
     resolve: async (c) => ({ items: arr(c.ids).map((tmdb, i) => ({ tmdb, kind: 'movie' as const, rank: i + 1 })) }),
   },
 
   tmdb_show: {
-    label: (c) => `TMDb shows ×${arr(c.ids).length}`,
+    label: (c) => count(arr(c.ids).length, 'TMDb show'),
     resolve: async (c) => ({ items: arr(c.ids).map((tmdb, i) => ({ tmdb, kind: 'show' as const, rank: i + 1 })) }),
   },
 
@@ -430,6 +430,9 @@ export const stableStringify = stableJson;
 export function sourceKey(spec: SourceSpec): string {
   return `${spec.type}:${createHash('sha1').update(stableStringify(spec.config)).digest('hex').slice(0, 16)}`;
 }
+
+/** "1 IMDb list", "4 IMDb lists" */
+function count(n: number, one: string): string { return `${n} ${one}${n === 1 ? '' : 's'}`; }
 
 export function sourceLabel(spec: SourceSpec): string {
   return ADAPTERS[spec.type]?.label(spec.config) ?? spec.type;

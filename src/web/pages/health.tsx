@@ -7,6 +7,8 @@ import { Csrf, InboxTabs, fmtDate, fmtTime, plural, type InboxCounts } from '../
 import type { HealthDashboard, HealthRow } from '../../library/health.js';
 import type { ArtworkSummary } from '../../library/artwork.js';
 import type { HealthKind } from '../../db/schema.js';
+import { groupRepairs } from '../../pipeline/boxset-identity.js';
+import { names } from '../terms.js';
 
 export const KIND: Record<HealthKind, string> = {
   runtime: 'Length', title: 'Title tag', audio: 'Audio', no_poster: 'No poster', video_poster: 'Poster from the video or file',
@@ -28,7 +30,7 @@ const Artwork: FC<{ r: HealthRow }> = ({ r }) => {
   const now = thumb(r);
   return (
     <div class="art-pair">
-      {now ? <img src={now} alt="Poster now" width={60} height={90} loading="lazy" /> : <span class="art-none">{r.boxSet ? 'collection' : 'no poster'}</span>}
+      {now ? <img src={now} alt="Poster now" width={60} height={90} loading="lazy" /> : r.proposal || r.boxSet ? <span class="art-none">{r.boxSet ? 'collection' : 'none'}</span> : null}
       {r.proposal ? (
         <>
           <span aria-hidden="true">→</span>
@@ -82,9 +84,9 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
             <p class="lead"><b class="num big">{pct(m.checked, m.files)}%</b> of {plural(m.files, 'file')}</p>
             <progress class="meter" max={Math.max(m.files, 1)} value={m.checked} aria-label="Files checked">{pct(m.checked, m.files)}%</progress>
             <p class="faint">
-              {m.checked.toLocaleString('en-US')} checked{m.waiting ? `, ${m.waiting.toLocaleString('en-US')} still to check (a few thousand a night)` : ''}.
-              {m.compared !== null ? ` ${m.compared.toLocaleString('en-US')} had a length to compare with; the rest are checked by title tags only.` : ''}
-              {` Artwork: ${pct(a.checked, a.titles)}% of ${plural(a.titles, 'movie and show', 'movies and shows')} (a few hundred a night).`}
+              {m.checked.toLocaleString('en-US')} checked{m.waiting ? `, ${m.waiting.toLocaleString('en-US')} to go (a few thousand a night)` : ''}.
+              {m.compared !== null ? ` ${m.compared.toLocaleString('en-US')} by length, the rest by title tags.` : ''}
+              {` Artwork: ${pct(a.checked, a.titles)}% of ${plural(a.titles, 'title')}.`}
             </p>
           </section>
         </div>
@@ -199,12 +201,11 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
 
         {a.collectionRepairs.length ? (
           <section class="panel" aria-labelledby="coll-h">
-            <div class="section-head"><h2 id="coll-h">Collection artwork changed</h2><span class="aside">repaired automatically · last 30 days</span></div>
+            <div class="section-head"><h2 id="coll-h">Collections tidied</h2><span class="aside">last 30 days</span></div>
             <p class="faint">Every run checks the app’s collections and puts back anything Jellyfin changed.</p>
             <ul class="plain-list">
-              {a.collectionRepairs.map((e) => (
-                <li><b>{e.name}</b> <span class="faint">{fmtDate(e.at, tz, { day: 'numeric', month: 'short' })}</span>{e.ok ? null : <span class="chip bad"> repair failed</span>}<br />{e.what}</li>
-              ))}
+              {groupRepairs(a.collectionRepairs.filter((e) => e.ok)).map((g) => <li>{g.what} <span class="faint">{names(g.names)}</span></li>)}
+              {a.collectionRepairs.filter((e) => !e.ok).map((e) => <li><b>{e.name}</b> <span class="chip bad">not fixed</span> {e.what}</li>)}
             </ul>
           </section>
         ) : null}
@@ -255,7 +256,7 @@ const FindingsTable: FC<{ rows: HealthRow[]; tz: string; csrf: string }> = ({ ro
           <td class="cb"><input type="checkbox" form="bulk" name="sel" value={`${r.jfId}|${r.kind}`} aria-label={`Select ${r.title}: ${KIND[r.kind]}`} /></td>
           <td><b>{r.title}</b><br /><span class="faint">{[r.library, r.rating].filter(Boolean).join(' · ')}</span></td>
           <td>
-            <span class="chip">{KIND[r.kind]}</span> {r.detail}
+            <span class="chip">{KIND[r.kind]}</span>{r.kind === 'no_poster' ? null : <> {r.detail}</>}
             {r.frame ? (
               // Hidden until asked for: a mislabelled file can hold anything. The picture only loads when opened.
               <details class="frame"><summary>Show a frame from the middle</summary><img src={`/health/img/frame/${encodeURIComponent(r.jfId)}`} alt={`A frame from the middle of ${r.title}`} width={240} height={135} loading="lazy" /></details>

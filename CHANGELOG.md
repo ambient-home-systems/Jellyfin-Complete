@@ -2,6 +2,26 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.21.1 — 14 Nov 2026
+
+Text the app writes itself, reviewed everywhere it's shown.
+
+- **Tidied collections** (was "collections put right", under Recommendations).
+  - It's no longer listed as a recommendation: nothing needs doing.
+  - Each note is one short sentence saying what was done: "Removed a backdrop and a thumbnail, and put its own poster back." It was "First check: a backdrop the app didn't add; Thumb image the app didn't add. Fixed: removed a backdrop; removed Thumb; replaced a poster the app didn't upload."
+  - Collections with the same fix share one line, with their names beside it, instead of repeating the sentence for each.
+  - Notes already stored read the new way too. Library health's list is the same.
+- **History → Runs** says what a run did in words ("4 new changes to approve · 1 source failing"), not a row of 26 counters. The log shows local clock times and marks only warnings and errors.
+- **Library health:** a "No poster" finding no longer says so three times. The Checked summary is one line.
+- **Home's timetable:** Details no longer repeats "Removed from Jellyfin; it comes back on its next dates" on every row that already says "goes away".
+- **Sources** are named "4 IMDb lists" and "10 TMDb collections", not "IMDb lists ×4". Existing names change on the next run.
+- **Why a title is in:** one chip, the source. Its rank and how it was matched (an IMDb ID, say) are on hover. The Inbox no longer gives the reason twice on a row.
+- **Missing titles:** IDs read "IMDb tt0099785". Without Radarr or Sonarr connected, rows no longer claim "Not in Radarr".
+- **Already in Jellyfin:** each row gives its reason once. What taking over does is said once, in the help above.
+- **Messages after a decision:** "3 changes approved and made in Jellyfin." (was "Approved 3. Applied 3.")
+- **While a run is going:** "Reading the lists for Christmas Movies", "Working out changes" (was "Resolving sources", "Planning").
+- A source's error always ends as a sentence before the next one starts.
+
 ## 0.21.0 — 14 Nov 2026
 
 - **Undo, right where you decided.** After you approve, snooze or dismiss in the Inbox, the message it leaves has an **Undo** button.
