@@ -443,7 +443,7 @@ export function healthRows(app: AppContext, opts: { dismissed?: boolean } = {}):
   return findings.map((f) => {
     const r = items.get(f.jfId);
     const show = r?.seriesJfId ? shows.get(r.seriesJfId) : undefined;
-    const title = !r ? (f.subject ? `${f.subject.name} (box set)` : f.jfId) : r.kind === 'episode'
+    const title = !r ? (f.subject ? `${f.subject.name} (collection)` : f.jfId) : r.kind === 'episode'
       ? `${show?.name ?? 'Unknown show'} S${String(r.season ?? 0).padStart(2, '0')}E${String(r.episode ?? 0).padStart(2, '0')} · ${r.name}`
       : `${r.name}${r.year ? ` (${r.year})` : ''}`;
     const libId = r?.kind === 'episode' ? show?.libraryId : r?.libraryId;

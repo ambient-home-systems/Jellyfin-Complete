@@ -17,10 +17,11 @@ import { requestJson } from '../clients/http.js';
 import { createSession, endSession, requireAuth, userOf } from './auth.js';
 import { Layout, Csrf, type NavKey } from './ui.js';
 import { AttemptLimiter, clientIp, isHttps, minutes, sameCode } from './security.js';
-import { shellModel, dashboardModel, collectionsModel, reviewModel, activityModel, librariesModel, type ReviewTab } from './model.js';
-import { Dashboard } from './pages/dashboard.js';
+import { shellModel, dashboardModel, collectionsModel, reviewModel, activityModel, librariesModel, inboxCounts, nextRunAt, type ReviewTab } from './model.js';
+import { familyNote, whenNext } from './terms.js';
+import { Dashboard, AutomaticOffer } from './pages/dashboard.js';
 import { RunProgress } from './pages/run-progress.js';
-import { CollectionsList, CollectionEditor, CollectionRow, FamilyCount, ToggleStatus, NewCollection, Preview, ParityPanel, type PreviewItem } from './pages/collections.js';
+import { CollectionsList, CollectionEditor, CollectionRow, FamilyCount, ToggleStatus, NewCollection, Preview, ParityPanel, EDITOR_TABS, type EditorTab, type PreviewItem } from './pages/collections.js';
 import { parity } from '../domain/parity.js';
 import { cachedPlan } from './plan-cache.js';
 import { Missing, ArrOptionsFields, parseArrOptions } from './pages/missing.js';
@@ -29,14 +30,14 @@ import { fingerprint } from '../pipeline/planner.js';
 import { definitionArr, run, posterKey } from '../db/schema.js';
 import { homeStatus, syncHomeRows } from '../homescreen/index.js';
 import { HomeRowsPanel } from './pages/home-rows.js';
-import { Start } from './pages/start.js';
+import { Start, START_STEPS, stepsDone } from './pages/start.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
-import { familyOf, FAMILY_LABEL, plexCounterpart, PRESET_FAMILIES, type PresetFamily } from '../presets/index.js';
+import { familyOf, plexCounterpart, PRESET_FAMILIES } from '../presets/index.js';
 import { availableIn, serviceOfPreset } from '../presets/streaming.js';
 import type { OnboardingStep } from '../settings.js';
 import { Review } from './pages/review.js';
 import { Activity } from './pages/activity.js';
-import { SettingsPage, CONNECTIONS } from './pages/settings.js';
+import { SettingsConnections, SettingsLibraries, SettingsApprovals, SettingsSchedule, SettingsExtras, SettingsAdvanced, CONNECTIONS } from './pages/settings.js';
 import { Login, Setup } from './pages/auth.js';
 import { Adoption } from './pages/adoption.js';
 import { runPipeline, currentRun, isRunning } from '../pipeline/run.js';
@@ -204,10 +205,22 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     return c.redirect(u.pathname + u.search + u.hash);
   };
 
+  /** A path inside the app to go back to, from a form's "next" field; anything else is ignored. */
+  const localPath = (v: unknown, fallback: string) => { const p = String(v ?? ''); return /^\/(?!\/)[\w\-/?=&#.]*$/.test(p) ? p : fallback; };
+
   web.get('/', (c) => {
     const ob = app.settings().onboarding;
-    const banner = ob.finished ? undefined : <div class="banner"><b>Finish setting up.</b> A few choices on Getting started, then a first dry run.<a class="btn sm" href="/start">Getting started</a></div>;
-    return page(c, 'Dashboard', 'dashboard', <Dashboard m={dashboardModel(app)} csrf={userOf(c).csrf} />, banner);
+    const m = dashboardModel(app);
+    const banner = !ob.finished ? <div class="banner"><span><b>Finish setting up.</b> A few choices, then a first run. Nothing changes in Jellyfin until you approve it.</span><a class="btn sm" href="/start">Getting started</a></div>
+      : m.offerAutomatic ? <AutomaticOffer m={m} csrf={userOf(c).csrf} /> : undefined;
+    return page(c, 'Home', 'home', <Dashboard m={m} csrf={userOf(c).csrf} />, banner);
+  });
+  // The one-time offer on Home (ADR-046): stop approving everything first, or keep asking. Either way it isn't shown again.
+  web.post('/start/automatic', async (c) => {
+    const yes = (await c.req.parseBody()).choice === 'yes';
+    if (yes) applySettings(app, { dryRun: false });
+    app.updateSettings({ onboarding: { ...app.settings().onboarding, automaticOffered: true } });
+    return back(c, '/', { ok: yes ? 'Done. Changes set to Automatic now happen on their own; everything else still waits in your Inbox.' : 'Nothing changes: every change still waits for your approval. You can switch this in Settings → Approvals.' });
   });
 
   // ── first-run guide (Phase 4) ──
@@ -215,50 +228,63 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const ob = app.settings().onboarding;
     if (!ob.done.includes(step)) app.updateSettings({ onboarding: { ...ob, done: [...ob.done, step] } });
   };
-  web.get('/start', (c) => {
+  web.get('/start', async (c) => {
     const s = app.settings();
     const defs = loadDefinitions(app.db);
-    // The count is how many collections the family can make, not how many titles were found in Jellyfin.
-    const NOTES: Record<PresetFamily, (n: number) => string> = {
-      seasonal: (n) => `${n} film collections for holidays and awareness months (Christmas, Halloween, Black History Month…). Each appears only during its dates.`,
-      holiday_episodes: (n) => `${n} collections of Christmas, Halloween and Thanksgiving episodes from your shows, on the same dates as the films.`,
-      universe: (n) => `${n} film universes (Marvel, Star Wars, Middle Earth…), one collection each. A universe’s collection is made only when you have at least 2 of its films, and stays all year.`,
-      show_franchise: (n) => `${n} TV franchises (Star Trek, NCIS, One Chicago…), one collection each. A franchise’s collection is made only when you have at least 2 of its shows, and stays all year.`,
-      film_series: (n) => `One collection for each film series you have at least ${s.filmSeries.minimum} films of (Toy Story, John Wick…), named and illustrated from TMDb, in release order. New series appear as you add films.${n ? ` ${n} so far.` : ''} Needs a TMDb key.`,
-      basic: (n) => `${n} collections that follow your library: Newly Released Movies and Shows (the last 90 days), New Episodes (aired in the last 7 days), and Recently Added Movies and Shows (the last 30 days). They change every night.`,
-      imdb_chart: (n) => `${n} collections of the titles you own from IMDb’s charts: the Top 250 and Most Popular films and shows, and the Lowest Rated films. They follow the charts and stay all year.`,
-      streaming: (n) => `${n} collections of the titles you own that stream on a service in your country (${s.streaming.region}; change it in Settings): Netflix Movies, Disney+ Shows and so on. Turning this on turns on the services offered there. Needs a TMDb key; a big library fills in over a few nights.`,
-    };
     const families = PRESET_FAMILIES.map((family) => {
       const mine = defs.filter((d) => familyOf(d.presetKey) === family);
-      // Film series is one switch, on before any series exists; the others count their collections.
+      // Movie series is one switch, on before any series exists; the others count their collections.
       const on = family === 'film_series' ? (s.filmSeries.enabled ? 1 : 0) : mine.filter((d) => d.enabled).length;
-      return { family, on, total: mine.length, note: NOTES[family](mine.length) };
+      return { family, on, total: mine.length, note: familyNote(family, mine.length, s) };
     });
+    // Before the first run the library list can be empty; read it from Jellyfin so it can be chosen, and say why if it can't.
+    const libError = librariesModel(app).length ? null : await refreshLibraries();
     const hasRun = Boolean(app.db.select({ id: run.id }).from(run).limit(1).get());
-    return page(c, 'Getting started', 'dashboard', <Start m={{ s, libraries: librariesModel(app), tmdbSet: Boolean(app.secrets.get('tmdb.apiKey')), families, hasRun, csrf: userOf(c).csrf }} />);
+    const progress = currentRun();
+    // Collections Jellyfin already has under one of the chosen names. Only looked up once the collections are chosen.
+    const chosen = s.onboarding.done.includes('families');
+    const existing = await (async () => {
+      if (!chosen) return { count: 0, error: null };
+      try {
+        return { count: (await adoptionCandidates(app)).length, error: null };
+      } catch (e) {
+        return { count: 0, error: (e as Error).message };
+      }
+    })();
+    const base = { s, tmdbSet: Boolean(app.secrets.get('tmdb.apiKey')), existing, hasRun, progress };
+    const done = stepsDone(base);
+    const asked = Number(c.req.query('step'));
+    const firstOpen = done.findIndex((d) => !d);
+    const step = Number.isInteger(asked) && asked >= 1 && asked <= START_STEPS ? asked : firstOpen === -1 ? START_STEPS : firstOpen + 1;
+    return page(c, 'Getting started', 'start', <Start m={{ ...base, libraries: librariesModel(app), libError, families, pending: inboxCounts(app).changes, step, csrf: userOf(c).csrf }} />);
   });
   web.post('/start/timezone', async (c) => {
     const tz = String((await c.req.parseBody()).timezone ?? '').trim();
     try {
       new Intl.DateTimeFormat('en', { timeZone: tz });
     } catch {
-      return back(c, '/start#st-2', { err: `Unknown timezone “${tz}”.` });
+      return back(c, '/start?step=2', { err: `Unknown timezone “${tz}”.` });
     }
+    const changed = tz !== app.settings().timezone;
     app.updateSettings({ timezone: tz });
+    if (changed) restartScheduler();
     markDone('timezone');
-    return back(c, '/start#st-3', { ok: `Timezone set to ${tz}.` });
+    return c.redirect('/start?step=3');
   });
   web.post('/start/tmdb', async (c) => {
     const key = String((await c.req.parseBody()).key ?? '').trim();
-    if (!key) return back(c, '/start#st-4', { ok: app.secrets.get('tmdb.apiKey') ? 'TMDb key kept.' : 'Skipped. You can add it later in Settings → Connections.' });
+    if (!key) {
+      markDone('tmdb');
+      return back(c, '/start?step=4', app.secrets.get('tmdb.apiKey') ? {} : { ok: 'Skipped for now. You can add a TMDb key later in Settings → Connections.' });
+    }
     try {
       await new TmdbClient(app.db, key, app.fetch).ping();
     } catch (e) {
-      return back(c, '/start#st-3', { err: `TMDb didn’t accept that key: ${(e as Error).message}` });
+      return back(c, '/start?step=3', { err: `TMDb didn’t accept that key: ${(e as Error).message}` });
     }
     app.secrets.set('tmdb.apiKey', key);
-    return back(c, '/start#st-4', { ok: 'TMDb key saved.' });
+    markDone('tmdb');
+    return back(c, '/start?step=4', { ok: 'TMDb key saved.' });
   });
   web.post('/start/families', async (c) => {
     const b = await c.req.parseBody({ all: true });
@@ -273,30 +299,38 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       if (want !== d.enabled) app.db.update(definition).set({ enabled: want, updatedAt: Date.now() }).where(eq(definition.id, d.id)).run();
     }
     markDone('families');
-    return back(c, '/start#st-5', { ok: 'Saved.' });
+    // The guide's Continue starts the first run here, so its results are ready by the last step.
+    const first = b.run === '1' && !isRunning() && app.jellyfin() && !app.db.select({ id: run.id }).from(run).limit(1).get();
+    if (first) runPipeline(app, { job: 'manual', trigger: 'manual', index: true }).catch((e) => log.error(`First run failed: ${(e as Error).message}`));
+    return back(c, '/start?step=5', first ? { ok: 'Saved. The first run has started in the background.' } : {});
   });
-  web.post('/start/finish', (c) => {
+  web.post('/start/existing', (c) => {
+    markDone('existing');
+    return c.redirect('/start?step=6');
+  });
+  web.post('/start/finish', async (c) => {
     app.updateSettings({ onboarding: { ...app.settings().onboarding, finished: true } });
-    return c.redirect('/');
+    return c.redirect(localPath((await c.req.parseBody()).next, '/'));
   });
 
-  web.post('/runs', (c) => {
+  web.post('/runs', async (c) => {
     if (!isRunning()) {
       runPipeline(app, { job: 'manual', trigger: 'manual', index: true }).catch((e) => log.error(`Manual run failed: ${(e as Error).message}`));
     }
     if (c.req.header('hx-request')) return c.html(<RunProgress p={currentRun()} csrf={userOf(c).csrf} />);
-    return c.redirect('/');
+    return c.redirect(localPath((await c.req.parseBody()).next, '/'));
   });
   web.get('/runs/progress', (c) => c.html(<RunProgress p={currentRun()} csrf={userOf(c).csrf} />));
 
   // ── collections ──
-  web.get('/collections', (c) => page(c, 'Collections', 'collections', <CollectionsList rows={collectionsModel(app)} tz={app.settings().timezone} csrf={userOf(c).csrf} />));
+  web.get('/collections', (c) => page(c, 'Collections', 'collections', <CollectionsList rows={collectionsModel(app)} tz={app.settings().timezone} csrf={userOf(c).csrf} s={app.settings()} />));
 
   // On/off from the list (one click): htmx swaps just the row and the family's count; without htmx it comes back to the row.
   web.post('/collections/:id/enabled', async (c) => {
     const id = Number(c.req.param('id'));
     const on = (await c.req.parseBody()).enabled === '1';
     let msg: string;
+    const wasLive = ['live', 'hidden'].includes(app.db.select().from(managedCollection).where(eq(managedCollection.definitionId, id)).get()?.state ?? '');
     try {
       msg = setCollectionEnabled(app, id, on);
     } catch (e) {
@@ -308,7 +342,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       const r = rows.find((x) => x.def.id === id)!;
       const fam = familyOf(r.def.presetKey);
       const group = rows.filter((x) => familyOf(x.def.presetKey) === fam);
-      return c.html(<><CollectionRow r={r} tz={app.settings().timezone} csrf={userOf(c).csrf} /><FamilyCount fam={fam} on={group.filter((x) => x.def.enabled).length} total={group.length} oob /><ToggleStatus text={msg} oob /></>);
+      return c.html(<><CollectionRow r={r} tz={app.settings().timezone} csrf={userOf(c).csrf} note={{ text: on ? 'Turned on. The next run reads its lists.' : wasLive ? 'Turned off. It’s removed from Jellyfin on the next run.' : 'Turned off.' }} /><FamilyCount fam={fam} on={group.filter((x) => x.def.enabled).length} total={group.length} oob /><ToggleStatus text={msg} oob /></>);
     }
     return back(c, `/collections#c-${id}`, { ok: msg });
   });
@@ -332,7 +366,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const target: Target = values.target === 'shows' ? 'shows' : values.target === 'episodes' ? 'episodes' : 'movies';
     try {
       const id = createCollection(app, { name: values.name!, target, dates: b.schedule === 'always' ? null : { from: values.from!, to: values.to! }, sourceType: values.type!, sourceValue: values.value! });
-      return back(c, `/collections/${id}`, { ok: 'Collection created. Run now from the Dashboard to fetch its sources and plan it.' });
+      return back(c, `/collections/${id}?tab=sources`, { ok: 'Collection created. Its source is read on the next run: use Run now on Home to do it straight away.' });
     } catch (e) {
       if (!(e instanceof SettingsError)) throw e;
       return c.html(
@@ -355,7 +389,11 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const state = app.db.select().from(managedCollection).where(eq(managedCollection.definitionId, def.id)).get()?.state;
     const live = state === 'live' || state === 'hidden';
     const arr = { addMissing: app.db.select().from(definitionArr).where(eq(definitionArr.definitionId, def.id)).get()?.addMissing ?? false, radarr: Boolean(app.radarr()), sonarr: Boolean(app.sonarr()), cap: app.settings().guardrails.arrCapPerRun };
-    return page(c, def.name, 'collections', <CollectionEditor def={def} tz={app.settings().timezone} csrf={userOf(c).csrf} live={live} globalModes={app.settings().modes} sources={sources} arr={arr} posterDefault={(() => { const d = defaultPoster(app, def.presetKey); return d ? posterKey(d) : null; })()} />);
+    const row = collectionsModel(app).find((r) => r.def.id === def.id)!;
+    const asked = c.req.query('tab') as EditorTab;
+    // A collection with nothing read yet opens on its sources; otherwise on what's in it.
+    const tab = EDITOR_TABS.includes(asked) ? asked : 'titles';
+    return page(c, def.name, 'collections', <CollectionEditor def={def} tz={app.settings().timezone} csrf={userOf(c).csrf} live={live} globalModes={app.settings().modes} dryRun={app.settings().dryRun} row={row} tab={tab} plex={Boolean(app.plex())} sources={sources} arr={arr} posterDefault={(() => { const d = defaultPoster(app, def.presetKey); return d ? posterKey(d) : null; })()} />);
   });
 
   web.post('/collections/:id', async (c) => {
@@ -367,6 +405,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     for (const [k, v] of Object.entries(b)) {
       if (k.startsWith('mode:') && (MODE_KEYS as readonly string[]).includes(k.slice(5))) modes[k.slice(5) as ModeKey] = MODES.has(String(v)) ? (String(v) as Mode) : 'default';
     }
+    const here = `/collections/${id}?tab=${EDITOR_TABS.includes(b.tab as EditorTab) ? String(b.tab) : 'titles'}`;
     try {
       updateCollection(app, id, {
         name: String(b.name ?? ''), enabled: b.enabled === '1', overview: String(b.overview ?? ''), minItems: Number(b.minItems ?? def.minItems),
@@ -378,11 +417,35 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
         addMissing: b.arrForm === '1' ? b.arrAddMissing === '1' : undefined,
         modes,
       });
+      // The poster is part of the same Save (ADR-046). It's only set again when the choice, the address or the file changed.
+      let posterMsg = '';
+      if (b.posterForm === '1') {
+        const file = b.posterFile instanceof File && b.posterFile.size ? new Uint8Array(await b.posterFile.arrayBuffer()) : null;
+        const kind = file ? 'upload' : String(b.poster ?? '');
+        const url = String(b.posterUrl ?? '').trim();
+        const d = defaultPoster(app, def.presetKey);
+        const isDefault = Boolean(d) && posterKey(def.poster) === posterKey(d!);
+        const choice: PosterChoice | null =
+          kind === 'upload' ? (file ? { kind: 'upload', bytes: file } : def.poster.kind === 'file' ? null : { kind: 'upload', bytes: new Uint8Array() })
+          : kind === 'none' ? (def.poster.kind === 'none' ? null : { kind: 'none' })
+          : kind === 'default' ? (isDefault ? null : { kind: 'default' })
+          : kind === 'url' ? (def.poster.kind === 'url' && !isDefault && def.poster.url === url ? null : { kind: 'url', url })
+          : null;
+        if (choice) {
+          try {
+            posterMsg = ` ${await setPoster(app, id, choice)}`;
+          } catch (e) {
+            // Everything else is saved by now; say so, and why the poster wasn't.
+            if (e instanceof SettingsError) return back(c, here, { err: `Saved, but the poster wasn’t changed: ${e.message}` });
+            throw e;
+          }
+        }
+      }
+      return back(c, here, { ok: `Saved. The next run uses these settings.${posterMsg}` });
     } catch (e) {
-      if (e instanceof SettingsError) return back(c, `/collections/${id}`, { err: e.message });
+      if (e instanceof SettingsError) return back(c, here, { err: e.message });
       throw e;
     }
-    return back(c, `/collections/${id}`, { ok: 'Saved. The next run plans with these settings.' });
   });
 
   // ── Posters (ADR-042): set from the editor; shown through the app so any address works under the page's CSP. ──
@@ -394,7 +457,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const kind = String(b.poster ?? (file ? 'upload' : 'url'));
     const choice: PosterChoice = kind === 'none' ? { kind: 'none' } : kind === 'default' ? { kind: 'default' } : kind === 'upload' ? { kind: 'upload', bytes: file ?? new Uint8Array() } : { kind: 'url', url: String(b.posterUrl ?? '') };
     try {
-      return back(c, `/collections/${id}`, { ok: await setPoster(app, id, choice) });
+      return back(c, `/collections/${id}?tab=details`, { ok: await setPoster(app, id, choice) });
     } catch (e) {
       if (e instanceof SettingsError) return back(c, `/collections/${id}`, { err: e.message });
       throw e;
@@ -418,7 +481,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const def = loadDefinition(app.db, Number(c.req.param('id')));
     if (!def) return c.notFound();
     const plan = cachedMembers(def);
-    if (!plan) return c.html(<p class="muted">No library index yet. Run once from the Dashboard.</p>);
+    if (!plan) return c.html(<p class="muted">Your library hasn’t been read yet. Use Run now on Home, then come back.</p>);
     const { members, index } = plan;
     const inBox = new Set(['live', 'hidden'].includes(app.db.select().from(managedCollection).where(eq(managedCollection.definitionId, def.id)).get()?.state ?? '')
       ? app.db.$client.prepare('select jf_id from membership where definition_id = ?').all(def.id).map((r) => (r as { jf_id: string }).jf_id) : []);
@@ -437,14 +500,14 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const plex = app.plex();
     if (!plex) return c.html(<p class="muted">Connect Plex in Settings → Connections to compare this collection with the one in Plex.</p>);
     const plan = cachedMembers(def);
-    if (!plan) return c.html(<p class="muted">No library index yet. Run once from the Dashboard.</p>);
+    if (!plan) return c.html(<p class="muted">Your library hasn’t been read yet. Use Run now on Home, then come back.</p>);
     const s = app.settings();
     const ctx = { db: app.db, fetch: app.fetch, tmdb: app.tmdb(), plex, mdblistKey: null, imdbRoute: s.imdbRoute };
     const counterpart = plexCounterpart(def);
     const r = await resolveSource(ctx, { type: 'plex_collection', config: { name: counterpart.names[0], names: counterpart.names, ...(counterpart.section ? { section: counterpart.section } : {}) } }, { maxAgeMs: 10 * 60_000 });
     if (r.status === 'failed') return c.html(<p class="muted">Couldn’t read Plex: {r.error}</p>);
-    const where = counterpart.section ? ` in a ${counterpart.section === 'movie' ? 'films' : 'TV'} library` : '';
-    if (!(r.meta as { found?: boolean } | null)?.found) return c.html(<p class="muted">Plex has no collection called {counterpart.names.map((n) => `“${n}”`).join(' or ')}{where} right now. Seasonal collections in Plex usually exist only during their dates, so compare while it’s open.</p>);
+    const where = counterpart.section ? ` in a ${counterpart.section === 'movie' ? 'movie' : 'TV'} library` : '';
+    if (!(r.meta as { found?: boolean } | null)?.found) return c.html(<p class="muted">Plex has no collection called {counterpart.names.map((n) => `“${n}”`).join(' or ')}{where} right now. Seasonal collections in Plex usually exist only during their dates, so compare while it’s there.</p>);
     const want = def.target === 'movies' ? 'movie' : def.target === 'shows' ? 'series' : def.target === 'episodes' ? 'episode' : 'any';
     return c.html(<ParityPanel p={parity(r.items, new Set(plan.members.keys()), plan.index, want)} fetchedAt={r.fetchedAt} />);
   });
@@ -454,7 +517,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const b = await c.req.parseBody();
     const kind = String(b.kind ?? '');
     try {
-      return back(c, `/collections/${id}#pv-h`, { ok: setPin(app, id, String(b.jfId ?? ''), kind === 'pin' || kind === 'exclude' ? kind : 'clear') });
+      return back(c, `/collections/${id}?tab=titles`, { ok: setPin(app, id, String(b.jfId ?? ''), kind === 'pin' || kind === 'exclude' ? kind : 'clear') });
     } catch (e) {
       if (e instanceof SettingsError) return back(c, `/collections/${id}`, { err: e.message });
       throw e;
@@ -466,7 +529,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     if (!loadDefinition(app.db, id)) return c.notFound();
     const b = await c.req.parseBody();
     const op = String(b.op ?? '');
-    const here = `/collections/${id}#src-h`;
+    const here = `/collections/${id}?tab=sources`;
     try {
       if (op === 'add') return back(c, here, { ok: addSource(app, id, { type: String(b.type ?? ''), value: String(b.value ?? ''), suggestOnly: b.role === 'suggest' }) });
       const m = op.match(/^(remove|role):(\d+)(?::(add|suggest))?$/);
@@ -492,7 +555,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
 
   // ── missing (Phase 2): what collections list that you don't own; send to Radarr/Sonarr ──
   // ── Library health (ADR-041) ──
-  web.get('/health', (c) => page(c, 'Library health', 'health', <HealthPage m={healthDashboard(app)} a={artworkSummary(app)} tz={app.settings().timezone} csrf={userOf(c).csrf} />));
+  web.get('/health', (c) => page(c, 'Library health', 'inbox', <HealthPage m={healthDashboard(app)} a={artworkSummary(app)} tz={app.settings().timezone} csrf={userOf(c).csrf} inbox={inboxCounts(app)} />));
   web.post('/health/dismiss', async (c) => {
     const b = await c.req.parseBody();
     const kind = HEALTH_KINDS.includes(String(b.kind) as HealthKind) ? (String(b.kind) as HealthKind) : 'runtime';
@@ -558,7 +621,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   web.get('/missing', async (c) => {
     const tab = c.req.query('tab') === 'shows' ? 'shows' : 'movies';
     const m = await missingModel(app, tab, Number(c.req.query('def')) || null, Number(c.req.query('page')) || 1);
-    return page(c, 'Missing', 'missing', <Missing m={m} csrf={userOf(c).csrf} />);
+    return page(c, 'Missing titles', 'inbox', <Missing m={m} csrf={userOf(c).csrf} inbox={inboxCounts(app)} />);
   });
 
   web.post('/missing/send', async (c) => {
@@ -595,7 +658,14 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   web.get('/review', (c) => {
     const tab = (['pending', 'snoozed', 'dismissed'].includes(c.req.query('tab') ?? '') ? c.req.query('tab') : 'pending') as ReviewTab;
     const def = Number(c.req.query('def')) || undefined;
-    return page(c, 'Review', 'review', <Review m={reviewModel(app, tab, def)} csrf={userOf(c).csrf} tz={app.settings().timezone} dryRun={app.settings().dryRun} />);
+    const s = app.settings();
+    const m = reviewModel(app, tab, def);
+    const filtered = def ? m.defs.find((d) => d.id === def) : undefined;
+    const st = {
+      dryRun: s.dryRun, running: isRunning(), hasRun: Boolean(app.db.select({ id: run.id }).from(run).limit(1).get()),
+      nextRun: whenNext(nextRunAt(app), s.timezone), leadDays: s.leadDays, filter: filtered ? { id: filtered.id, name: filtered.name } : null,
+    };
+    return page(c, 'Inbox', 'inbox', <Review m={m} csrf={userOf(c).csrf} tz={s.timezone} inbox={inboxCounts(app)} st={st} />);
   });
 
   web.post('/review', async (c) => {
@@ -608,22 +678,29 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       verdict = v ?? '';
       ids = [Number(id)];
     }
-    if (!ids.length) return back(c, `/review?tab=${tab}`, { err: 'Select at least one proposal first.' });
+    // "Approve all" on a collection's heading: every change of its that's waiting.
+    const group = String(b.group ?? '').match(/^approve:(\d+)$/);
+    if (group) {
+      verdict = 'approve';
+      ids = app.db.select({ id: action.id }).from(action).where(and(eq(action.definitionId, Number(group[1])), eq(action.status, 'proposed'))).all().map((r) => r.id);
+    }
+    const here = `/review?tab=${tab}${Number(b.def) ? `&def=${Number(b.def)}` : ''}`;
+    if (!ids.length) return back(c, here, { err: 'Tick at least one change first.' });
     const by = userOf(c).name;
     if (verdict === 'forget') {
       for (const a of app.db.select().from(action).where(inArray(action.id, ids)).all()) forgetDecision(app.db, a.fingerprint);
-      return back(c, `/review?tab=${tab}`, { ok: 'Undone. The next run proposes it again.' });
+      return back(c, here, { ok: 'Brought back. The next run lists it again.' });
     }
     if (verdict === 'approve' || verdict === 'dismiss' || verdict === 'snooze') {
       const choice = String(b.snooze ?? app.settings().defaultSnooze);
       const r = await reviewVerdict(app, ids, verdict, by, { snooze: (['7d', '30d', 'window'].includes(choice) ? choice : 'window') as SnoozeFor });
-      return back(c, `/review?tab=${tab}`, r.ok ? { ok: r.message } : { err: r.message });
+      return back(c, here, r.ok ? { ok: r.message } : { err: r.message });
     }
-    return back(c, `/review?tab=${tab}`, { err: 'Unknown action.' });
+    return back(c, here, { err: 'Unknown action.' });
   });
 
   // ── activity ──
-  web.get('/activity', (c) => page(c, 'Activity', 'activity', <Activity m={activityModel(app)} tz={app.settings().timezone} csrf={userOf(c).csrf} />));
+  web.get('/activity', (c) => page(c, 'History', 'history', <Activity m={activityModel(app)} tz={app.settings().timezone} csrf={userOf(c).csrf} />));
   web.post('/activity/:id/undo', async (c) => {
     try {
       const msg = await undoAction(app, Number(c.req.param('id')), userOf(c).name);
@@ -634,18 +711,27 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   });
 
   // ── settings ──
-  web.get('/settings', async (c) => {
+  const maskedSecrets = () => ({ ...Object.fromEntries(CONNECTIONS.map((x) => [x.key, x.secret ? app.secrets.masked(x.secret) : { set: false, last4: null }])), imdbSnapshot: app.secrets.masked('imdb.snapshotToken') });
+  web.get('/settings', (c) => page(c, 'Settings', 'settings', <SettingsConnections s={app.settings()} csrf={userOf(c).csrf} masked={maskedSecrets()} />));
+  web.get('/settings/libraries', async (c) => {
     // Before the first run the library list is empty; read it from Jellyfin so it can be chosen.
     const hasLibs = librariesModel(app).some((l) => l.collectionType === 'movies');
     const libError = hasLibs ? null : await refreshLibraries();
-    const masked = { ...Object.fromEntries(CONNECTIONS.map((x) => [x.key, x.secret ? app.secrets.masked(x.secret) : { set: false, last4: null }])), imdbSnapshot: app.secrets.masked('imdb.snapshotToken') };
+    return page(c, 'Settings', 'settings', <SettingsLibraries s={app.settings()} csrf={userOf(c).csrf} libraries={librariesModel(app)} libError={libError} />);
+  });
+  web.get('/settings/approvals', (c) => page(c, 'Settings', 'settings', <SettingsApprovals s={app.settings()} csrf={userOf(c).csrf} />));
+  web.get('/settings/schedule', (c) => {
     const runs = nextRuns(app);
     const schedules = app.db.select().from(jobSchedule).all().map((j) => ({ ...j, next: runs.find((r) => r.job === j.job)?.next ?? null }));
+    return page(c, 'Settings', 'settings', <SettingsSchedule s={app.settings()} csrf={userOf(c).csrf} schedules={schedules} />);
+  });
+  web.get('/settings/extras', (c) => page(c, 'Settings', 'settings', <SettingsExtras s={app.settings()} csrf={userOf(c).csrf} libraries={librariesModel(app)} arr={{ radarr: Boolean(app.radarr()), sonarr: Boolean(app.sonarr()) }} />));
+  web.get('/settings/advanced', (c) => {
     const sessionId = userOf(c).sessionId;
     const reveal = reveals.get(sessionId);
     reveals.delete(sessionId); // shown once
     const claude = { tokens: listTokens(app.db), reveal: reveal && reveal.expires > Date.now() ? reveal : null, endpoint: mcpEndpoint(c) };
-    return page(c, 'Settings', 'settings', <SettingsPage s={app.settings()} csrf={userOf(c).csrf} masked={masked} libraries={librariesModel(app)} libError={libError} schedules={schedules} claude={claude} media={mediaStatus(app)} />);
+    return page(c, 'Settings', 'settings', <SettingsAdvanced s={app.settings()} csrf={userOf(c).csrf} masked={maskedSecrets()} media={mediaStatus(app)} claude={claude} />);
   });
 
   // ── Claude access (ADR-032): MCP access tokens. A new token waits here for one page view, then only its hash remains. ──
@@ -655,18 +741,18 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const b = await c.req.parseBody();
     const name = String(b.name ?? '').trim().slice(0, 60);
     const scope: TokenScope = b.scope === 'read' || b.scope === 'full' ? b.scope : 'review';
-    if (!name) return back(c, '/settings#claude', { err: 'Give the token a name, such as where it’s used.' });
+    if (!name) return back(c, '/settings/advanced#claude', { err: 'Give the token a name, such as where it’s used.' });
     const { token } = createToken(app.db, name, scope, userOf(c).name);
     reveals.set(userOf(c).sessionId, { name, token, scope, expires: Date.now() + 10 * 60_000 });
     log.info(`Claude access token “${name}” (${SCOPE_LABEL[scope]}) created by ${userOf(c).name}`);
-    return back(c, '/settings#claude', { ok: `Token “${name}” created. Copy it below: it isn’t shown again.` });
+    return back(c, '/settings/advanced#claude', { ok: `Token “${name}” created. Copy it below: it isn’t shown again.` });
   });
   web.post('/settings/claude/:id/revoke', (c) => {
     const id = Number(c.req.param('id'));
     const row = listTokens(app.db).find((t) => t.id === id);
-    if (!row || !revokeToken(app.db, id)) return back(c, '/settings#claude', { err: 'That token no longer exists.' });
+    if (!row || !revokeToken(app.db, id)) return back(c, '/settings/advanced#claude', { err: 'That token no longer exists.' });
     log.info(`Claude access token “${row.name}” revoked by ${userOf(c).name}`);
-    return back(c, '/settings#claude', { ok: `Revoked “${row.name}”. Claude can’t use it any more.` });
+    return back(c, '/settings/advanced#claude', { ok: `Revoked “${row.name}”. Claude can’t use it any more.` });
   });
 
   web.post('/settings/connections', async (c) => {
@@ -675,7 +761,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     for (const x of CONNECTIONS) {
       if (x.urlField) {
         const url = String(b[`url:${x.key}`] ?? '').trim().replace(/\/$/, '');
-        if (url && !/^https?:\/\/\S+$/.test(url)) return back(c, '/settings#conn', { err: `${x.name}: enter an address starting with http:// or https://` });
+        if (url && !/^https?:\/\/\S+$/.test(url)) return back(c, '/settings', { err: `${x.name}: enter an address starting with http:// or https://` });
         conn[x.urlField] = url;
       }
       const secret = String(b[`secret:${x.key}`] ?? '').trim();
@@ -683,7 +769,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     }
     app.updateSettings({ connections: conn });
     await refreshLibraries();
-    return back(c, '/settings#conn', { ok: 'Connections saved.' });
+    return back(c, '/settings', { ok: 'Connections saved.' });
   });
 
   web.post('/settings/test/:svc', async (c) => {
@@ -738,30 +824,30 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     try {
       const r = applySettings(app, patch);
       if (r.timezoneChanged) restartScheduler();
-      return back(c, `/settings#${anchor}`, { ok });
+      return back(c, anchor, { ok });
     } catch (e) {
-      if (e instanceof SettingsError) return back(c, `/settings#${anchor}`, { err: e.message });
+      if (e instanceof SettingsError) return back(c, anchor, { err: e.message });
       throw e;
     }
   };
 
-  web.post('/settings/general', async (c) => {
-    const b = await c.req.parseBody({ all: true });
-    const neighbours = String(b.neighbours ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
-      const m = l.match(/^(.*?)\s+(\d{1,2}:\d{2})$/);
-      return m ? { name: m[1]!.trim(), time: m[2]! } : { name: l, time: '' };
-    });
-    const snooze = ['window', '7d', '30d'].includes(String(b.defaultSnooze)) ? (String(b.defaultSnooze) as Settings['defaultSnooze']) : 'window';
-    return save(c, 'run', { timezone: String(b.timezone ?? ''), leadDays: Number(b.leadDays), arrCapPerRun: Number(b.arrCapPerRun), dryRun: b.dryRun === '1', neighbours, defaultSnooze: snooze, releasedOnly: b.releasedOnly === '1', streamingRegion: b.streamingRegion === undefined ? undefined : String(b.streamingRegion), healthEnabled: b.healthEnabled === '1', ...(b.autoFixSent === '1' ? { healthAutoFixLibraryIds: ([] as unknown[]).concat(b.autoFixLib ?? []).map(String) } : {}), ...(b.mediaSent === '1' ? { mediaEnabled: b.mediaEnabled === '1', mediaDir: String(b.mediaDir ?? '') } : {}) }, 'Saved.');
-  });
-
-  web.post('/settings/modes', async (c) => {
+  web.post('/settings/approvals', async (c) => {
     const b = await c.req.parseBody();
     const modes: Partial<Record<ModeKey, Mode>> = {};
     for (const [k, v] of Object.entries(b)) {
       if (k.startsWith('mode:') && (MODE_KEYS as readonly string[]).includes(k.slice(5)) && MODES.has(String(v))) modes[k.slice(5) as ModeKey] = String(v) as Mode;
     }
-    return save(c, 'modes', { modes }, 'Modes saved.');
+    const snooze = ['window', '7d', '30d'].includes(String(b.defaultSnooze)) ? (String(b.defaultSnooze) as Settings['defaultSnooze']) : undefined;
+    return save(c, '/settings/approvals', {
+      dryRun: b.dryRun === undefined ? undefined : b.dryRun === '1', modes,
+      leadDays: b.leadDays === undefined ? undefined : Number(b.leadDays), arrCapPerRun: b.arrCapPerRun === undefined ? undefined : Number(b.arrCapPerRun),
+      defaultSnooze: snooze, releasedOnly: b.arrCapPerRun === undefined ? undefined : b.releasedOnly === '1',
+    }, 'Approvals saved.');
+  });
+
+  web.post('/settings/health', async (c) => {
+    const b = await c.req.parseBody({ all: true });
+    return save(c, '/settings/extras#health', { healthEnabled: b.healthEnabled === '1', healthAutoFixLibraryIds: ([] as unknown[]).concat(b.autoFixLib ?? []).map(String) }, 'Library health saved.');
   });
 
   // The IMDb queries your collections need, for the snapshot job (docs/IMDB-SNAPSHOT.md).
@@ -772,18 +858,18 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     return c.json(queriesFor(sources, series));
   });
 
-  web.post('/settings/imdb', async (c) => {
+  web.post('/settings/advanced', async (c) => {
     const b = await c.req.parseBody();
     const route = String(b.imdbRoute) as SettingsPatch['imdbRoute'];
     try {
-      applySettings(app, { imdbRoute: route, snapshotUrl: String(b.snapshotUrl ?? '') });
+      applySettings(app, { imdbRoute: route, snapshotUrl: String(b.snapshotUrl ?? ''), ...(b.mediaSent === '1' ? { mediaEnabled: b.mediaEnabled === '1', mediaDir: String(b.mediaDir ?? '') } : {}) });
     } catch (e) {
-      if (e instanceof SettingsError) return back(c, '/settings#imdb', { err: e.message });
+      if (e instanceof SettingsError) return back(c, '/settings/advanced', { err: e.message });
       throw e;
     }
     const token = String(b.snapshotToken ?? '').trim();
     if (token) app.secrets.set('imdb.snapshotToken', token);
-    return back(c, '/settings#imdb', { ok: route === 'snapshot' ? 'IMDb route saved. The next run reads the snapshot.' : 'IMDb route saved.' });
+    return back(c, '/settings/advanced', { ok: route === 'snapshot' ? 'Saved. The next run reads IMDb from the snapshot.' : 'Saved.' });
   });
 
   // Radarr/Sonarr defaults, read live from each app (lazy-loaded so Settings stays fast).
@@ -792,7 +878,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const parts = await Promise.all((['radarr', 'sonarr'] as const).map(async (which) => {
       const cl = which === 'radarr' ? app.radarr() : app.sonarr();
       const name = which === 'radarr' ? 'Radarr' : 'Sonarr';
-      if (!cl) return <p class="muted">{name}: connect it under Connections to choose its defaults.</p>;
+      if (!cl) return <p class="muted">{name}: not connected. Add it under <a href="/settings">Connections</a> to choose how titles are sent to it.</p>;
       try {
         const [profiles, roots, tags] = await Promise.all([cl.qualityProfiles(), cl.rootFolders(), cl.tags()]);
         return (
@@ -800,7 +886,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
             <Csrf token={userOf(c).csrf} /><input type="hidden" name="which" value={which} />
             <h3>{name}</h3>
             <ArrOptionsFields which={which} values={s.arr[which]} choices={{ profiles, roots, tags }} idPrefix={`set-${which}`} />
-            <div><button class="btn primary" type="submit">Save {name} defaults</button></div>
+            <div class="save-row"><button class="btn primary" type="submit">Save {name}</button></div>
           </form>
         );
       } catch (e) {
@@ -814,7 +900,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const b = await c.req.parseBody({ all: true });
     const which = b.which === 'sonarr' ? 'sonarr' : 'radarr';
     saveArrDefaults(app, which, parseArrOptions(b, which));
-    return back(c, '/settings#arr', { ok: `${which === 'radarr' ? 'Radarr' : 'Sonarr'} defaults saved.` });
+    return back(c, '/settings/extras#arr', { ok: `${which === 'radarr' ? 'Radarr' : 'Sonarr'} saved.` });
   });
 
   // ── home-screen rows (Phase 3, ADR-025) ──
@@ -832,15 +918,15 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       const isDefault = listed.every((l) => kids.has(l.id) === skip.includes(l.id));
       overlays.skipLibraryIds = isDefault ? null : skip;
     }
-    return save(c, 'overlays', { overlays }, 'Saved. Use Apply now to change posters straight away.');
+    return save(c, '/settings/extras#overlays', { overlays }, 'Saved. Use Apply now to change posters straight away.');
   });
   web.post('/settings/overlays/apply', (c) => {
     const r = startOverlayRun(app, 'apply');
-    return back(c, r.ok ? '/' : '/settings#overlays', r.ok ? { ok: 'Updating poster overlays: follow the run here.' } : { err: r.error });
+    return back(c, r.ok ? '/' : '/settings/extras#overlays', r.ok ? { ok: 'Updating poster overlays: follow the run here.' } : { err: r.error });
   });
   web.post('/settings/overlays/remove', (c) => {
     const r = startOverlayRun(app, 'remove');
-    return back(c, r.ok ? '/' : '/settings#overlays', r.ok ? { ok: 'Putting the original posters back: follow the run here.' } : { err: r.error });
+    return back(c, r.ok ? '/' : '/settings/extras#overlays', r.ok ? { ok: 'Putting the original posters back: follow the run here.' } : { err: r.error });
   });
   web.get('/settings/overlays/preview/:id', async (c) => {
     try {
@@ -858,33 +944,41 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const b = await c.req.parseBody();
     const enabled = b.enabled === '1';
     const viewMode = (['Portrait', 'Landscape', 'Square', 'Small'] as const).find((v) => v === b.viewMode) ?? 'Portrait';
-    return save(c, 'home', { homeRows: { enabled, orderIndex: Number(b.orderIndex ?? 2), viewMode } }, enabled ? 'Saved. Rows update on the next run, or press “Update rows in Jellyfin now”.' : 'Saved. Rows stay as they are in Jellyfin until you turn this back on.');
+    return save(c, '/settings/extras#home', { homeRows: { enabled, orderIndex: Number(b.orderIndex ?? 2), viewMode } }, enabled ? 'Saved. Rows update on the next run, or press “Update rows in Jellyfin now”.' : 'Saved. Rows stay as they are in Jellyfin until you turn this back on.');
   });
 
   web.post('/settings/home/sync', async (c) => {
-    if (!app.settings().homeRows.enabled) return back(c, '/settings#home', { err: 'Turn home-screen rows on first.' });
+    if (!app.settings().homeRows.enabled) return back(c, '/settings/extras#home', { err: 'Turn home-screen rows on first.' });
     try {
       const r = await syncHomeRows(app, { dryRun: false }); // an explicit press, so dry run doesn't hold it back
-      if (r.problem) return back(c, '/settings#home', { err: r.problem });
-      return back(c, '/settings#home', { ok: r.changed ? `Rows updated. Showing: ${r.showing.join(', ') || 'none right now'}.` : 'Rows were already up to date.' });
+      if (r.problem) return back(c, '/settings/extras#home', { err: r.problem });
+      return back(c, '/settings/extras#home', { ok: r.changed ? `Rows updated. Showing: ${r.showing.join(', ') || 'none right now'}.` : 'Rows were already up to date.' });
     } catch (e) {
-      return back(c, '/settings#home', { err: `Couldn’t update the rows: ${(e as Error).message}` });
+      return back(c, '/settings/extras#home', { err: `Couldn’t update the rows: ${(e as Error).message}` });
     }
   });
 
   web.post('/settings/libraries', async (c) => {
     const b = await c.req.parseBody({ all: true });
     const ids = (field: string) => ([] as unknown[]).concat(b[field] ?? []).map(String);
-    const next = String(b.next ?? '');
-    const to = next.startsWith('/start') ? next : '/settings#libs'; // only ever back into the guide
+    const to = localPath(b.next, '').startsWith('/start') ? String(b.next) : '/settings/libraries'; // only ever back into the guide
+    // Only a kind of library Jellyfin has can be chosen: with none to tick (or Jellyfin unreadable), that kind is left as it is.
+    const has = (type: string) => librariesModel(app).some((l) => l.collectionType === type);
     try {
-      applySettings(app, { movieLibraryIds: ids('movieLibraryIds'), showLibraryIds: ids('showLibraryIds') });
+      const r = applySettings(app, {
+        ...(has('movies') ? { movieLibraryIds: ids('movieLibraryIds') } : {}),
+        ...(has('tvshows') ? { showLibraryIds: ids('showLibraryIds') } : {}),
+        // The Settings page saves the region with the libraries; the guide sends the libraries alone.
+        ...(b.regionForm === '1' ? { timezone: String(b.timezone ?? ''), streamingRegion: String(b.streamingRegion ?? '') } : {}),
+      });
+      if (r.timezoneChanged) restartScheduler();
     } catch (e) {
-      if (e instanceof SettingsError) return back(c, to, { err: e.message });
+      // In the guide, an error stays on the libraries step rather than moving on.
+      if (e instanceof SettingsError) return back(c, to.startsWith('/start') ? '/start?step=1' : to, { err: e.message });
       throw e;
     }
     markDone('libraries');
-    return back(c, to, { ok: 'Libraries saved.' });
+    return to.startsWith('/start') ? c.redirect(to) : back(c, to, { ok: 'Saved.' });
   });
 
   web.post('/settings/schedules', async (c) => {
@@ -895,27 +989,34 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       try {
         new Cron(cron, { paused: true });
       } catch {
-        return back(c, '/settings#sched', { err: `“${cron}” isn’t a valid cron expression for ${j.job}.` }); // nothing saved
+        return back(c, '/settings/schedule', { err: `“${cron}” isn’t a schedule the app can read (${j.job}). Nothing was saved.` }); // nothing saved
       }
     }
     for (const j of jobs) setSchedule(app, j.job, { cron: String(b[`cron:${j.job}`] ?? j.cron), enabled: b[`on:${j.job}`] === '1' });
+    if (b.neighboursForm === '1') {
+      const neighbours = String(b.neighbours ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+        const m = l.match(/^(.*?)\s+(\d{1,2}:\d{2})$/);
+        return m ? { name: m[1]!.trim(), time: m[2]! } : { name: l, time: '' };
+      });
+      applySettings(app, { neighbours });
+    }
     restartScheduler();
-    return back(c, '/settings#sched', { ok: 'Schedules saved.' });
+    return back(c, '/settings/schedule', { ok: 'Schedule saved.' });
   });
 
   // ── adoption ──
   web.get('/adoption', async (c) => {
     try {
-      return page(c, 'Existing box sets', 'collections', <Adoption items={await adoptionCandidates(app, { verify: true })} csrf={userOf(c).csrf} />);
+      return page(c, 'Already in Jellyfin', 'collections', <Adoption items={await adoptionCandidates(app, { verify: true })} csrf={userOf(c).csrf} />);
     } catch (e) {
-      return page(c, 'Existing box sets', 'collections', <Adoption items={[]} csrf={userOf(c).csrf} error={`Couldn’t read box sets from Jellyfin: ${(e as Error).message}`} />);
+      return page(c, 'Already in Jellyfin', 'collections', <Adoption items={[]} csrf={userOf(c).csrf} error={`Couldn’t read Jellyfin’s collections: ${(e as Error).message}`} />);
     }
   });
   web.post('/adoption/adopt', async (c) => {
     const b = await c.req.parseBody();
     try {
       await adopt(app, Number(b.definitionId), String(b.boxsetId), userOf(c).name);
-      return back(c, '/adoption', { ok: 'Adopted. The next run syncs its members through Review.' });
+      return back(c, '/adoption', { ok: 'Taken over. The next run works out what to change in it, and asks you first.' });
     } catch (e) {
       return back(c, '/adoption', { err: (e as Error).message });
     }
@@ -923,7 +1024,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
   web.post('/adoption/adopt-all', async (c) => {
     try {
       const r = await adoptSuggested(app, userOf(c).name);
-      return back(c, '/adoption', r.failed.length ? { err: `Adopted ${r.adopted}. Failed: ${r.failed.join('; ')}` } : { ok: `Adopted ${r.adopted}. The next run syncs their titles through Review.` });
+      return back(c, '/adoption', r.failed.length ? { err: `Took over ${r.adopted}. Failed: ${r.failed.join('; ')}` } : { ok: `Took over ${r.adopted}. The next run works out what to change in them, and asks you first.` });
     } catch (e) {
       return back(c, '/adoption', { err: (e as Error).message });
     }
@@ -932,7 +1033,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const b = await c.req.parseBody();
     try {
       await deleteUnmanaged(app, String(b.boxsetId), userOf(c).name);
-      return back(c, '/adoption', { ok: 'Box set deleted. Its films are still in your library.' });
+      return back(c, '/adoption', { ok: 'Deleted from Jellyfin. Its titles are still in your library.' });
     } catch (e) {
       return back(c, '/adoption', { err: (e as Error).message });
     }

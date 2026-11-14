@@ -119,7 +119,7 @@ export async function verifyTmdb(tmdb: TmdbClient, r: Pick<Row, 'kind' | 'tmdb' 
   const media = r.kind === 'movie' ? 'movie' : 'tv';
   if (!r.tmdb) return { verified: null, mismatch: null, note: 'Jellyfin has no TMDb ID for it.' };
   const j = await tmdb.artwork(media, r.tmdb);
-  if (!j) return { verified: null, mismatch: null, note: `TMDb has no ${media === 'movie' ? 'film' : 'show'} ${r.tmdb}.` };
+  if (!j) return { verified: null, mismatch: null, note: `TMDb has no ${media === 'movie' ? 'movie' : 'show'} ${r.tmdb}.` };
   if (r.imdb && j.imdb === r.imdb) return { verified: { tmdb: r.tmdb, by: 'imdb', art: j }, mismatch: null, note: null };
   if (media === 'tv' && r.tvdb && j.tvdb === r.tvdb) return { verified: { tmdb: r.tmdb, by: 'tvdb', art: j }, mismatch: null, note: null };
   const named = pathNames(r.path, j);
@@ -337,7 +337,7 @@ async function checkBoxSets(app: AppContext, jf: JellyfinClient, now: number, ou
         const counts = new Map<string, number>();
         for (const c of own) counts.set(c, (counts.get(c) ?? 0) + 1);
         const top = [...counts].sort((a, x) => x[1] - a[1])[0]![0];
-        found.push({ kind: 'other_title', detail: `Linked to TMDb collection ${link}, but its films belong to TMDb collection ${top}: its artwork and overview may be another collection’s. The app doesn’t change box sets it doesn’t manage: adopt it (Collections → Existing box sets) to have it rebuilt cleanly, or fix it in Jellyfin.`, proposal: null });
+        found.push({ kind: 'other_title', detail: `Linked to TMDb collection ${link}, but its movies belong to TMDb collection ${top}: its artwork and description may be another collection’s. The app doesn’t change collections it doesn’t look after: take it over (Collections → Already in Jellyfin) to have it rebuilt cleanly, or fix it in Jellyfin.`, proposal: null });
       }
     }
     out.found += saveFindings(app, b.Id!, sig, found, now, { name: b.Name ?? 'Box set', kind: 'boxset' });
@@ -432,7 +432,7 @@ export async function resetArtwork(app: AppContext, jfId: string, opts: { by: st
   if (!tmdb) return { ok: false, message: 'TMDb isn’t connected (Settings → Connections).' };
   const r = app.db.select().from(libraryItem).where(eq(libraryItem.jfId, jfId)).get();
   const findings = app.db.select().from(healthFinding).where(and(eq(healthFinding.jfId, jfId), inArray(healthFinding.kind, [...ARTWORK_KINDS]))).all();
-  if (!r || r.kind === 'episode') return { ok: false, message: findings[0]?.subject ? 'The app doesn’t change box sets it doesn’t manage: adopt it instead.' : 'That title isn’t in the library index.' };
+  if (!r || r.kind === 'episode') return { ok: false, message: findings[0]?.subject ? 'The app doesn’t change collections it doesn’t look after: take it over instead (Collections → Already in Jellyfin).' : 'That title isn’t in the library index.' };
   const check = app.db.select().from(artworkCheck).where(eq(artworkCheck.jfId, jfId)).get();
   if (!check?.verifiedTmdb) return { ok: false, message: `${r.name}: its TMDb ID isn’t confirmed, so the app won’t take artwork for it from TMDb.` };
 

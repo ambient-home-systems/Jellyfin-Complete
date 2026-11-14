@@ -17,9 +17,9 @@ export const ClaudeAccess: FC<{ tokens: ApiToken[]; reveal: Reveal | null; endpo
   <section class="form-sec" id="claude" aria-labelledby="claude-h">
     <div class="section-head"><h2 id="claude-h">Claude access</h2><span class="aside">MCP, from a computer on your network</span></div>
     <p class="muted">
-      Let Claude Code or Claude Desktop use this app: ask what’s coming up, what’s waiting in Review, or why a title is missing.
-      With <b>Read, review and run</b>, Claude can also approve, snooze or dismiss proposals and start a run; with <b>Full control</b>, everything else too, except connections, keys and these tokens.
-      Approving applies the change to Jellyfin straight away, as it does in Review, even with dry run on.
+      Let Claude Code or Claude Desktop use this app: ask what’s coming up, what’s waiting in your Inbox, or why a title is missing.
+      With <b>Read, review and run</b>, Claude can also approve, snooze or dismiss changes and start a run; with <b>Full control</b>, everything else too, except connections, keys and these tokens.
+      Approving applies the change to Jellyfin straight away, as it does in your Inbox.
     </p>
 
     {reveal ? (
@@ -65,12 +65,12 @@ export const ClaudeAccess: FC<{ tokens: ApiToken[]; reveal: Reveal | null; endpo
         <span class="hint">Name it after where it’s used, so you know which one to revoke.</span>
       </div>
       <div class="choice" role="radiogroup" aria-label="Access">
-        <label><input type="radio" name="scope" value="review" checked /><b>{SCOPE_LABEL.review}</b><span>Everything Read only allows, plus approving, snoozing or dismissing proposals in Review, and starting a run.</span></label>
-        <label><input type="radio" name="scope" value="full" /><b>{SCOPE_LABEL.full}</b><span>Everything the app’s pages can do: settings and schedules; creating, editing and deleting collections, with their dates, filters and sources; existing box sets; undo; Radarr and Sonarr. Not connections, keys or these tokens.</span></label>
-        <label><input type="radio" name="scope" value="read" /><b>{SCOPE_LABEL.read}</b><span>Status, settings, collections, Review, Missing and Activity. Can’t change anything.</span></label>
+        <label><input type="radio" name="scope" value="review" checked /><b>{SCOPE_LABEL.review}</b><span>Everything Read only allows, plus approving, snoozing or dismissing changes in your Inbox, and starting a run.</span></label>
+        <label><input type="radio" name="scope" value="full" /><b>{SCOPE_LABEL.full}</b><span>Everything the app’s pages can do: settings and schedules; creating, editing and deleting collections, with their dates, filters and sources; collections already in Jellyfin; undo; Radarr and Sonarr. Not connections, keys or these tokens.</span></label>
+        <label><input type="radio" name="scope" value="read" /><b>{SCOPE_LABEL.read}</b><span>Status, settings, collections, the Inbox and History. Can’t change anything.</span></label>
       </div>
       <div><button class="btn primary" type="submit"><Icon name="plus" /> Create token</button></div>
     </form>
-    <p class="hint" style="margin-top:var(--s3)">Endpoint: <code>{endpoint}</code>. Connections and keys stay on the Settings page: Claude can’t see or change them, so a leaked token can’t send your keys elsewhere.</p>
+    <p class="hint" style="margin-top:var(--s3)">Endpoint: <code>{endpoint}</code>. Connections and keys stay on these Settings pages: Claude can’t see or change them, so a leaked token can’t send your keys elsewhere.</p>
   </section>
 );

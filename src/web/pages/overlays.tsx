@@ -25,7 +25,7 @@ export const OverlaysPanel: FC<{ m: OverlaysModel; csrf: string }> = ({ m, csrf 
       <Csrf token={csrf} />
       <input type="hidden" name="libs" value="1" />
       <label class="check"><input type="checkbox" name="status" value="1" checked={m.status} /> <span><b>Status on shows:</b> AIRING (an episode in the last 14 days), RETURNING, CANCELED or ENDED, top left</span></label>
-      <label class="check"><input type="checkbox" name="imdbTop250" value="1" checked={m.imdbTop250} /> <span><b>IMDb Top 250 ribbon</b> on films and shows in IMDb’s Top 250, bottom right</span></label>
+      <label class="check"><input type="checkbox" name="imdbTop250" value="1" checked={m.imdbTop250} /> <span><b>IMDb Top 250 ribbon</b> on movies and shows in IMDb’s Top 250, bottom right</span></label>
       {m.libraries.length ? (
         <fieldset class="plain">
           <legend>Libraries with overlays</legend>
@@ -34,11 +34,16 @@ export const OverlaysPanel: FC<{ m: OverlaysModel; csrf: string }> = ({ m, csrf 
           ))}
         </fieldset>
       ) : null}
-      <p class="hint">
-        Kometa’s designs, drawn on a copy of each poster at its own size. The original is kept in <code>/config/overlays/originals</code> and put back when you turn a badge off or remove them all; if Jellyfin gets a new poster, the badges go on the new one.
-        Only titles in the libraries collections draw from, and ticked here, get overlays. A library counts as a kids’ library when its name says so or most of its titles have children’s ratings; those get none unless you tick them. Unticking a library takes its overlays off on the next update. {m.dryRun ? 'Dry run is on, so runs only check: use Apply now to change posters.' : 'Each run keeps them up to date.'}
-      </p>
-      <div class="actions-row"><button class="btn primary" type="submit">Save</button></div>
+      <p class="hint">Kometa’s designs, drawn on a copy of each poster. The original is kept and goes back when you turn a badge off. {m.dryRun ? 'While you’re approving everything first, runs only check: use Apply now to change posters.' : 'Each run keeps them up to date.'}</p>
+      <details class="how"><summary>Which titles get them</summary>
+        <ul class="plain-list">
+          <li>Only titles in the libraries your collections use, and ticked above.</li>
+          <li>A library counts as a kids’ library when its name says so or most of its titles have children’s ratings. Those get none unless you tick them.</li>
+          <li>Unticking a library takes its overlays off on the next update.</li>
+          <li>Originals are kept in <code>/config/overlays/originals</code>. If Jellyfin gets a new poster, the badges go on the new one.</li>
+        </ul>
+      </details>
+      <div class="save-row"><button class="btn primary" type="submit">Save overlays</button></div>
     </form>
     <p>
       {m.withOverlays === 1 ? '1 poster has overlays.' : `${m.withOverlays} posters have overlays.`}{' '}

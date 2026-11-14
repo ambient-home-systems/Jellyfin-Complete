@@ -168,7 +168,7 @@ export function setSourceRole(app: AppContext, id: number, sourceId: number, rol
   if (src.type === 'jellyfin_episode_title' && role === 'add') throw new SettingsError('Episode-title matches can only be suggestions; they’re matched by title, not by ID.');
   app.db.update(definitionSource).set({ role }).where(eq(definitionSource.id, src.id)).run();
   app.db.update(definition).set({ updatedAt: Date.now() }).where(eq(definition.id, id)).run();
-  return role === 'suggest' ? 'Its titles now go to Review as suggestions.' : 'Its titles are now added directly.';
+  return role === 'suggest' ? 'Its titles now wait in your Inbox as suggestions.' : 'Its titles are now added like any other.';
 }
 
 /** Always include a title (pin), never include it (exclude), or clear either. */
@@ -177,7 +177,7 @@ export function setPin(app: AppContext, id: number, jfId: string, kind: 'pin' | 
   if (!jfId) throw new SettingsError('Nothing selected.');
   app.db.delete(pin).where(and(eq(pin.definitionId, id), eq(pin.jfId, jfId))).run();
   if (kind === 'pin' || kind === 'exclude') app.db.insert(pin).values({ definitionId: id, jfId, kind }).run();
-  return kind === 'pin' ? 'Pinned. The next run adds it.' : kind === 'exclude' ? 'Excluded. The next run proposes removing it if it’s in the box set.' : 'Cleared.';
+  return kind === 'pin' ? 'Always included from now on. The next run adds it.' : kind === 'exclude' ? 'Left out from now on. The next run removes it if it’s in the collection.' : 'Back to following the sources.';
 }
 
 /** Delete one of your own collections (not a preset), once its box set is gone. */
@@ -215,19 +215,19 @@ export async function setPoster(app: AppContext, id: number, choice: PosterChoic
   if (m?.jfBoxsetId && (m.state === 'live' || m.state === 'hidden') && app.jellyfin()) {
     try {
       await secureArtwork(identityCtx(app), { ...def, poster }, m.jfBoxsetId);
-      return poster.kind === 'none' ? 'Poster removed, from its box set in Jellyfin too.' : 'Poster saved and put on its box set in Jellyfin.';
+      return poster.kind === 'none' ? 'Poster removed, in Jellyfin too.' : 'Poster saved and put on the collection in Jellyfin.';
     } catch (e) {
-      return `Poster saved. Putting it on the box set in Jellyfin failed (${(e as Error).message}); the next run tries again.`;
+      return `Poster saved. Putting it on the collection in Jellyfin failed (${(e as Error).message}); the next run tries again.`;
     }
   }
-  return poster.kind === 'none' ? 'Poster removed.' : 'Poster saved. It goes on the box set when the collection is next created.';
+  return poster.kind === 'none' ? 'Poster removed.' : 'Poster saved. It goes on the collection when it’s next created in Jellyfin.';
 }
 
 export function deleteCollection(app: AppContext, id: number): string {
   const def = mustLoad(app, id);
   if (def.presetKey) throw new SettingsError('Presets can’t be deleted; turn it off instead.');
   const m = app.db.select().from(managedCollection).where(eq(managedCollection.definitionId, id)).get();
-  if (m?.state === 'live' || m?.state === 'hidden') throw new SettingsError('Turn it off and run once to remove its box set first.');
+  if (m?.state === 'live' || m?.state === 'hidden') throw new SettingsError('It’s in Jellyfin now. Turn it off and start a run to remove it from Jellyfin first.');
   app.db.transaction((tx) => {
     tx.delete(definitionSource).where(eq(definitionSource.definitionId, id)).run();
     tx.delete(definitionMode).where(eq(definitionMode.definitionId, id)).run();
@@ -275,7 +275,7 @@ export async function sendMissing(app: AppContext, input: { defId: number; tab: 
     created.push(row.id);
   }
   const noIdNote = noId.length ? ` ${noId.length} couldn’t be sent: no TVDB ID (add a TMDb key to look them up).` : '';
-  if (!input.sendNow) return { ok: true, message: `${created.length} queued in Review.${noIdNote}` };
+  if (!input.sendNow) return { ok: true, message: `${created.length} added to your Inbox.${noIdNote}` };
   const r = await executeArrDue(app, now, created);
   const parts = [`Sent ${r.applied} to ${name}.`];
   if (r.skipped.length) parts.push(`Skipped ${r.skipped.map((x) => `${x.title} (${x.why})`).join(', ')}.`);
@@ -295,7 +295,7 @@ export async function monitorInRadarr(app: AppContext, input: { defId: number; r
     payload: { app: 'radarr', radarrCollectionIds: [id], collectionTitle: input.title, manual: true }, decidedBy: input.by, decidedAt: now, createdAt: now, updatedAt: now,
   }).returning({ id: action.id }).get();
   const r = await executeArrDue(app, now, [row.id]);
-  return r.applied ? { ok: true, message: `Radarr now monitors ${input.title}. It adds the missing films itself as they’re released.` } : { ok: false, message: r.failed[0]?.why ?? 'Radarr didn’t accept that.' };
+  return r.applied ? { ok: true, message: `Radarr now monitors ${input.title}. It adds the missing movies itself as they’re released.` } : { ok: false, message: r.failed[0]?.why ?? 'Radarr didn’t accept that.' };
 }
 
 /** Save the defaults for titles sent to Radarr or Sonarr. */

@@ -172,7 +172,7 @@ describe('Box set artwork safety (ADR-040)', () => {
     expect(events.find((e) => e.name === 'Twister')!.what).toMatch(/not locked.*fresh locked box set/);
     expect(dashboardModel(app, NOW + DAY).integrity.filter((e) => e.ok)).toHaveLength(3);
     const page = String(Dashboard({ m: dashboardModel(app, NOW + DAY), csrf: 'x' }));
-    expect(page).toContain('box sets repaired this week');
+    expect(page).toContain('3 collections put right this week');
     expect(page).toContain('linked to TMDb 981142 instead of TMDb 1022790');
 
     // A quiet run afterwards: nothing to repair, and no metadata change proposed either.
@@ -185,6 +185,6 @@ describe('Box set artwork safety (ADR-040)', () => {
     (fake.libraries[0] as { LibraryOptions?: { AutomaticallyAddToCollection: boolean } }).LibraryOptions = { AutomaticallyAddToCollection: true };
     await run(app, NOW);
     expect(dashboardModel(app, NOW).autoCollections).toEqual(['Movies']);
-    expect(String(Dashboard({ m: dashboardModel(app, NOW), csrf: 'x' }))).toContain('Jellyfin makes its own box sets in Movies');
+    expect(String(Dashboard({ m: dashboardModel(app, NOW), csrf: 'x' }))).toContain('Jellyfin makes its own collections in Movies');
   });
 });

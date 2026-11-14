@@ -41,14 +41,16 @@ describe('Collections page: one-click on/off', () => {
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain('name="enabled" value="0"'); // the next click turns it off
     expect(html).toMatch(/<span id="fam-imdb_chart-count"[^>]*hx-swap-oob="true"[^>]*>1 of 5 on<\/span>/);
-    expect(html).toMatch(/<div id="toggle-status"[^>]*hx-swap-oob="innerHTML"[^>]*>.*is on\. The next run fetches its sources and plans it\.<\/div>/);
+    expect(html).toMatch(/<div id="toggle-status"[^>]*hx-swap-oob="innerHTML"[^>]*>.*is on\. The next run reads its lists\.<\/div>/);
     expect(html).not.toContain('<html');
 
     const off = await (await post(`/collections/${d.id}/enabled`, { enabled: '0' }, { 'hx-request': 'true' })).text();
     expect(bySlug('chart-top-movies').enabled).toBe(false);
     expect(off).toContain('aria-checked="false"');
     expect(off).toContain('>0 of 5 on</span>');
-    expect(off).toContain('is off. The next run removes its box set, if it has one.');
+    expect(off).toContain('is off. The next run removes it from Jellyfin, if it’s there.');
+    // The row itself says what the switch did, with a way back.
+    expect(off).toMatch(/class="row-note">Turned off\.[\s\S]*>Undo<\/button>/);
   });
 
   it('without JavaScript, goes back to the same row rather than the top of the page', async () => {

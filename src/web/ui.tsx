@@ -55,31 +55,34 @@ export const Seg: FC<{ name: string; value: string; options: [string, string][];
   </span>
 );
 
-export type NavKey = 'dashboard' | 'collections' | 'review' | 'missing' | 'health' | 'activity' | 'settings';
+export type NavKey = 'start' | 'home' | 'inbox' | 'collections' | 'history' | 'settings';
 
 export type LayoutProps = {
   title: string;
   nav: NavKey;
   user: { name: string; csrf: string };
   dryRun: boolean;
-  pending: number;
-  /** Library health findings waiting for review (ADR-041). */
-  healthOpen?: number;
+  /** Everything waiting for a decision: collection changes plus open Library health findings. */
+  inbox: number;
+  /** Last run, in a few words. */
   lastRun: string;
+  /** A run is going on right now. */
+  running?: boolean;
+  /** The first-run guide isn't finished yet, so it has a place in the navigation. */
+  setupOpen?: boolean;
   flash?: { kind: 'ok' | 'err'; text: string } | null;
   banner?: Child;
   children?: Child;
 };
 
 export const Layout: FC<LayoutProps> = (p) => {
-  // [key, href, icon, label, shorter label for the phone tab bar]
-  const nav: [NavKey, string, string, string, string?][] = [
-    ['dashboard', '/', 'dashboard', 'Dashboard'],
+  // [key, href, icon, label, hidden on the phone's tab bar]
+  const nav: [NavKey, string, string, string, boolean?][] = [
+    ...(p.setupOpen ? [['start', '/start', 'play', 'Getting started', true] as [NavKey, string, string, string, boolean]] : []),
+    ['home', '/', 'dashboard', 'Home'],
+    ['inbox', '/review', 'review', 'Inbox'],
     ['collections', '/collections', 'collections', 'Collections'],
-    ['review', '/review', 'review', 'Review'],
-    ['missing', '/missing', 'missing', 'Missing'],
-    ['health', '/health', 'health', 'Library health', 'Health'],
-    ['activity', '/activity', 'activity', 'Activity'],
+    ['history', '/activity', 'activity', 'History'],
     ['settings', '/settings', 'settings', 'Settings'],
   ];
   return (
@@ -92,6 +95,7 @@ export const Layout: FC<LayoutProps> = (p) => {
         <link rel="stylesheet" href="/static/app.css" />
         <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
         <script src="/static/vendor/htmx.min.js" defer></script>
+        <script src="/static/app.js" defer></script>
       </head>
       <body hx-headers={JSON.stringify({ 'x-csrf-token': p.user.csrf })}>
         {sprite()}
@@ -99,22 +103,21 @@ export const Layout: FC<LayoutProps> = (p) => {
           <aside class="rail" aria-label="Main navigation">
             <div class="brand"><Logo /><span>Maverick<small>Jellyfin Complete</small></span></div>
             <nav>
-              {nav.map(([key, href, icon, label, short]) => (
-                <a href={href} aria-current={p.nav === key ? 'page' : undefined}>
+              {nav.map(([key, href, icon, label, phoneHide]) => (
+                <a href={href} aria-current={p.nav === key ? 'page' : undefined} class={phoneHide ? 'phone-hide' : undefined}>
                   <Icon name={icon} />
-                  {short ? <span class="lbl"><span class="long">{label}</span><span class="short" aria-hidden="true">{short}</span></span> : <span class="lbl">{label}</span>}
-                  {key === 'review' && p.pending > 0 ? <span class="count num" aria-label={`${p.pending} waiting`}>{p.pending}</span> : null}
-                  {key === 'health' && p.healthOpen ? <span class="count num" aria-label={`${p.healthOpen} to review`}>{p.healthOpen}</span> : null}
+                  <span class="lbl">{label}</span>
+                  {key === 'inbox' && p.inbox > 0 ? <span class="count num" aria-label={`${p.inbox} waiting for you`}>{p.inbox}</span> : null}
                 </a>
               ))}
             </nav>
             <div class="foot">
-              <div class="dry">
+              <a class="dry" href="/settings/approvals" title="Change this in Settings → Approvals">
                 <span class={`dot ${p.dryRun ? 'warn' : 'ok'}`}></span>
-                <b>{p.dryRun ? 'Dry run on' : 'Dry run off'}</b>
-                <span>{p.dryRun ? 'Every action waits in Review' : 'Auto actions apply on their own'}</span>
-              </div>
-              <div class="who">{p.lastRun} · signed in as {p.user.name}</div>
+                <b>{p.dryRun ? 'Approving everything first' : 'Automatic where you allow it'}</b>
+                <span>{p.dryRun ? 'Nothing changes until you approve it' : 'Everything else waits in your Inbox'}</span>
+              </a>
+              <div class="who">{p.running ? 'Running now…' : p.lastRun} · signed in as {p.user.name}</div>
               <div class="who faint">v{APP_VERSION}</div>
               <form method="post" action="/logout">
                 <input type="hidden" name="_csrf" value={p.user.csrf} />
@@ -132,6 +135,18 @@ export const Layout: FC<LayoutProps> = (p) => {
     </html>
   );
 };
+
+/** What the Inbox holds, for its tabs. Library health and Missing titles appear once they're switched on. */
+export type InboxCounts = { changes: number; health: number; healthOn: boolean; missingOn: boolean };
+
+/** The Inbox's tabs: one queue, three kinds of thing waiting. */
+export const InboxTabs: FC<{ at: 'changes' | 'health' | 'missing'; c: InboxCounts }> = ({ at, c }) => (
+  <nav class="tabs" aria-label="Inbox">
+    <a href="/review" aria-current={at === 'changes' ? 'page' : undefined}>Collection changes <span class="n num">{c.changes}</span></a>
+    {c.healthOn || at === 'health' ? <a href="/health" aria-current={at === 'health' ? 'page' : undefined}>Library health <span class="n num">{c.health}</span></a> : null}
+    {c.missingOn || at === 'missing' ? <a href="/missing" aria-current={at === 'missing' ? 'page' : undefined}>Missing titles</a> : null}
+  </nav>
+);
 
 export const Csrf: FC<{ token: string }> = ({ token }) => <input type="hidden" name="_csrf" value={token} />;
 

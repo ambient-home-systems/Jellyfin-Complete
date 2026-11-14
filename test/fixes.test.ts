@@ -16,7 +16,7 @@ describe('0.7.0 fixes', () => {
     await runPipeline(t.app, { job: 'manual', trigger: 'manual', index: true, now: Date.UTC(2026, 10, 17, 15) });
     const create = t.app.db.select().from(action).where(eq(action.type, 'collection.create')).all().find((a) => a.status === 'proposed')!;
     const r = await reviewVerdict(t.app, [create.id], 'approve', 'admin');
-    expect(r.message).toMatch(/Approved 3 \(including 2 title and metadata changes for the new box set\)\. Applied 3\./);
+    expect(r.message).toMatch(/Approved 3 \(including 2 title and detail changes for the new collection\)\. Applied 3\./);
     expect(t.fake.boxSets().find((b) => b.Name === 'Thanksgiving Movies')?.children).toEqual(['m-ptna']);
   });
 

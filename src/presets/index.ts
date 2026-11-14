@@ -21,7 +21,7 @@ export const FAMILY_LABEL: Record<PresetFamily | 'custom', string> = {
   custom: 'Your collections',
   universe: 'Universes',
   show_franchise: 'Show franchises',
-  film_series: 'Film series',
+  film_series: 'Movie series',
   basic: 'New and recent',
   imdb_chart: 'IMDb charts',
   streaming: 'Streaming services',

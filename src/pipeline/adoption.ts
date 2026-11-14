@@ -25,7 +25,7 @@ export type AdoptionCandidate = {
   verified: boolean | null;
 };
 
-const REPLACES = 'Adopting replaces it with a fresh locked box set holding the same titles, with this app’s name, overview and artwork.';
+const REPLACES = 'Taking it over replaces it with a fresh collection holding the same titles, with this app’s name, description and poster.';
 
 /**
  * Box sets that match a turned-on collection. With `verify`, each film series set's TMDb link is checked against the
@@ -72,10 +72,10 @@ export async function adoptionCandidates(app: AppContext, opts: { verify?: boole
     const seriesId = def?.presetKey?.startsWith(SERIES_PREFIX) ? def.presetKey.slice(SERIES_PREFIX.length) : null;
     if (seriesId && opts.verify) verified = await verifySeriesLink(app, b.Id, tmdbId ? String(tmdbId) : null, seriesId);
     const link = !seriesId ? '' : verified === true ? ' Its TMDb link and titles match this series.'
-      : verified === false ? ` Jellyfin linked it to ${tmdbId ? `TMDb collection ${tmdbId}` : 'no TMDb collection'}, not this series (${seriesId}), or its titles disagree: its artwork and overview can’t be trusted.` : '';
-    if (orphan) { suggestion = 'delete'; why = 'Left over from an older Jellyfin-Auto-Collections config; nothing updates it'; }
-    else if (exact) { suggestion = 'adopt'; why = `${jac ? 'Same name as this preset; remove it from JAC’s config first (ADR-009).' : 'Same name as this preset.'}${link} ${REPLACES}`; }
-    else if (series !== undefined) { suggestion = 'adopt'; why = `Jellyfin’s own collection for this film series.${link} ${REPLACES}`; }
+      : verified === false ? ` Jellyfin linked it to ${tmdbId ? `TMDb collection ${tmdbId}` : 'no TMDb collection'}, not this series (${seriesId}), or its titles disagree: its artwork and description can’t be trusted.` : '';
+    if (orphan) { suggestion = 'delete'; why = 'Left over from an older Jellyfin-Auto-Collections setup; nothing updates it'; }
+    else if (exact) { suggestion = 'adopt'; why = `${jac ? 'Same name as one of your collections. Jellyfin-Auto-Collections makes it: remove its line from that tool’s config first.' : 'Same name as one of your collections.'}${link} ${REPLACES}`; }
+    else if (series !== undefined) { suggestion = 'adopt'; why = `Jellyfin’s own collection for this movie series.${link} ${REPLACES}`; }
     else { suggestion = 'delete'; why = 'An older name for this collection'; }
     out.push({ boxsetId: b.Id, name, jac, childCount: b.ChildCount ?? null, definitionId: def?.id ?? null, definitionName: def?.name ?? null, suggestion, why, tmdbLink: tmdbId ? String(tmdbId) : null, verified });
   }
@@ -102,7 +102,7 @@ export async function adopt(app: AppContext, definitionId: number, boxsetId: str
   const def = app.db.select().from(definition).where(eq(definition.id, definitionId)).get();
   if (!def) throw new Error('No such collection');
   const old = await x.jf.getItem(boxsetId);
-  if (!old) throw new Error('That box set is gone');
+  if (!old) throw new Error('That collection is no longer in Jellyfin');
   const now = Date.now();
   const values = { jfBoxsetId: boxsetId, origin: 'adopted' as const, state: 'live' as const, artwork: null, updatedAt: now };
   app.db.insert(managedCollection).values({ definitionId, ...values }).onConflictDoUpdate({ target: managedCollection.definitionId, set: values }).run();
@@ -123,7 +123,7 @@ export async function adopt(app: AppContext, definitionId: number, boxsetId: str
     .where(and(eq(action.definitionId, definitionId), inArray(action.status, ['proposed', 'approved']), inArray(action.type, ['collection.create', 'collection.update_metadata', 'collection.add_items', 'collection.show']))).run();
   const images = [...Object.keys(old.ImageTags ?? {}), ...(old.BackdropImageTags?.length ? [`${old.BackdropImageTags.length} backdrop(s)`] : [])];
   app.db.insert(action).values({
-    type: 'collection.update_metadata', fingerprint: `adopt:${boxsetId}`, definitionId, mode: 'review', status: 'applied', reason: 'Adopted an existing box set: replaced by a fresh locked one with the same titles',
+    type: 'collection.update_metadata', fingerprint: `adopt:${boxsetId}`, definitionId, mode: 'review', status: 'applied', reason: 'Took over a collection Jellyfin already had: replaced by a fresh one with the same titles',
     before: { id: boxsetId, Name: old.Name, Overview: old.Overview, Tags: old.Tags, ProviderIds: old.ProviderIds, images }, after: { id: newId, adopted: true, replaced: true, titles: children.length },
     decidedBy: by, decidedAt: now, appliedAt: now, createdAt: now, updatedAt: now,
   }).run();
@@ -156,13 +156,13 @@ export async function adoptSuggested(app: AppContext, by: string): Promise<{ ado
 export async function deleteUnmanaged(app: AppContext, boxsetId: string, by: string): Promise<void> {
   const jf = app.jellyfin();
   if (!jf) throw new Error('Jellyfin is not connected');
-  if (app.db.select().from(managedCollection).where(eq(managedCollection.jfBoxsetId, boxsetId)).get()) throw new Error('That box set is managed; it is deleted through its window instead');
+  if (app.db.select().from(managedCollection).where(eq(managedCollection.jfBoxsetId, boxsetId)).get()) throw new Error('The app looks after that collection; turn it off under Collections to remove it');
   const before = await jf.getItem(boxsetId);
   if (!before) return;
   await jf.deleteItem(boxsetId);
   const now = Date.now();
   app.db.insert(action).values({
-    type: 'collection.delete', fingerprint: `adoption-delete:${boxsetId}`, definitionId: null, mode: 'review', status: 'applied', reason: 'Deleted from the adoption screen',
+    type: 'collection.delete', fingerprint: `adoption-delete:${boxsetId}`, definitionId: null, mode: 'review', status: 'applied', reason: 'Deleted from Collections → Already in Jellyfin',
     before: { id: boxsetId, name: before.Name, tags: before.Tags, children: before.ChildCount ?? null }, after: { deleted: true }, decidedBy: by, decidedAt: now, appliedAt: now, createdAt: now, updatedAt: now,
   }).run();
 }

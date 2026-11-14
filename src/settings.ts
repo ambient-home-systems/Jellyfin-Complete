@@ -29,7 +29,11 @@ export type Settings = {
   /** Home-screen rows (Phase 3, ADR-025): off until you turn them on. */
   homeRows: { enabled: boolean; orderIndex: number; viewMode: 'Portrait' | 'Landscape' | 'Square' | 'Small' };
   /** The first-run guide (Phase 4): steps you've confirmed, and whether it's finished or skipped. */
-  onboarding: { done: OnboardingStep[]; finished: boolean };
+  onboarding: {
+    done: OnboardingStep[]; finished: boolean;
+    /** Home has offered, once, to let routine changes happen by themselves (ADR-046). */
+    automaticOffered?: boolean;
+  };
   /** Film series (ADR-035): a collection for each TMDb film series you own at least `minimum` films of. Off until turned on. */
   filmSeries: { enabled: boolean; minimum: number };
   /** Streaming-service collections (ADR-036): the country whose services count, as a two-letter code. */
@@ -52,7 +56,7 @@ export type Settings = {
   server: { version: string | null; seenAt: number | null };
 };
 
-export type OnboardingStep = 'libraries' | 'timezone' | 'families';
+export type OnboardingStep = 'libraries' | 'timezone' | 'tmdb' | 'families' | 'existing';
 
 export const DEFAULT_MODES: Record<ActionType, Mode> = {
   'collection.create': 'auto',

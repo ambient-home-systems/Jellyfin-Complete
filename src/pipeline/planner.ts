@@ -163,26 +163,26 @@ export function plan(input: PlanInput): { actions: PlannedAction[]; plans: Defin
       if (mem.size >= def.minItems) {
         const metaPayload = { ...desiredMeta(def), tags: [MANAGED_TAG], lockedFields: LOCKED_FIELDS, displayOrder: def.sortBy === 'title.asc' ? 'SortName' : 'PremiereDate' };
         if (!live) {
-          const reason = open ? 'Window is open' : `Window opens ${isoDay(opensDay!)}`;
+          const reason = open ? 'Its dates have begun' : `Its dates begin ${isoDay(opensDay!)}`;
           actions.push({ type: 'collection.create', definitionId: def.id, fingerprint: fingerprint('collection.create', def.slug, cycle), applyAt, reason, payload: { name: def.name, minItems: def.minItems } });
           actions.push({ type: 'collection.update_metadata', definitionId: def.id, fingerprint: fingerprint('collection.update_metadata', def.slug, cycle), applyAt, reason, payload: { ...metaPayload, uploadPoster: true } });
           for (const [jfId, prov] of mem) {
-            actions.push({ type: 'collection.add_items', definitionId: def.id, fingerprint: fingerprint('collection.add_items', def.slug, ref(jfId)), applyAt, reason: prov.pinned ? 'Pinned' : `On ${prov.sources.map((s) => s.label).join(', ')}`, item: item(jfId, prov) });
+            actions.push({ type: 'collection.add_items', definitionId: def.id, fingerprint: fingerprint('collection.add_items', def.slug, ref(jfId)), applyAt, reason: prov.pinned ? 'Always included by you' : `On ${prov.sources.map((s) => s.label).join(', ')}`, item: item(jfId, prov) });
           }
         } else {
           if (live.hidden) {
-            const reason = open ? 'Window is open' : `Window opens ${isoDay(opensDay!)}`;
+            const reason = open ? 'Its dates have begun' : `Its dates begin ${isoDay(opensDay!)}`;
             actions.push({ type: 'collection.show', definitionId: def.id, fingerprint: fingerprint('collection.show', def.slug, cycle), applyAt, reason });
           }
           for (const [jfId, prov] of mem) {
             if (live.children.has(jfId)) continue;
-            actions.push({ type: 'collection.add_items', definitionId: def.id, fingerprint: fingerprint('collection.add_items', def.slug, ref(jfId)), applyAt: null, reason: prov.pinned ? 'Pinned' : `On ${prov.sources.map((s) => s.label).join(', ')}`, item: item(jfId, prov) });
+            actions.push({ type: 'collection.add_items', definitionId: def.id, fingerprint: fingerprint('collection.add_items', def.slug, ref(jfId)), applyAt: null, reason: prov.pinned ? 'Always included by you' : `On ${prov.sources.map((s) => s.label).join(', ')}`, item: item(jfId, prov) });
           }
           if (def.syncMode === 'sync' && !blocked) {
             for (const jfId of live.children) {
               // A suggestion you accepted stays while a source still suggests it; only titles no source lists any more go.
               if (mem.has(jfId) || suggestions.has(jfId) || !input.index.get(jfId)) continue;
-              actions.push({ type: 'collection.remove_items', definitionId: def.id, fingerprint: fingerprint('collection.remove_items', def.slug, ref(jfId)), applyAt: null, reason: 'No longer on any source (sources healthy)', item: item(jfId, { sources: [], match: 'current member' }) });
+              actions.push({ type: 'collection.remove_items', definitionId: def.id, fingerprint: fingerprint('collection.remove_items', def.slug, ref(jfId)), applyAt: null, reason: 'No source lists it any more (and every source answered)', item: item(jfId, { sources: [], match: 'current member' }) });
             }
           }
           const want = desiredMeta(def);
@@ -190,7 +190,7 @@ export function plan(input: PlanInput): { actions: PlannedAction[]; plans: Defin
           const drift = m.name !== want.name || (m.forcedSortName ?? null) !== want.forcedSortName || (m.overview || null) !== (want.overview || null)
             || !m.tags.includes(MANAGED_TAG) || LOCKED_FIELDS.some((f) => !m.lockedFields.includes(f)) || (!m.hasPoster && want.posterUrl);
           if (drift) {
-            actions.push({ type: 'collection.update_metadata', definitionId: def.id, fingerprint: driftFingerprint(def), applyAt: null, reason: 'Metadata differs from the definition', payload: { ...metaPayload, uploadPoster: !m.hasPoster } });
+            actions.push({ type: 'collection.update_metadata', definitionId: def.id, fingerprint: driftFingerprint(def), applyAt: null, reason: 'Its name, poster or description in Jellyfin differs from what’s set here', payload: { ...metaPayload, uploadPoster: !m.hasPoster } });
           }
         }
         for (const [jfId, prov] of suggestions) {
@@ -198,7 +198,7 @@ export function plan(input: PlanInput): { actions: PlannedAction[]; plans: Defin
           actions.push({ type: 'collection.add_items', definitionId: def.id, fingerprint: fingerprint('collection.add_items', def.slug, ref(jfId)), applyAt: live ? null : applyAt, reason: `Suggested by ${prov.sources.map((s) => s.label).join(', ')}`, suggested: true, item: item(jfId, prov) });
         }
       } else if (live && open && !blocked) {
-        const reason = `Below the minimum of ${def.minItems} item(s)`;
+        const reason = `Fewer than ${def.minItems} ${def.minItems === 1 ? 'title' : 'titles'} in your library`;
         if (def.visibility !== 'tag_gate') actions.push({ type: 'collection.delete', definitionId: def.id, fingerprint: fingerprint('collection.delete', def.slug, cycle, 'below-min'), applyAt: null, reason });
         else if (!live.hidden) actions.push({ type: 'collection.hide', definitionId: def.id, fingerprint: fingerprint('collection.hide', def.slug, cycle, 'below-min'), applyAt: null, reason });
       }
@@ -207,9 +207,9 @@ export function plan(input: PlanInput): { actions: PlannedAction[]; plans: Defin
       const when = closed ? isoDay(closed.day) : isoDay(today);
       // Tag-gate keeps the box set (members, poster, ID) and hides it; otherwise it's deleted, Kometa's way.
       if (def.visibility === 'tag_gate') {
-        if (!live.hidden) actions.push({ type: 'collection.hide', definitionId: def.id, fingerprint: fingerprint('collection.hide', def.slug, when), applyAt: null, reason: 'Window closed' });
+        if (!live.hidden) actions.push({ type: 'collection.hide', definitionId: def.id, fingerprint: fingerprint('collection.hide', def.slug, when), applyAt: null, reason: 'Its dates have ended' });
       } else {
-        actions.push({ type: 'collection.delete', definitionId: def.id, fingerprint: fingerprint('collection.delete', def.slug, when), applyAt: null, reason: 'Window closed' });
+        actions.push({ type: 'collection.delete', definitionId: def.id, fingerprint: fingerprint('collection.delete', def.slug, when), applyAt: null, reason: 'Its dates have ended' });
       }
     }
   }

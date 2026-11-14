@@ -2,66 +2,72 @@
 
 ## The idea in one minute
 
-- **Collections.** A *collection* is a Jellyfin box set that the app builds and keeps up to date from *sources*: IMDb lists and searches, MDBList, TMDb, Letterboxd, Plex, or your own Jellyfin tags and genres.
-- **Windows.** A collection can have a *window*, such as 1 to 31 December. It appears in Jellyfin at midnight on the first day and goes away after the last.
-- **Plan, review, apply.** Nothing changes in Jellyfin directly. Each run *plans* the changes (create a box set, add or remove a title, update its poster or sort title). Each change then either applies on its own or waits for you in **Review**, depending on its *mode*.
-- **Dry run.** Dry run is on when you first start, so every change waits for you. Turn it off in Settings when the plans look right.
+- **Collections.** A *collection* is a group of titles in Jellyfin (Jellyfin calls it a box set) that the app builds and keeps up to date from *sources*: IMDb lists and searches, MDBList, TMDb, Letterboxd, Plex, or your own Jellyfin tags and genres.
+- **Dates.** A collection can have dates, such as 1 to 31 December. It appears in Jellyfin at midnight on the first day and goes away after the last.
+- **Nothing changes without you.** Each run works out the changes (create a collection, add or remove a title, update its poster). Each change then either happens on its own or waits in your **Inbox**, depending on its *approval* setting.
+- **Approve everything first.** That's how the app starts: every change waits for you. After your first approvals, Home offers once to let routine changes happen by themselves; you can switch it any time in Settings → Approvals.
 
-## Each day
+## Finding your way
 
 | Where | What for |
 |---|---|
-| **Dashboard** | What needs you, what broke, what's next. The timetable lists the next 120 days of collections opening and closing. |
-| **Review** | Proposed changes, grouped by collection. **Approve** applies a change straight away, even in dry run. **Dismiss** means "never this change". **Snooze** means "not now". Dismissed and snoozed changes are remembered, and both can be undone from their tabs. |
-| **Activity** | Every run with its log, and every change applied, with who approved it. Any change can be undone once. |
+| **Home** | What needs you, what broke, what's next. The timetable lists the next 120 days of collections appearing and going away. |
+| **Inbox** | Everything waiting for a decision, in one place, with one count in the menu. **Collection changes** are grouped by collection: **Approve** applies a change straight away, **Approve all** does a whole collection, **Snooze** means "not now" and **Dismiss** means "never this change". Snoozed and dismissed changes are remembered, and **Bring back** undoes either. **Library health** and **Missing titles** are tabs here too, once they're switched on. |
+| **Collections** | Every collection, with a switch each. **Already in Jellyfin** is its second tab. |
+| **History** | Every change made, with who approved it and an **Undo**, and every run with its log. |
+| **Settings** | One page per subject: Connections, Libraries and region, Approvals, Schedule, Extras, Advanced. |
 
 Runs happen at these times:
 
-| Job | Default time | What it does |
+| What runs | Default time | What it does |
 |---|---|---|
-| Window check | 00:00 | Opens and closes windows at local midnight. It also runs at start-up. |
-| Nightly refresh | 02:30 | Re-reads your library and sources, plans everything, and applies what's due. |
-| Cache cleanup | Sundays 03:10 | Drops expired cache entries. |
+| Midnight date check | 00:00 | Collections appear and go away on their dates. It also runs at start-up. |
+| Nightly refresh | 02:30 | Re-reads your library and sources, works out every change, and applies what's due. |
+| Clean-up | Sundays 03:10 | Clears out saved results that have expired. |
 
-Change the times in Settings → Schedules, or press **Run now** on the Dashboard.
+Change the times in Settings → Schedule, or press **Run now** on Home.
 
-## Modes
+**Getting started** walks a new install through six steps, one at a time: libraries, timezone, a TMDb key, which collections, collections Jellyfin already has, and your first changes. The first run starts as soon as you've chosen your collections, so its results are waiting by the last step.
 
-Each kind of change has a mode: **Off** (never), **Review** (wait for you) or **Auto** (apply on its own). Set them in Settings → Modes, and override them per collection in its editor.
+## Approvals
 
-| Change | Default |
+Each kind of change has an approval setting: **Never**, **Ask me** (it waits in your Inbox) or **Automatic**. Set them in Settings → Approvals. A single collection can be the exception, under its Advanced tab.
+
+| Change | To begin with |
 |---|---|
-| Create or delete a box set | Auto |
-| Add titles | Auto |
-| Remove titles | **Review** |
-| Update metadata (name, sort title, overview, poster) | Auto |
-| Send a film to Radarr or a series to Sonarr | **Review** |
+| Create and remove collections in Jellyfin | Automatic |
+| Add titles | Automatic |
+| Remove titles | **Ask me** |
+| Update name, poster and description | Automatic |
+| Send a movie to Radarr or a show to Sonarr | **Ask me** |
 
-Some rules hold whatever the modes say:
+While **Approve everything first** is on, every change asks first, whatever is set here.
 
-- **A failing source never removes anything.** It keeps its last good result, and its collections make no removals until it recovers.
-- **No empty box sets.** A box set is created only once at least its minimum number of titles is approved.
-- **Suggestions always wait for Review.** These include titles matched only by an episode's title.
-- **Hands off other box sets.** The app never touches a box set it didn't create or adopt.
+Some rules hold whatever the settings say:
+
+- **A failing source never removes anything.** It keeps its last good results, and its collections lose nothing until it recovers.
+- **No empty collections.** A collection is created in Jellyfin only once at least its fewest number of titles is approved.
+- **Suggestions always ask.** These include titles matched only by an episode's title, and titles from a source set to "Ask before adding".
+- **Hands off other collections.** The app never touches a collection it didn't create or take over.
 
 ## Collections
 
-The ready-made **presets** come in families. Turn single ones on or off under Collections.
+The **ready-made collections** come in families. Turn single ones on or off under Collections.
 
-**Turning collections on and off.** Each row on the Collections page has a switch. One click turns that collection on or off, and the page stays where you are. **All on** and **All off** beside each family switch the whole family. For streaming services, All on picks only the services offered in your country. A collection you turn on is planned on the next run. One you turn off has its box set removed on the next run, if it has one. Both follow your dry-run setting and action modes, so with dry run on the change waits in Review. Runs happen at midnight and 2:30 am, or straight away with **Run now**.
+**Turning collections on and off.** Each row on the Collections page has a switch. One click turns that collection on or off, the row says what will happen, and **Undo** beside it takes it back. **All on** and **All off** beside each family switch the whole family. For streaming services, All on picks only the services offered in your country. A collection you turn on is read on the next run. One you turn off is removed from Jellyfin on the next run, if it's there. Both follow your approval settings, so while you're approving everything first the change waits in your Inbox. Runs happen at midnight and 2:30 am, or straight away with **Run now**.
 
 | Family | Comes from | Starts |
 |---|---|---|
 | Seasonal (19) | Kometa's seasonal collections | On |
-| Holiday episodes (3) | Christmas, Halloween and Thanksgiving episodes from your shows | On (additions wait for review) |
+| Holiday episodes (3) | Christmas, Halloween and Thanksgiving episodes from your shows | On (additions ask first) |
 | New and recent (5) | Kometa's basic collections, Newly Released and New Episodes, plus Recently Added | Off |
 | Universes (17) | Kometa's universe collections | Off |
-| Film series (one per series you own) | Kometa's movie franchise collections: every TMDb film series you have at least 2 films of | Off |
+| Movie series (one per series you own) | Kometa's movie franchise collections: every TMDb movie series you have at least 2 movies of | Off |
 | Show franchises (27) | Kometa's show franchise collections | Off |
 | IMDb charts (5) | Kometa's IMDb chart collections: the titles you own from the Top 250, Most Popular and Lowest Rated charts | Off |
 | Streaming services (41) | Kometa's streaming collections: the titles you own that stream on Netflix, Disney+ and 20 more services in your country | Off |
 
-**New collection** makes your own: films, shows or episodes, always on or between two dates, from any sources.
+**New collection** makes your own: movies, shows or episodes, all year or between two dates, from any sources.
 
 ### New and recent
 
@@ -69,114 +75,116 @@ Five collections that follow your library's own dates:
 
 | Collection | Holds |
 |---|---|
-| Newly Released Movies | Films released in the last 90 days |
+| Newly Released Movies | Movies released in the last 90 days |
 | Newly Released Shows | Shows that first aired in the last 90 days |
 | New Episodes | Episodes that aired in the last 7 days |
-| Recently Added Movies | Films that arrived in the last 30 days |
+| Recently Added Movies | Movies that arrived in the last 30 days |
 | Recently Added Shows | Shows with an episode that arrived in the last 30 days |
 
 - Days are whole days, today included. A release date still to come doesn't count.
 - **Added means first arrived.** A replaced file, such as a Radarr or Sonarr upgrade, keeps its first date, so upgrades don't show as new.
-  - **With Radarr connected,** a film arrived when Radarr first imported it (from Radarr's history). Upgrades don't move that date, and a film you asked Radarr for long before it downloaded counts from the download. This is checked on every run, so it doesn't matter when you connected Radarr. A film with no import in Radarr's history counts from when it was added to Radarr.
-  - **Otherwise,** the app remembers the first date it saw each film (by its TMDb ID) and each episode, and a title that was gone for over a week and comes back counts as new.
+  - **With Radarr connected,** a movie arrived when Radarr first imported it (from Radarr's history). Upgrades don't move that date, and a movie you asked Radarr for long before it downloaded counts from the download. This is checked on every run, so it doesn't matter when you connected Radarr. A movie with no import in Radarr's history counts from when it was added to Radarr.
+  - **Otherwise,** the app remembers the first date it saw each movie (by its TMDb ID) and each episode, and a title that was gone for over a week and comes back counts as new.
   - **A show** was added when its newest episode was, so it comes back when a new episode arrives.
-- They change every night: titles that have aged out are taken out without waiting for review (unless dry run is on). You can change that, or the number of days, per collection.
+- They change every night: titles that have aged out are taken out without asking (unless you're approving everything first). You can change that, or the number of days, per collection.
 - A collection with nothing in it is deleted, and made again when something qualifies.
 - After updating to 0.10.0, they start after the next nightly refresh (or a manual run), when the app has read each title's release date.
 
-### Film series
+### Movie series
 
-**What it makes.** Film series are the collections Jellyfin used to make itself from TMDb, Kometa-style:
-- one collection for each film series you have at least 2 films of
+**What it makes.** Movie series are the collections Jellyfin used to make itself from TMDb, Kometa-style:
+- one collection for each movie series you have at least 2 movies of
 - named from TMDb, without the word "Collection"
 - in release order, with TMDb's overview and poster
-- new series appear as you add films, and each collection updates as films arrive
+- new series appear as you add movies, and each collection updates as movies arrive
 
 Kometa's additions apply, such as Prometheus in Alien and Hobbs & Shaw in The Fast and the Furious.
 
-**Turning it on.** Use Getting started (step 4) or ask Claude. It's one switch for every series, and the next run adds them. It needs a TMDb key. The minimum number of films is a setting (2 by default).
+**Turning it on.** Use Getting started (step 4) or ask Claude. It's one switch for every series, and the next run adds them. It needs a TMDb key. The minimum number of movies is a setting (2 by default).
 
-**Your existing series box sets.** If Jellyfin already made them, open **Collections → Existing box sets** after that run. It lists Jellyfin's own series box sets, and says whether each one's TMDb link matches its series and films. **Adopt all suggested** replaces each with a fresh box set holding the same films, with this app's name, overview and artwork; nothing Jellyfin attached carries over.
+**Your existing series collections.** If Jellyfin already made them, open **Collections → Already in Jellyfin** after that run. It lists Jellyfin's own series collections, and says whether each one's TMDb link matches its series and movies. **Take over all suggested** replaces each with a fresh collection holding the same movies, with this app's name, overview and artwork; nothing Jellyfin attached carries over.
 
-Which series a film belongs to comes from Jellyfin's TMDb metadata. If Jellyfin has recorded none, the app asks TMDb, a few hundred films per run, and remembers the answers.
+Which series a movie belongs to comes from Jellyfin's TMDb metadata. If Jellyfin has recorded none, the app asks TMDb, a few hundred movies per run, and remembers the answers.
 
 ### IMDb charts
 
-Five collections: **IMDb Top 250 Movies**, **IMDb Top 250 Shows**, **IMDb Popular Movies**, **IMDb Popular Shows** and **IMDb Lowest Rated Movies**. Each holds the titles you own from that IMDb chart, follows the chart as it changes, and stays all year. The chart's other titles are on the Missing page, ready for Radarr or Sonarr.
+Five collections: **IMDb Top 250 Movies**, **IMDb Top 250 Shows**, **IMDb Popular Movies**, **IMDb Popular Shows** and **IMDb Lowest Rated Movies**. Each holds the titles you own from that IMDb chart, follows the chart as it changes, and stays all year. The chart's other titles are under Missing titles in the Inbox, ready for Radarr or Sonarr.
 
-Turn them on in Getting started (step 4) or one at a time under Collections. They use the IMDb route in Settings, like every IMDb source.
+Turn them on in Getting started (step 4) or one at a time under Collections. They read IMDb the way Settings → Advanced says, like every IMDb source.
 
 ### Streaming services
 
 A collection for each service, such as **Netflix Movies** or **Disney+ Shows**, holding the titles you own that stream on it in your country. Subscription, free and with-ads offers count; rentals and purchases don't. The services are Kometa's 22: Netflix, Prime Video, Disney+, HBO Max, Hulu, Apple TV, Paramount+, Peacock and more, with some offered in one country only (ITVX and NOW in the UK, Crave in Canada, Movistar Plus+ in Spain).
 
-- **Your country** is set in Settings → Run and review (US by default).
+- **Your country** is set in Settings → Libraries and region (US by default).
 - **Turning them on** in Getting started (step 4) turns on the services offered in your country. Turn single ones on or off under Collections.
 - **How it works.** Each run asks TMDb which services carry the titles you own, starting with ones it hasn't asked about, then each title once a week. It asks about at most 600 titles a run, so a big library fills in over a few nights. Until every title has been checked once, nothing is removed from these collections. It needs a TMDb key.
 
 Streaming data comes from JustWatch, through TMDb.
 
-### Box set artwork
+### Collection artwork
 
-Jellyfin fills in an unlocked box set by searching TMDb for its name, and can pick the wrong collection: another collection's poster, backdrop and overview. So for every box set it manages, the app:
+Jellyfin fills in an unlocked collection by searching TMDb for its name, and can pick the wrong collection: another collection's poster, backdrop and overview. So for every collection it manages, the app:
 
 - creates it locked, so that search never runs (the titles in it aren't locked)
-- sets its TMDb link itself: the series' own for a film series, none for anything else
-- gives it this app's poster (the preset's own, Kometa's for universes and show franchises, TMDb's for a film series) or none, and no backdrop, logo, thumb, banner or art
-- checks all of that every run, with its lock, name and overview, and puts back anything else changed. Each repair shows on the Dashboard for a week.
+- sets its TMDb link itself: the series' own for a movie series, none for anything else
+- gives it this app's poster (the one it came with, Kometa's for universes and show franchises, TMDb's for a movie series) or none, and no backdrop, logo, thumb, banner or art
+- checks all of that every run, with its lock, name and overview, and puts back anything else changed. Each repair shows on Home for a week.
 
 Some things follow from that:
-- A box set found unlocked is replaced by a fresh locked one with the same titles. Locking it in place would lock every title in it.
-- The poster is whatever the collection's **Poster** section says (in its editor): an image address, an image you upload, the preset's own, or none. A poster added in Jellyfin instead is removed.
-- If "Automatically add to collection" is on for a Jellyfin library, the Dashboard warns you: Jellyfin makes unlocked box sets of its own. Turn it off in Jellyfin: Dashboard → Libraries, open the library's menu → Manage library.
+- A collection found unlocked is replaced by a fresh locked one with the same titles. Locking it in place would lock every title in it.
+- The poster is whatever the collection's **Name and poster** tab says: the one it came with, an image you upload, an image on the web, or none. A poster added in Jellyfin instead is removed.
+- If "Automatically add to collection" is on for a Jellyfin library, Home recommends turning it off: Jellyfin makes unlocked collections of its own. Turn it off in Jellyfin: Dashboard → Libraries, open the library's menu → Manage library.
 
-### In the editor
+### A collection's page
 
-- **Schedule.** Always on, or between two dates each year. A range can wrap past New Year.
-- **Sources.** Paste an ID, a URL or keywords. **Released in the last … days** and **Added in the last … days** take a number of days (for an episode collection, released means aired). An **IMDb chart** source takes top, popular or lowest; a **Streaming service** source takes a service's name (for a collection of films or of shows). A source can **add** titles directly or only **suggest** them for Review. A source the app hasn't fetched yet is fetched on the next run.
-- **Live preview.** What the collection would hold right now, with the reason each title is in. **Pin** a title to keep it whatever the sources say; **exclude** one to keep it out.
-- **Output in Jellyfin:**
-  - **Minimum items:** below this, the box set isn't created, or it's deleted.
-  - **Sync or append:** sync removes titles that have left every source; append never removes.
-  - **Sort title.**
-  - **Home-screen row.**
-- **When the window is closed.** Either delete the box set (Kometa's way; the poster and sort title come back next season), or keep it hidden with a blocked tag. Hiding keeps the same box set with its titles, but adds a tag to every Jellyfin user's blocked tags.
-- **Plex parity.** If Plex is connected, compares the collection with the one Kometa built in Plex and explains each difference.
-- **Poster.** An image address, an image you upload (JPEG, PNG or WebP, up to 10 MB), the preset's own poster, or none. Saving puts it on the box set in Jellyfin straight away. Uploads are kept in `/config/posters`.
-  - **The presets' own posters** were made for this app: seasonal films, holiday episodes, New and recent, IMDb charts and streaming services each have one, in one style, with the collection's name set in the app's typeface. Streaming services share a picture in each service's colour. Universes and show franchises use Kometa's posters, and film series TMDb's.
-  - Your choice always wins: an upload, an address or "No poster" stays until you change it. To use Kometa's poster for a preset instead, paste its address.
+The top of the page says where the collection stands, in a sentence: whether it's in Jellyfin, how many titles it has, when it next appears or goes away, and how many changes wait for you. The rest is in tabs, and **Save changes** saves all of them at once.
 
-### Box sets you already have
+- **Titles.** What the collection holds right now, with the source that lists each title. **Always include** keeps a title whatever the sources say; **Leave out** keeps one out. If Plex is connected, **Compared with Plex** sets the collection beside the one Kometa built in Plex and explains each difference.
+- **Sources.** Paste an address from your browser, an ID or keywords. **Released in the last … days** and **Added in the last … days** take a number of days (for an episode collection, released means aired). An **IMDb chart** source takes top, popular or lowest; a **Streaming service** source takes a service's name (for a collection of movies or of shows). Turn on **Ask before adding** for a source whose titles should wait in your Inbox as suggestions. A new source is read on the next run. Adding or removing a source is saved straight away.
+  - **Titles you don't have:** tick **Send missing titles…** to have runs suggest them for Radarr or Sonarr.
+- **Dates.** All year, or between two dates each year. The dates can run past New Year.
+- **Name and poster.** The name, the description, whether it's turned on, and the poster: the one it came with, an image you upload (JPEG, PNG or WebP, up to 10 MB), an image on the web, or none. A new poster goes on the collection in Jellyfin as soon as you save. Uploads are kept in `/config/posters`.
+  - **The posters ready-made collections come with** were made for this app: seasonal movies, holiday episodes, New and recent, IMDb charts and streaming services each have one, in one style, with the collection's name set in the app's typeface. Streaming services share a picture in each service's colour. Universes and show franchises use Kometa's posters, and movie series TMDb's.
+  - Your choice always wins: an upload, an address or "No poster" stays until you change it. To use Kometa's poster for a ready-made collection instead, paste its address.
+- **Advanced.** Most collections never need these.
+  - **Fewest titles:** with fewer in your library, the collection isn't created, or it's removed.
+  - **When a title leaves every source:** *Keep in step with the lists* removes it from the collection too; *Only ever add* never removes.
+  - **Sort title** and **Home-screen row.**
+  - **Outside its dates:** remove the collection from Jellyfin (Kometa's way; the poster and sort title come back next time), or keep it, hidden. Hiding keeps the same collection with its titles, but adds a tag to every Jellyfin user's blocked tags.
+  - **Approvals for this collection:** make this collection the exception to Settings → Approvals.
 
-**Collections → Existing box sets** lists box sets with the same names as your collections, and leftovers from Jellyfin-Auto-Collections. You can:
+### Collections already in Jellyfin
 
-- **adopt** a box set: it's replaced by a fresh, locked box set with the same titles and this app's name, overview and artwork, which the app manages from then on. Nothing Jellyfin attached to the old one carries over, because Jellyfin may have linked it to the wrong TMDb collection (see [Box set artwork](#box-set-artwork)).
-- **delete** a box set: its titles stay in your library
+**Collections → Already in Jellyfin** lists collections Jellyfin already has under the same names as yours, and leftovers from Jellyfin-Auto-Collections. You can:
+
+- **take one over:** it's replaced by a fresh, locked collection with the same titles and this app's name, description and artwork, which the app looks after from then on. Nothing Jellyfin attached to the old one carries over, because Jellyfin may have linked it to the wrong TMDb collection (see [Collection artwork](#collection-artwork)).
+- **delete** it: its titles stay in your library
 - **leave** it alone
 
 If another tool builds the same collections, remove them from that tool first so the two don't fight.
 
 ## Library health
 
-The app checks each film and episode against its title, and each film's and show's artwork. **Library health** in the menu (with a count of findings needing review) shows how much of the library has been checked, what needs review and what's been reviewed, by library. It flags a file for:
+The app checks each movie and episode against its title, and each movie's and show's artwork. **Library health**, a tab of the Inbox (its findings count towards the Inbox's number), shows how much of the library has been checked, what needs review and what's been reviewed, by library. It flags a file for:
 
-- **Length:** the file runs more than 12 minutes or 15% (whichever is larger) longer or shorter than it should. A two-hour film has to be 18 minutes out; an episode, 12.
-  - A film is measured against TMDb's runtime.
+- **Length:** the file runs more than 12 minutes or 15% (whichever is larger) longer or shorter than it should. A two-hour movie has to be 18 minutes out; an episode, 12.
+  - A movie is measured against TMDb's runtime.
   - An episode is measured against TMDb's runtime too, unless TMDb lists the whole season at a different length. Some networks list the TV slot, ads included: *Dirty Jobs* at 60 minutes for 42-minute files. Then the episode is measured against the season's typical (median) file length, so only the odd ones out are flagged: an episode with the ads left in, two episodes in one file, a double-length crossover. A season with fewer than three files uses the whole show's typical length. When TMDb has no runtimes, the typical length is used too.
   - A file about twice the typical length says it may contain two episodes, and whether the next episode also has its own file. A file Jellyfin already knows holds two episodes ("S07E13-E14") is expected to be twice as long.
 - **Title tags:** a title tag inside the file names another title, for example "Bewitched (2005)" on *Black Panther: Wakanda Forever*. A tag with the same year is treated as a translated title and left alone.
-- **Audio:** the file plays in another language by default, though it has a track in the library's language (a French dub on a kids' film that has English too).
+- **Audio:** the file plays in another language by default, though it has a track in the library's language (a French dub on a kids' movie that has English too).
   - If every Jellyfin user's settings already pick the library's language, it's listed **For information** and not counted. Those settings are a preferred audio language, with "Play default audio track" off.
-  - The Dashboard names users without those settings.
+  - Home names users without those settings.
 
-And each film's and show's **artwork**:
+And each movie's and show's **artwork**:
 
 - **No poster.**
 - **Poster from the video or file:** a wide 16:9 picture, like a frame from the video. Or a poster that isn't one of TMDb's for the title and has the same shape as the picture embedded in the file (or the file has one attached).
 - **Poster language:** the poster is TMDb's poster in another language, and TMDb has one in the library's language.
   - The library's own language is used, else the server's (Jellyfin: Dashboard → Libraries).
   - If TMDb has none in that language, the poster is kept and a note says so; it isn't flagged.
-- **Artwork from another title:** Jellyfin links the title to a different TMDb title than the one its IMDb ID and folder name point to, as with *Inside Out* linked to a lookalike. Also: a box set the app doesn't manage, linked to a TMDb collection its films aren't in.
+- **Artwork from another title:** Jellyfin links the title to a different TMDb title than the one its IMDb ID and folder name point to, as with *Inside Out* linked to a lookalike. Also: a collection the app doesn't manage, linked to a TMDb collection its movies aren't in.
 
 **Reset from TMDb** fixes an artwork finding: on one row, or **Reset artwork for selected** for the ones you tick. Nothing resets the whole library.
 - It takes TMDb's best-rated poster in the library's language, and optionally the backdrop, logo and thumb too.
@@ -186,11 +194,11 @@ And each film's and show's **artwork**:
 - Just before replacing, it reads the title again and checks its ID again. If anything changed since the check, it stops and leaves the finding.
 - The old images are kept in `/config/artwork/backups`. **Artwork fixed** lists what was replaced, before and after, with **Undo**.
 - A poster with the app's overlays is backed up as its clean original, and the badges go back on the new one.
-- Box sets the app doesn't manage are only reported. **Adopt it** has the app rebuild one cleanly.
+- Collections the app doesn't manage are only reported. **Take it over** has the app rebuild one cleanly.
 
-**Fixing posters by themselves:** in Settings → Run and review, choose libraries where "No poster" and "Poster from the video or file" are fixed on each run, the same way, while dry run is off. Everything else waits for you.
+**Fixing posters without asking:** in Settings → Extras → Library health, choose libraries where "No poster" and "Poster from the video or file" are fixed on each run, the same way, once you've stopped approving everything first. Everything else waits for you.
 
-**Collection artwork changed** lists the repairs the app made to its own box sets in the last 30 days (see Box set artwork).
+**Collection artwork changed** lists the repairs the app made to its own collections in the last 30 days (see Collection artwork).
 
 Each finding shows the library, the rating and the file's path. Check it by playing it.
 - **It's fine** moves it to Reviewed, with who marked it and when, until the file changes.
@@ -200,11 +208,11 @@ Each finding shows the library, the rating and the file's path. Check it by play
 
 The app never moves, deletes or hides files.
 
-Each file is checked once, and again when it changes, a few thousand a night, so a big library is covered over a few nights. Artwork is checked a few hundred titles a night: new or changed first, then each title again after a month. Extended editions much longer than TMDb's runtime show up too: mark them fine once. Turn the checks off in Settings → Run and review.
+Each file is checked once, and again when it changes, a few thousand a night, so a big library is covered over a few nights. Artwork is checked a few hundred titles a night: new or changed first, then each title again after a month. Extended editions much longer than TMDb's runtime show up too: mark them fine once. Turn the checks off in Settings → Extras; its tab then leaves the Inbox.
 
 **Reading files' own titles (optional).** Jellyfin shows only the title tags on a file's streams, not the title stored in the file itself. The file's own title is the tag that gave away *Bewitched* inside a file labelled *Black Panther: Wakanda Forever*. To have it checked too:
 1. Mount your media folder into the container **read-only**, for example `- /path/to/your/media:/media:ro` under `volumes` (see `docker-compose.yml`). The app's user (uid 1000) must be able to read the files.
-2. In Settings → Run and review → **Media files**, turn on "Read each new file's own title", with the folder it's mounted at (`/media` by default).
+2. In Settings → Advanced → **Media files**, turn on "Read each new file's own title", with the folder it's mounted at (`/media` by default).
 
 On the next run, the app works out where Jellyfin's files are under the mount by finding a few of them, so the folders don't have to be named the same. The Settings page shows what it found and how many files it has read.
 - **What's read:** only the few kilobytes of each file that hold its title, once per file and again when the file changes. Nothing is ever written.
@@ -217,32 +225,32 @@ On the next run, the app works out where Jellyfin's files are under the mount by
 
 Frames are kept in `/config/frames` until the file changes.
 
-**Dashboard warnings.**
-- **Image fetchers:** a film or TV library with **Screen Grabber** or **Embedded Image Extractor** turned on as an image fetcher, for Movie, Series or Season. Jellyfin then uses a random frame, or a mislabelled file's own picture, when TMDb has no poster. Turn them off in Jellyfin under the library's Image fetchers. Episode stills are fine.
+**Recommendations on Home.** These aren't faults in the app, so Home lists them apart from its problems, each with its steps under **How to fix**.
+- **Image fetchers:** a movie or TV library with **Screen Grabber** or **Embedded Image Extractor** turned on as an image fetcher, for Movie, Series or Season. Jellyfin then uses a random frame, or a mislabelled file's own picture, when TMDb has no poster. Turn them off in Jellyfin under the library's Image fetchers. Episode stills are fine.
 - **Audio settings:** Jellyfin users with no preferred audio language, or with "Play default audio track" on.
 
 ## Missing titles, Radarr and Sonarr
 
-**Missing** lists what each collection's sources name that isn't in your library, best-ranked first, with each title's status in Radarr or Sonarr. Select titles and **Send to Radarr/Sonarr**, or **Send to Review instead**.
+**Missing titles**, a tab of the Inbox once Radarr or Sonarr is connected, lists what each collection's sources name that isn't in your library, best-ranked first, with each title's status in Radarr or Sonarr. Tick titles and **Send to Radarr/Sonarr**, or **Add to Inbox instead** to approve them later.
 
-- **Checks.** Before every add, the app checks again that the title is released, not already in Radarr/Sonarr, and not on their exclusion list.
-- **Limits.** Sends are capped, 10 at a time by default (Settings → Run and review). Nothing is ever removed from Radarr or Sonarr.
-- **TMDb collections.** For a collection with TMDb collection sources, **Monitor in Radarr** lets Radarr add the missing films itself as they're released.
-- **Automatic sending.** To have runs propose adds, tick **Send missing titles…** in the collection's editor. Proposals follow the Radarr/Sonarr modes, Review by default.
+- **Checks.** Before every send, the app checks again that the title is released, not already in Radarr/Sonarr, and not on their exclusion list.
+- **Limits.** Sends are capped, 10 at a time by default (Settings → Approvals). Nothing is ever removed from Radarr or Sonarr.
+- **Movie series.** For a collection with TMDb collection sources, **Monitor in Radarr** lets Radarr add the missing movies itself as they're released.
+- **Automatic sending.** To have runs suggest sends, tick **Send missing titles…** on the collection's Sources tab. They follow the Radarr and Sonarr approval settings, Ask me to begin with.
 
-Choose the defaults (quality profile, root folder, tags and so on) in Settings → Radarr and Sonarr.
+Choose how titles are sent (quality profile, root folder, tags and so on) in Settings → Extras → Radarr and Sonarr.
 
 ## Poster overlays
 
-Kometa-style badges on your posters, off until you choose them in **Settings → Poster overlays**:
+Kometa-style badges on your posters, off until you choose them in **Settings → Extras → Poster overlays**:
 
 - **Status on shows:** AIRING (an episode in the last 14 days), RETURNING, CANCELED or ENDED, top left. The status comes from TMDb, or from Jellyfin when TMDb has none.
-- **IMDb Top 250 ribbon:** on films and shows in IMDb's Top 250, bottom right.
+- **IMDb Top 250 ribbon:** on movies and shows in IMDb's Top 250, bottom right.
 
 **Before anything changes,** the section shows how many posters would change and previews a few, drawn on their own posters.
 
-- **Apply now** changes them, even while dry run is on.
-- After that, each run keeps them up to date while dry run is off. With dry run on, runs only report what would change.
+- **Apply now** changes them, even while you're approving everything first: pressing it is your approval.
+- After that, each run keeps them up to date. While you're approving everything first, runs only report what would change.
 - **Remove all overlays** puts every original back.
 
 **Your originals are kept.**
@@ -251,23 +259,23 @@ Kometa-style badges on your posters, off until you choose them in **Settings →
 - Back up `/config` with that folder in it.
 - If Jellyfin saves artwork into your media folders, the badged poster is saved there too, and removing the overlays puts the original back there as well.
 
-**Which libraries.** Only titles in the libraries chosen under Settings → Libraries get overlays, and you can untick any of them in Settings → Poster overlays.
+**Which libraries.** Only titles in the libraries chosen under Settings → Libraries and region get overlays, and you can untick any of them under Poster overlays.
 - **Kids' libraries get none unless you tick them.** A library counts as a kids' library when its name says so (Kids, Children's, Family, Cartoons, Disney, Pixar, Animated…) or at least 80% of its rated titles have children's ratings (G, PG, TV-Y, TV-Y7, TV-G).
 - Unticking a library takes its overlays off on the next update, putting the originals back.
-- Box sets never get overlays.
+- Collections never get overlays.
 
 ## Home-screen rows
 
-With the Home Screen Sections and Collection Sections plugins installed in Jellyfin, each live collection that asks for one gets a row on the home screen while it's live. Turn this on in Settings → Home-screen rows. See [PHASE3.md](PHASE3.md) for how it works and its limits.
+With the Home Screen Sections and Collection Sections plugins installed in Jellyfin, each collection that asks for one gets a row on the home screen while it's in Jellyfin. Turn this on in Settings → Extras → Home-screen rows. See [PHASE3.md](PHASE3.md) for how it works and its limits.
 
 ## Let Claude use it
 
 Claude Code or Claude Desktop, on a computer on your home network, can use the app for you through MCP. You can ask, for example:
-- "What's waiting in Review?"
-- "Which Christmas films am I missing?"
+- "What's waiting in my Inbox?"
+- "Which Christmas movies am I missing?"
 - "Approve the Thanksgiving additions."
 
-1. **Create a token** in Settings → Claude access. Name it after where you'll use it, and choose what it may do:
+1. **Create a token** in Settings → Advanced → Claude access. Name it after where you'll use it, and choose what it may do:
    - **Read, review and run**
    - **Full control (except connections and keys)**
    - **Read only**
@@ -283,22 +291,22 @@ Claude Code or Claude Desktop, on a computer on your home network, can use the a
 
 | Claude can | Read only | Read, review and run | Full control |
 |---|---|---|---|
-| See status, settings, collections and their titles, Review, Missing, Activity and runs | ✓ | ✓ | ✓ |
-| Approve, snooze or dismiss proposals in Review | | ✓ | ✓ |
+| See status, settings, collections and their titles, the Inbox, History and runs | ✓ | ✓ | ✓ |
+| Approve, snooze or dismiss changes in the Inbox | | ✓ | ✓ |
 | Start a run | | ✓ | ✓ |
-| See why a title is in or out of a collection, compare with Plex, see existing box sets and Radarr/Sonarr options | ✓ | ✓ | ✓ |
+| See why a title is in or out of a collection, compare with Plex, see collections already in Jellyfin and Radarr/Sonarr options | ✓ | ✓ | ✓ |
 | Change settings and job schedules | | | ✓ |
-| Create, edit, delete and turn collections on or off, with their dates, minimum, filters and sources; pin or exclude titles | | | ✓ |
-| Adopt or delete existing box sets, undo changes, send missing titles to Radarr or Sonarr, update home-screen rows | | | ✓ |
+| Create, edit, delete and turn collections on or off, with their dates, minimum, filters and sources; always include or leave out titles | | | ✓ |
+| Take over or delete collections already in Jellyfin, undo changes, send missing titles to Radarr or Sonarr, update home-screen rows | | | ✓ |
 | See or change connections and keys, or Claude access tokens | | | |
 
-Connections and keys stay on the Settings page. If Claude could change an address, someone with a leaked token could point it at their own server, and the app would send your saved key there.
+Connections and keys stay on the Settings pages. If Claude could change an address, someone with a leaked token could point it at their own server, and the app would send your saved key there.
 
-**Approving through Claude does the same as pressing Approve in Review:**
-- The change applies to Jellyfin straight away, even with dry run on.
-- Activity shows "Claude (*token name*)" as who approved it.
+**Approving through Claude does the same as pressing Approve in the Inbox:**
+- The change applies to Jellyfin straight away.
+- History shows "Claude (*token name*)" as who approved it.
 
-Claude is told to show you each change and wait for your yes, and to ask before turning dry run off, setting a mode to auto, or turning a collection off. Still, treat a review token like a password. Revoking it in Settings → Claude access stops it at once.
+Claude is told to show you each change and wait for your yes, and to ask before it stops approving everything first, sets a kind of change to Automatic, or turns a collection off. (Claude's tools keep the app's older names for these: dry run, modes, Review. Claude is told the pages' words.) Still, treat a review token like a password. Revoking it in Settings → Advanced → Claude access stops it at once.
 
 The Claude app on the web or on a phone can't connect: Claude would reach the app from Anthropic's servers, which can't see your home network.
 
@@ -306,9 +314,9 @@ The Claude app on the web or on a phone can't connect: Claude would reach the ap
 
 | You see | What to do |
 |---|---|
-| A source **failing** or **from cache** on the Dashboard | Its message says why: a missing key, a list that moved, or a site that refused. Its collections keep their titles until it recovers. |
+| A source **failing** or **using last good results** on Home | Its message says why: a missing key, a list that moved, or a site that refused. Its collections keep their titles until it recovers. |
 | "Nothing in your library matches" | The source lists titles you don't have, or Jellyfin has no IMDb/TMDb IDs for them. Refresh their metadata in Jellyfin, and add a TMDb key. |
-| **IMDb query hashes** failing | IMDb changed its query. Kometa's hash files usually catch up within a day. Until then, IMDb sources serve their last good results. If IMDb blocks your server for good, see [IMDB-SNAPSHOT.md](IMDB-SNAPSHOT.md). |
+| **IMDb can't be read** | IMDb changed its query. Kometa's hash files usually catch up within a day. Until then, IMDb sources serve their last good results. If IMDb blocks your server for good, see [IMDB-SNAPSHOT.md](IMDB-SNAPSHOT.md). |
 | A run **failed** with "older than 10.10.0" | Update Jellyfin. See [COMPATIBILITY.md](COMPATIBILITY.md). |
 | "Too many failed sign-ins" | Wait 15 minutes. It's per address and per username. |
 | Lost the **setup code** | Restart the container. A new code is printed in its log for as long as Jellyfin isn't connected. |

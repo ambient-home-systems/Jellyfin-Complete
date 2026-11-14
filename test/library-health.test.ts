@@ -171,7 +171,7 @@ describe('Library health', () => {
     });
     const rows = healthRows(app);
     expect(rows.find((x) => x.jfId === 'e-shredder')).toMatchObject({ title: 'Teenage Mutant Ninja Turtles S02E01 · Return of the Shredder', library: 'Shows', rating: 'TV-Y7', path: '/kids/TMNT/S02E01.mkv' });
-    expect(String(Dashboard({ m: dashboardModel(app, NOW), csrf: 'x' }))).toMatch(/\d+ things to check in Library health/);
+    expect(String(Dashboard({ m: dashboardModel(app, NOW), csrf: 'x' }))).toMatch(/href="\/health">Library health<\/a>[\s\S]{0,200}<span class="n num">\d+<\/span>/);
   });
 
   it('checks each file once, and again when it changes; a finding marked fine stays hidden until then', async () => {
@@ -283,13 +283,13 @@ describe('Library health page and Claude', () => {
     expect(after).toMatch(/<b class="num big">1<\/b> marked fine/);
     expect(after).toContain('100%</b> of 2 files');
     expect(after).toMatch(/Odd Film \(2020\)[\s\S]*admin[\s\S]*Review again/);
-    expect(after).toContain('aria-current="page"'); // its own menu item, current
+    expect(after).toContain('aria-current="page"'); // its own tab in the Inbox, current
     expect(after).toMatch(/href="\/health"[^>]*aria-current="page"/);
     // Review again puts it back.
     const again = await t.web.request('/health/reopen', { ...form({ _csrf: csrf, jfId: 'm-odd', kind: 'title' }), headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' } });
     expect(flash(again)).toContain('Back in Needs review');
     expect(await (await t.web.request('/health', { headers: { cookie } })).text()).toMatch(/<b class="num big bad">1<\/b> finding/);
-    // The menu item counts what needs review, on every page.
-    expect(await (await t.web.request('/', { headers: { cookie } })).text()).toMatch(/href="\/health"[\s\S]{0,600}aria-label="1 to review"/);
+    // The Inbox's one badge counts what needs you, on every page.
+    expect(await (await t.web.request('/', { headers: { cookie } })).text()).toMatch(/href="\/review"[\s\S]{0,600}aria-label="\d+ waiting for you"/);
   });
 });

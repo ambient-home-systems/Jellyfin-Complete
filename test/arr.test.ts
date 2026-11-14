@@ -133,8 +133,8 @@ describe('sending missing films to Radarr (ADR-007)', () => {
     // An unreleased film is re-checked and skipped, not added.
     expect(flash(await send(['tmdb:10676', 'tmdb:999001']))).toMatch(/Sent 1 to Radarr\. Skipped Halloween Forever \(not released yet \(announced\)\)/);
     expect(radarr.calls.filter((c) => c.method === 'POST' && c.path === '/movie').map((c) => c.body.tmdbId)).toEqual([10676]);
-    // "Send to Review instead" queues it; the next run keeps it.
-    expect(flash(await send(['tmdb:23202'], { mode: 'review' }))).toMatch(/1 queued in Review/);
+    // "Add to Inbox instead" queues it; the next run keeps it.
+    expect(flash(await send(['tmdb:23202'], { mode: 'review' }))).toMatch(/1 added to your Inbox/);
     await runPipeline(app, { job: 'manual', trigger: 'manual', index: false });
     expect(app.db.select().from(action).where(eq(action.status, 'proposed')).all().filter((a) => a.type === 'radarr.add_movie').map((a) => a.item?.name)).toEqual(['Trick ’r Treat']);
     // Monitoring a TMDb collection in Radarr.

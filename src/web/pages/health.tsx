@@ -3,7 +3,7 @@
 // what's been reviewed. Files are only reported, never moved or deleted. Artwork can be reset from TMDb, one finding at
 // a time or for findings ticked here (never the whole library), by a TMDb ID the app has confirmed, and undone.
 import type { FC } from 'hono/jsx';
-import { Csrf, fmtDate, fmtTime, plural } from '../ui.js';
+import { Csrf, InboxTabs, fmtDate, fmtTime, plural, type InboxCounts } from '../ui.js';
 import type { HealthDashboard, HealthRow } from '../../library/health.js';
 import type { ArtworkSummary } from '../../library/artwork.js';
 import type { HealthKind } from '../../db/schema.js';
@@ -28,7 +28,7 @@ const Artwork: FC<{ r: HealthRow }> = ({ r }) => {
   const now = thumb(r);
   return (
     <div class="art-pair">
-      {now ? <img src={now} alt="Poster now" width={60} height={90} loading="lazy" /> : <span class="art-none">{r.boxSet ? 'box set' : 'no poster'}</span>}
+      {now ? <img src={now} alt="Poster now" width={60} height={90} loading="lazy" /> : <span class="art-none">{r.boxSet ? 'collection' : 'no poster'}</span>}
       {r.proposal ? (
         <>
           <span aria-hidden="true">→</span>
@@ -39,29 +39,36 @@ const Artwork: FC<{ r: HealthRow }> = ({ r }) => {
   );
 };
 
-export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string; csrf: string }> = ({ m, a, tz, csrf }) => {
+export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string; csrf: string; inbox?: InboxCounts }> = ({ m, a, tz, csrf, inbox = { changes: 0, health: m.needsReview, healthOn: true, missingOn: false } }) => {
   const kinds = (Object.entries(m.byKind) as [HealthKind, number][]).filter(([, n]) => n).map(([k, n]) => `${n} ${KIND[k].toLowerCase()}`);
   const fixable = m.open.some((r) => r.proposal);
   return (
     <>
       <header class="top">
-        <h1>Library health</h1>
-        <span class="aside faint">{m.lastChecked ? `Last checked ${fmtDate(m.lastChecked, tz)} · ${fmtTime(m.lastChecked, tz)}` : 'Not checked yet'}</span>
+        <h1>Inbox</h1>
+        <InboxTabs at="health" c={inbox} />
       </header>
       <div class="content">
-        <p class="lead">
-          Films and episodes whose file may not be what it says: it runs much longer or shorter than it should (more than 12 minutes or 15%, whichever is larger), a title tag inside it names another title, or it plays in another language by default.
-          A film is measured against TMDb’s runtime. An episode is measured against TMDb’s too, unless TMDb lists the whole season at a different length (often the TV slot, ads included); then it’s measured against the season’s typical file length.
-          Artwork is checked too: no poster, a poster from the video or the file, a poster in another language, or artwork from another title.
-          The app never moves or deletes files. Artwork is only replaced when you choose it here (or for libraries you’ve set to fix it by themselves), from TMDb, by the title’s confirmed TMDb ID, and can be undone.
-        </p>
-        {!m.enabled ? <p class="callout">The check is off (Settings → Run and review → Library health), so nothing new is checked or found.</p> : null}
+        <div class="intro">
+          <p class="lead">Flags files and posters that don’t match their title. Nothing is changed without you. <span class="faint">{m.lastChecked ? `Last checked ${fmtDate(m.lastChecked, tz)} at ${fmtTime(m.lastChecked, tz)}.` : 'Not checked yet: the first run does it.'}</span></p>
+          <details class="how">
+            <summary>How checks work</summary>
+            <ul class="plain-list">
+              <li><b>Length.</b> A file is flagged when it runs much longer or shorter than it should: more than 12 minutes or 15%, whichever is larger. A movie is measured against TMDb’s runtime. An episode is too, unless TMDb lists the whole season at a different length (often the TV slot, ads included); then it’s measured against the season’s typical file length.</li>
+              <li><b>Title tag.</b> A title written inside the file names another title.</li>
+              <li><b>Audio.</b> The file plays in another language by default.</li>
+              <li><b>Artwork.</b> No poster, a poster taken from the video or the file, a poster in another language, or artwork from another title.</li>
+              <li><b>What can change.</b> Files are never moved or deleted. Artwork is only replaced when you choose it here (or in libraries you’ve set to fix it by themselves), from TMDb, by the title’s confirmed TMDb ID, and it can be undone.</li>
+            </ul>
+          </details>
+        </div>
+        {!m.enabled ? <p class="callout">Library health is switched off, so nothing new is checked or found. Turn it on in <a href="/settings/extras#health">Settings → Extras</a>.</p> : null}
 
         <div class="answers health-sum">
           <section class="panel" aria-labelledby="hs-need">
             <div class="section-head"><h2 id="hs-need">Needs review</h2></div>
             <p class="lead"><b class={`num big${m.needsReview ? ' bad' : ''}`}>{m.needsReview}</b> {m.needsReview === 1 ? 'finding' : 'findings'}</p>
-            <p class="faint">{m.needsReview ? kinds.join(' · ') : 'Nothing waits for you.'}</p>
+            <p class="faint">{m.needsReview ? kinds.join(' · ') : 'You’re all caught up.'}</p>
             {m.needsReview ? <p><a href="#needs-h">See them</a></p> : null}
           </section>
           <section class="panel" aria-labelledby="hs-done">
@@ -77,7 +84,7 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
             <p class="faint">
               {m.checked.toLocaleString('en-US')} checked{m.waiting ? `, ${m.waiting.toLocaleString('en-US')} still to check (a few thousand a night)` : ''}.
               {m.compared !== null ? ` ${m.compared.toLocaleString('en-US')} had a length to compare with; the rest are checked by title tags only.` : ''}
-              {` Artwork: ${pct(a.checked, a.titles)}% of ${plural(a.titles, 'film and show', 'films and shows')} (a few hundred a night).`}
+              {` Artwork: ${pct(a.checked, a.titles)}% of ${plural(a.titles, 'movie and show', 'movies and shows')} (a few hundred a night).`}
             </p>
           </section>
         </div>
@@ -131,7 +138,7 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
               </form>
               <FindingsTable rows={m.open} tz={tz} csrf={csrf} />
             </>
-          ) : <p class="muted">{m.enabled ? 'Nothing to review. Every file and poster checked so far matches its title.' : 'Nothing to review.'}</p>}
+          ) : <p class="muted">{m.enabled ? 'You’re all caught up. Every file and poster checked so far matches its title.' : 'Nothing to review.'}</p>}
         </section>
 
         {m.info.length || a.sameImage.length ? (
@@ -193,7 +200,7 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
         {a.collectionRepairs.length ? (
           <section class="panel" aria-labelledby="coll-h">
             <div class="section-head"><h2 id="coll-h">Collection artwork changed</h2><span class="aside">repaired automatically · last 30 days</span></div>
-            <p class="faint">The box sets this app made or adopted are checked every run against what it last set: TMDb link, lock, poster and no other images. Anything Jellyfin changed is put back straight away.</p>
+            <p class="faint">The collections this app made or took over in Jellyfin are checked every run against what it last set: TMDb link, lock, poster and no other images. Anything Jellyfin changed is put back straight away.</p>
             <ul class="plain-list">
               {a.collectionRepairs.map((e) => (
                 <li><b>{e.name}</b> <span class="faint">{fmtDate(e.at, tz, { day: 'numeric', month: 'short' })}</span>{e.ok ? null : <span class="chip bad"> repair failed</span>}<br />{e.what}</li>
@@ -260,7 +267,7 @@ const FindingsTable: FC<{ rows: HealthRow[]; tz: string; csrf: string }> = ({ ro
           <td>
             <div class="row-actions">
               {r.proposal ? <button class="btn sm primary" type="submit" form="bulk" formaction="/health/artwork/reset" name="one" value={r.jfId} title="Replace the poster with TMDb’s, by this title’s confirmed TMDb ID. The old one is kept, to undo.">Reset from TMDb</button> : null}
-              {r.boxSet ? <a class="btn sm ghost" href="/adoption">Adopt it</a> : null}
+              {r.boxSet ? <a class="btn sm ghost" href="/adoption">Take it over</a> : null}
               <DismissForm r={r} csrf={csrf} />
             </div>
           </td>

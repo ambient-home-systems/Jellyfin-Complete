@@ -281,13 +281,13 @@ describe('Poster overlays in Settings', () => {
     const post = (path: string, data: Record<string, string> = {}) => t.web.request(path, { ...form({ _csrf: csrf, ...data }), headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' } });
     const panel = async () => (await t.web.request('/settings/overlays', { headers: { cookie } })).text();
 
-    expect(await (await t.web.request('/settings', { headers: { cookie } })).text()).toContain('Poster overlays');
+    expect(await (await t.web.request('/settings/extras', { headers: { cookie } })).text()).toContain('Poster overlays');
     expect(await panel()).toContain('0 posters have overlays.');
     expect(flash(await post('/settings/overlays', { status: '1' }))).toContain('Saved');
     expect(t.app.settings().overlays).toEqual({ status: true, imdbTop250: false, skipLibraryIds: null });
     const p = await panel();
     expect(p).toContain('1 would change on the next update.');
-    expect(p).toContain('Dry run is on, so runs only check');
+    expect(p).toContain('While you’re approving everything first, runs only check');
     expect(p).toContain('/settings/overlays/preview/s-end');
 
     const preview = await t.web.request('/settings/overlays/preview/s-end', { headers: { cookie } });

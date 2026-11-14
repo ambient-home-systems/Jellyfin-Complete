@@ -2,6 +2,42 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.20.0 — 14 Nov 2026
+
+The same app, reorganised around what you want to do, in plainer words (ADR-046). Nothing is removed, your settings and collections are untouched, and every old address still works.
+
+- **Five places instead of seven.**
+  - **Home** (was Dashboard): what needs you, what broke, what's next.
+  - **Inbox:** everything waiting for a decision, with one count. **Collection changes** (was Review), **Library health** and **Missing titles** are its tabs. The last two appear once they're switched on.
+  - **Collections**, with **Already in Jellyfin** (was Existing box sets) as its second tab.
+  - **History** (was Activity), with the changes made first and the runs below.
+  - **Settings**, one page per subject, each with its own Save: Connections, Libraries and region, Approvals, Schedule, Extras, Advanced. It was one page of 11 sections.
+- **Plainer words.**
+  - Off / Review / Auto are now **Never / Ask me / Automatic**, under **Approvals**.
+  - Dry run is now **Approve everything first**.
+  - A collection **appears** and **goes away** on its **dates** (was: its window opens and closes).
+  - A proposal is a **change to approve**. Adopting a box set is **taking it over**. Films are **movies**, as in the collections' own names.
+  - "Box set" is said once, in help text. Everywhere else it's a collection.
+  - Dates read "26 Dec – 4 Jan" everywhere, and schedules read "Every day at 02:30", with the cron expression behind **Change**.
+  - The timezone is chosen from a list.
+- **Getting started** shows one step at a time, with one Continue each.
+  - The first run starts as soon as you've chosen your collections, so its results are waiting by the last step.
+  - "Collections already in Jellyfin" finishes itself when there are none.
+  - If your libraries can't be read from Jellyfin, the step says why instead of showing nothing to tick.
+- **No more dead ends before the first run.** Home offers the run in place of an empty plan, and no longer lists collections "going away" that were never there. The Inbox says a run is in progress and fills in by itself when it finishes.
+- **A collection's page** opens on what it is: its poster, where it stands in a sentence, and its titles at full width. Sources, Dates, Name and poster, and Advanced are tabs, and **one Save** covers them all, the poster included.
+  - A source has an **Ask before adding** switch (was Make suggestion / Make direct).
+  - "Sync / Append" is now **Keep in step with the lists / Only ever add**.
+  - Approvals show what Default means here: "Default: Automatic".
+- **Inbox.** **Approve all** on each collection, **Select all**, and words on the row buttons. **Bring back** (was Undo) on snoozed and dismissed changes.
+- **Collections.** Flipping a switch says what will happen in the row, with **Undo** beside it. Folded-away groups say what they are. A collection whose changes wait for you says **Needs your approval**.
+- **Home.**
+  - Problems with the app's own sources come first. Settings worth changing in Jellyfin are listed apart, as **Recommendations**, each in one line with its steps under **How to fix**.
+  - After your first approved change, Home asks once whether routine changes should happen by themselves from now on.
+- **Library health** opens with one sentence. The rest is under **How checks work**.
+- **Claude:** the tools keep their names and what they take. Claude is told the pages' new words, and messages it relays use them.
+- No change to what the app does to Jellyfin, to the database, or to `/config`.
+
 ## 0.19.0 — 14 Nov 2026
 
 - **Posters of the app's own.** 73 presets now have posters made for this app, in one style, instead of Kometa's:

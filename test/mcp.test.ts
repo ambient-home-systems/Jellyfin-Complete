@@ -25,10 +25,10 @@ const json = (r: unknown) => JSON.parse(text(r));
 /** Signed-in admin who creates a token in Settings; returns the token as the page shows it once. */
 async function makeToken(t: ReturnType<typeof setup>, name: string, scope: 'read' | 'review' | 'full') {
   const { cookie } = await signIn(t.web);
-  const csrf = await csrfOf(t.web, cookie, '/settings');
+  const csrf = await csrfOf(t.web, cookie, '/settings/advanced');
   const res = await t.web.request('/settings/claude', { ...form({ _csrf: csrf, name, scope }), headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' } });
   expect(flash(res)).toContain(`Token “${name}” created`);
-  const page = await (await t.web.request('/settings', { headers: { cookie } })).text();
+  const page = await (await t.web.request('/settings/advanced', { headers: { cookie } })).text();
   const token = page.match(/>(mjc_[A-Za-z0-9_-]{43})</)?.[1] ?? '';
   return { token, cookie, csrf, page };
 }
@@ -45,7 +45,7 @@ describe('Claude access (MCP)', () => {
     expect(token).toMatch(/^mjc_/);
     expect(page).toContain('claude mcp add --transport http maverick http://localhost/mcp --header &quot;Authorization: Bearer ' + token);
     expect(page).toContain('mcp-remote');
-    const again = await (await t.web.request('/settings', { headers: { cookie } })).text();
+    const again = await (await t.web.request('/settings/advanced', { headers: { cookie } })).text();
     expect(again).not.toContain(token);
     expect(again).toContain('Laptop');
     expect(again).toContain(`mjc_…${token.slice(-4)}`);
@@ -171,7 +171,7 @@ describe('Claude access (MCP)', () => {
     const on = json(await client.callTool({ name: 'list_collections', arguments: { only: 'on' } })).map((c: { name: string }) => c.name);
     expect(on).toContain('Crave Shows');
     expect(on).not.toContain('Channel 4 Shows');
-    expect(text(await client.callTool({ name: 'set_family_enabled', arguments: { family: 'film_series', on: true } }))).toContain('Film series');
+    expect(text(await client.callTool({ name: 'set_family_enabled', arguments: { family: 'film_series', on: true } }))).toContain('Movie series');
     expect(t.app.settings().filmSeries.enabled).toBe(true);
     expect((await client.callTool({ name: 'set_family_enabled', arguments: { family: 'nope', on: true } })).isError).toBe(true);
     // Library health in the overview.
@@ -206,9 +206,9 @@ describe('Claude access (MCP)', () => {
     const why = json(await call('explain_collection', { id: tg.id, search: 'planes' }));
     expect(why.sources[0].counts).toEqual({ member: 1 });
     expect(why.sources[0].titles[0]).toMatchObject({ title: 'Planes, Trains and Automobiles', verdict: 'member' });
-    expect(text(await call('pin_or_exclude_title', { id: tg.id, title: 'Planes, Trains and Automobiles', rule: 'exclude' }))).toContain('Excluded');
+    expect(text(await call('pin_or_exclude_title', { id: tg.id, title: 'Planes, Trains and Automobiles', rule: 'exclude' }))).toContain('Left out');
     expect(json(await call('explain_collection', { id: tg.id })).sources[0].counts).toEqual({ excluded: 1 });
-    expect(text(await call('pin_or_exclude_title', { id: tg.id, title: 'Planes, Trains and Automobiles', rule: 'clear' }))).toContain('Cleared');
+    expect(text(await call('pin_or_exclude_title', { id: tg.id, title: 'Planes, Trains and Automobiles', rule: 'clear' }))).toContain('Back to following the sources');
     expect((await call('delete_collection', { id: tg.id })).isError).toBe(true); // presets can only be turned off
 
     // Approve, then undo the addition.

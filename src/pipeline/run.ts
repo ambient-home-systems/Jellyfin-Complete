@@ -87,7 +87,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
 
     // Film series (ADR-035): one collection per TMDb film series you own enough of; new series appear as films arrive.
     if (settings.filmSeries.enabled) {
-      step('Finding film series');
+      step('Finding movie series');
       try {
         const fs = await syncFilmSeries(app, { step });
         Object.assign(stats, { filmSeries: fs.series, filmSeriesAdded: fs.created, filmSeriesLookups: fs.lookedUp });
@@ -159,7 +159,7 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
     }
 
     // Box set integrity (ADR-040): provider IDs, lock and images are the app's own; differences are repaired now.
-    step('Checking managed box sets’ artwork and TMDb links');
+    step('Checking your collections’ artwork and TMDb links');
     try {
       const ig = await checkIntegrity(identityCtx(app), defs, now);
       Object.assign(stats, { boxSetsChecked: ig.checked, boxSetsRepaired: ig.repaired, boxSetRepairsFailed: ig.failed });
