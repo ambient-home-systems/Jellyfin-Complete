@@ -256,8 +256,8 @@ export const SettingsAdvanced: FC<{ s: Settings; csrf: string; masked: Masked; m
 
 /** The optional read-only media mount (ADR-044): on or off, where it is, and how it's going. */
 const MediaFields: FC<{ s: Settings; media: MediaStatus }> = ({ s, media }) => {
-  const status = !media.enabled ? null
-    : !media.mounted ? `Nothing is mounted at ${media.dir} in this container yet.`
+  const status = !media.mounted ? `Nothing is mounted at ${media.dir} yet (the folder is missing or empty).`
+    : !media.enabled ? 'Mounted.'
     : !media.map ? 'Mounted. Jellyfin’s files will be found there on the next run.'
     : `Mounted: Jellyfin’s ${media.map.from || '/'} is ${media.map.to} here. ${media.read.toLocaleString('en-US')} ${media.read === 1 ? 'file’s' : 'files’'} own title read${media.unreadable ? `; ${media.unreadable.toLocaleString('en-US')} couldn’t be read` : ''}.`;
   return (

@@ -17,7 +17,7 @@
 // Box sets the app doesn't manage are only reported; the app changes box sets it created or adopted (ADR-040).
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
 import { ARTWORK_KINDS, artworkCheck, artworkFix, healthFinding, imageHash, integrityEvent, library, libraryItem, managedCollection, mediaCheck, overlay, type ArtworkKind, type ArtworkProposal } from '../db/schema.js';
 import { byRating, type TmdbArtwork, type TmdbClient, type TmdbImage } from '../clients/tmdb.js';
@@ -61,6 +61,54 @@ export function distance(a: string, b: string): number {
 }
 
 /** A TMDb image's fingerprint, from its smallest size (kept for good: a TMDb file path never changes). */
+/** How two pictures of a poster relate. */
+export type ArtworkLikeness = 'identical' | 'reframed' | 'retitled' | 'different';
+
+/**
+ * Compare two posters more closely than a 64-bit fingerprint can. Both are reduced to 72 × 108 greys, normalised, and
+ * compared in 96 blocks. Measured on real artwork (a 300px copy against a 92px one):
+ * - the same upload: every block within 0.10
+ * - the same picture with other lettering (another language's title): most blocks the same, a few far apart
+ * - the same picture cropped or re-graded by a few percent: blocks moderately apart all over (median 0.13–0.45)
+ * - another picture: median 0.58 or more
+ * The 64-bit fingerprint puts all four within a few bits of each other, which is why it can't decide this.
+ */
+export async function compareArtwork(a: Uint8Array, b: Uint8Array): Promise<ArtworkLikeness> {
+  const sharp = await loadSharp();
+  const W = 72, H = 108, B = 9;
+  const grid = async (bytes: Uint8Array) => {
+    const px = Float32Array.from(await sharp(bytes).greyscale().resize(W, H, { fit: 'fill' }).blur(1).raw().toBuffer());
+    let mean = 0;
+    for (const x of px) mean += x;
+    mean /= px.length;
+    let sd = 0;
+    for (const x of px) sd += (x - mean) ** 2;
+    sd = Math.sqrt(sd / px.length) || 1;
+    return px.map((x) => (x - mean) / sd);
+  };
+  const [ga, gb] = await Promise.all([grid(a), grid(b)]);
+  const blocks: number[] = [];
+  for (let by = 0; by < H / B; by++) for (let bx = 0; bx < W / B; bx++) {
+    let d = 0;
+    for (let y = 0; y < B; y++) for (let x = 0; x < B; x++) { const i = (by * B + y) * W + bx * B + x; d += Math.abs(ga[i]! - gb[i]!); }
+    blocks.push(d / (B * B));
+  }
+  blocks.sort((x, y) => x - y);
+  const median = blocks[blocks.length >> 1]!, max = blocks[blocks.length - 1]!;
+  if (median < 0.12) return max < 0.35 ? 'identical' : 'retitled';
+  return median < 0.45 ? 'reframed' : 'different';
+}
+
+/** A TMDb poster's small copy, to look at. */
+async function tmdbThumb(app: AppContext, path: string): Promise<Uint8Array | null> {
+  try {
+    const res = await app.fetch(`${IMG}/w92${path}`);
+    return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function tmdbFingerprint(app: AppContext, path: string): Promise<string | null> {
   const hit = app.db.select().from(imageHash).where(eq(imageHash.path, path)).get();
   if (hit) return hit.hash;
@@ -212,6 +260,32 @@ async function matchPoster(app: AppContext, art: TmdbArtwork, hash: string, want
 /** Two TMDb uploads of the same picture can differ a little (size, compression, a re-export): this close counts as the same. */
 export const SAME_IMAGE_DISTANCE = 16;
 
+/**
+ * The wanted-language TMDb poster that is the same picture as the current one, if there is one: the same file, a
+ * fingerprint this close, or (looked at properly) the same upload or the same picture framed a little differently.
+ * Candidates are the best-rated dozen in the language and the eight closest by fingerprint.
+ */
+async function sameInLanguage(app: AppContext, art: TmdbArtwork, current: Uint8Array, hash: string, matched: { image: TmdbImage; hash: string }, want: string, pref: TmdbImage): Promise<string | null> {
+  if (pref.path === matched.image.path) return pref.path;
+  const inLang = art.posters.filter((i) => sameLanguage(i.lang, want)).sort(byRating);
+  const near: { image: TmdbImage; d: number }[] = [];
+  for (const p of inLang.slice(0, 60)) {
+    const h = await tmdbFingerprint(app, p.path);
+    if (!h) continue;
+    const d = Math.min(distance(h, hash), distance(h, matched.hash));
+    if (d <= MATCH_DISTANCE || (p.path === pref.path && distance(h, hash) <= SAME_IMAGE_DISTANCE)) return p.path;
+    near.push({ image: p, d });
+  }
+  const candidates = [...new Set([...inLang.slice(0, 12), ...near.sort((a, b) => a.d - b.d).slice(0, 8).map((x) => x.image)])];
+  for (const p of candidates) {
+    const thumb = await tmdbThumb(app, p.path);
+    if (!thumb) continue;
+    const like = await compareArtwork(current, thumb).catch(() => 'different' as const);
+    if (like === 'identical' || like === 'reframed') return p.path;
+  }
+  return null;
+}
+
 type CheckResult = { found: Found[]; check: Omit<typeof artworkCheck.$inferInsert, 'jfId'> };
 
 /** Check one film's or show's artwork. */
@@ -258,14 +332,18 @@ export async function checkTitle(app: AppContext, jf: JellyfinClient, tmdb: Tmdb
     check.poster = { source: 'tmdb', lang: match.lang, path: match.path, aspect };
     if (match.lang && want && !sameLanguage(match.lang, want)) {
       const pref = pickImage(art.posters, want, { only: true });
-      // Before flagging: is the poster TMDb would put on the same picture as this one? (The same file, or the same
-      // image uploaded again under another language tag.) Then there's nothing to change: noted, not counted.
-      const prefHash = pref ? await tmdbFingerprint(app, pref.path) : null;
-      const same = Boolean(pref && (pref.path === match.path || (prefHash && (distance(prefHash, fp.hash) <= SAME_IMAGE_DISTANCE || distance(prefHash, matched.hash) <= MATCH_DISTANCE))));
-      if (pref && same) {
-        check.poster = { ...check.poster, sameAs: pref.path };
+      // Before flagging: is this poster the same picture as one TMDb has in the wanted language? TMDb often holds a
+      // picture more than once, under different language tags, re-uploaded or framed a little differently. Then the
+      // lettering is already right and there's nothing to change: noted, not counted. Only the same picture with
+      // other lettering, or a poster nothing in the wanted language resembles, is a language finding.
+      const sameAs = pref ? await sameInLanguage(app, art, bytes, fp.hash, matched, want, pref) : null;
+      if (pref && sameAs) {
+        check.poster = { ...check.poster, sameAs };
         check.note = `The poster has a${/^[AEIOU]/.test(languageName(match.lang)) ? 'n' : ''} ${languageName(match.lang)} tag on TMDb but is the same image as its ${languageName(want)} one.`;
-      } else if (pref) found.push({ kind: 'language', detail: `The poster is TMDb’s ${languageName(match.lang)} one; TMDb has ${languageName(want)} posters too.`, proposal: proposalOf(art, pref) });
+      } else if (pref) {
+        log.info(`Poster language: ${r.name} has TMDb’s ${languageName(match.lang)} poster ${match.path}; none of its ${languageName(want)} posters is the same picture, so ${pref.path} is suggested`);
+        found.push({ kind: 'language', detail: `The poster is TMDb’s ${languageName(match.lang)} one; TMDb has ${languageName(want)} posters too.`, proposal: proposalOf(art, pref) });
+      }
       else check.note = `TMDb has no ${languageName(want)} poster for it, so its ${languageName(match.lang)} one is kept.`;
     }
     return { found, check };
@@ -365,7 +443,10 @@ export async function checkArtwork(app: AppContext, opts: { now: number; apply: 
   for (const f of app.db.select().from(healthFinding).where(inArray(healthFinding.kind, [...ARTWORK_KINDS])).all()) {
     if (!f.subject && !ids.has(f.jfId)) app.db.delete(healthFinding).where(and(eq(healthFinding.jfId, f.jfId), eq(healthFinding.kind, f.kind))).run();
   }
-  const due = (r: Row) => { const c = checks.get(r.jfId); return !c ? 3 : c.sig !== artworkSig(r) ? 2 : opts.now - c.checkedAt > ARTWORK_LIMITS.recheckDays * DAY ? 1 : 0; };
+  // An open poster-language finding is looked at again every run: it's the check most likely to have been wrong
+  // (TMDb's language tags are), and there are never many.
+  const languageOpen = new Set(app.db.select({ id: healthFinding.jfId }).from(healthFinding).where(and(eq(healthFinding.kind, 'language'), isNull(healthFinding.dismissedAt))).all().map((f) => f.id));
+  const due = (r: Row) => { const c = checks.get(r.jfId); return !c ? 3 : c.sig !== artworkSig(r) || languageOpen.has(r.jfId) ? 2 : opts.now - c.checkedAt > ARTWORK_LIMITS.recheckDays * DAY ? 1 : 0; };
   const todo = rows.filter((r) => due(r) > 0).sort((a, b) => due(b) - due(a)).slice(0, ARTWORK_LIMITS.titlesPerRun);
   if (todo.length) opts.step?.(`Checking ${todo.length} posters`);
   for (const r of todo) {

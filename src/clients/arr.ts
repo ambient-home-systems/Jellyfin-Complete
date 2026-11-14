@@ -77,6 +77,10 @@ export class ArrClient {
    * Radarr only: when each film first arrived, by "tmdb:<id>" and "imdb:<id>" (ADR-038): the date of its first import
    * in Radarr's history (a download, or an existing folder imported), which upgrades don't move. A film with a file but
    * no import in the history counts from when it was added to Radarr.
+   *
+   * Radarr's history doesn't always reach back to the first import: a film brought in by a library import, or before
+   * the history was cleared or Radarr reinstalled, has none. Its first import *in the history* is then an upgrade. That
+   * shows as a file deleted "for upgrade" at the same moment, and such a film counts from when it was added to Radarr.
    */
   async arrivals(): Promise<Map<string, number>> {
     type Movie = { id: number; tmdbId?: number; imdbId?: string; added?: string; hasFile?: boolean };
@@ -97,10 +101,33 @@ export class ArrClient {
         if (!records.length || page * 1000 >= (r.totalRecords ?? 0)) break;
       }
     }
+    // 6: movieFileDeleted. The earliest one with reason "Upgrade" per film: the first time a file of its was replaced.
+    const firstUpgrade = new Map<number, number>();
+    for (let page = 1; page <= 200; page++) {
+      const r = await this.get<{ totalRecords?: number; records?: { movieId?: number; date?: string; eventType?: string | number; data?: { reason?: string } }[] }>(
+        `/history?page=${page}&pageSize=1000&sortKey=date&sortDirection=ascending&eventType=6`).catch(() => ({ records: [] as never[], totalRecords: 0 }));
+      const records = r.records ?? [];
+      for (const h of records) {
+        if (h.eventType !== undefined && h.eventType !== 'movieFileDeleted' && h.eventType !== 6) continue;
+        if ((h.data?.reason ?? '').toLowerCase() !== 'upgrade') continue;
+        const at = h.date ? Date.parse(h.date) : NaN;
+        if (!h.movieId || !Number.isFinite(at) || at <= 0) continue;
+        if (at < (firstUpgrade.get(h.movieId) ?? Infinity)) firstUpgrade.set(h.movieId, at);
+      }
+      if (!records.length || page * 1000 >= (r.totalRecords ?? 0)) break;
+    }
     const out = new Map<string, number>();
     for (const m of movies) {
       const added = m.added ? Date.parse(m.added) : NaN; // Radarr reports 0001-01-01 for unknown
-      const at = firstImport.get(m.id) ?? (m.hasFile && Number.isFinite(added) && added > 0 ? added : undefined);
+      const knownAdded = Number.isFinite(added) && added > 0 ? added : undefined;
+      const imported = firstImport.get(m.id);
+      const upgraded = firstUpgrade.get(m.id);
+      // The first import the history knows replaced a file (within ten minutes of an upgrade's delete, or after one):
+      // the film was here before the history begins.
+      const firstKnownIsUpgrade = imported !== undefined && upgraded !== undefined && upgraded <= imported + 10 * 60_000;
+      const at = imported !== undefined
+        ? (firstKnownIsUpgrade && knownAdded !== undefined ? Math.min(imported, knownAdded) : imported)
+        : m.hasFile ? knownAdded : undefined;
       if (at === undefined) continue;
       if (m.tmdbId) out.set(`tmdb:${m.tmdbId}`, at);
       if (m.imdbId) out.set(`imdb:${m.imdbId}`, at);

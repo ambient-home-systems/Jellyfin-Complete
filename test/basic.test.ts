@@ -169,7 +169,37 @@ describe('Recently Added counts when a title first arrived (ADR-038)', () => {
     expect(radarr.calls.filter((c) => c.path.startsWith('/history')).map((c) => c.path)).toEqual([
       '/history?page=1&pageSize=1000&sortKey=date&sortDirection=ascending&eventType=3',
       '/history?page=1&pageSize=1000&sortKey=date&sortDirection=ascending&eventType=7',
+      '/history?page=1&pageSize=1000&sortKey=date&sortDirection=ascending&eventType=6',
     ]);
+  });
+
+  it('when Radarr’s history starts with an upgrade, the film counts from when it was added to Radarr', async () => {
+    // Iron Man: in Radarr for 5 years (a library import, so no first import in its history), upgraded 2 days ago.
+    // Long Wanted: added 100 days ago, first downloaded today; nothing was replaced, so it is new.
+    const { app, fake, sourceTitles, radarr, connectRadarr } = world();
+    radarr.library = [
+      { id: 1, title: 'Iron Man', year: 2008, tmdbId: 1726, status: 'released', monitored: true, hasFile: true, added: daysAgo(1800) },
+      { id: 2, title: 'Long Wanted', year: 2024, tmdbId: 561, status: 'released', monitored: true, hasFile: true, added: daysAgo(100) },
+    ];
+    radarr.history = [
+      { movieId: 1, date: daysAgo(2), eventType: 'downloadFolderImported' },
+      { movieId: 1, date: daysAgo(2), eventType: 'movieFileDeleted', data: { reason: 'Upgrade' } },
+      { movieId: 2, date: daysAgo(0), eventType: 'downloadFolderImported' },
+    ];
+    connectRadarr();
+    fake.add({ Id: 'm-iron', Name: 'Iron Man', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(2), ProviderIds: { Tmdb: '1726' } });
+    fake.add({ Id: 'm-561', Name: 'Long Wanted', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(0), ProviderIds: { Tmdb: '561' } });
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW });
+    const added = sourceTitles('Added in the last 30 days', 'movie');
+    expect(added).not.toContain('Iron Man');
+    expect(added).toContain('Long Wanted');
+    expect(app.db.select().from(libraryItem).where(eq(libraryItem.jfId, 'm-iron')).get()!.firstAdded).toBe(Date.parse(daysAgo(1800)));
+    // A later upgrade, seen as a new Jellyfin item, doesn't bring it back either: the remembered date is kept.
+    radarr.history.push({ movieId: 1, date: new Date(NOW + DAY).toISOString(), eventType: 'downloadFolderImported' }, { movieId: 1, date: new Date(NOW + DAY).toISOString(), eventType: 'movieFileDeleted', data: { reason: 'Upgrade' } });
+    fake.items.delete('m-iron');
+    fake.add({ Id: 'm-iron2', Name: 'Iron Man', Type: 'Movie', ParentId: 'lib-movies', DateCreated: new Date(NOW + DAY).toISOString(), ProviderIds: { Tmdb: '1726' } });
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + 2 * DAY });
+    expect(sourceTitles('Added in the last 30 days', 'movie')).not.toContain('Iron Man');
   });
 
   it('corrects films remembered before Radarr was connected (an upgrade then looked new)', async () => {

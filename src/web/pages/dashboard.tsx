@@ -53,8 +53,8 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
   const failedRepairs = m.integrity.filter((e) => !e.ok);
   const repaired = m.integrity.filter((e) => e.ok);
   const serverBad = m.server?.level === 'unsupported';
-  const problems = m.failing.length + m.stale.length + failedRepairs.length + (m.hashError ? 1 : 0) + (serverBad ? 1 : 0);
-  const advice = m.autoCollections.length || m.imageFetcherRisks.length || m.audioPrefRisks.length || (m.server && m.server.level !== 'verified' && !serverBad);
+  const problems = m.failing.length + m.stale.length + failedRepairs.length + (m.hashError ? 1 : 0) + (serverBad ? 1 : 0) + (m.autoCollections.length ? 1 : 0);
+  const advice = m.imageFetcherRisks.length || m.audioPrefRisks.length || (m.server && m.server.level !== 'verified' && !serverBad);
   const tidied = groupRepairs(repaired);
   const tidiedCount = new Set(repaired.map((e) => e.definitionId)).size;
   const showVia = m.timetable.some((c) => c.via);
@@ -120,6 +120,12 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
             {m.stale.map((s) => (
               <Notice state="warn" label="Using last good results" title={s.label} line={<>{sentence(s.error)} Using its results from {fmtAgo(s.lastGoodAt, m.now)}.</>} />
             ))}
+            {/* A risk, not advice: this setting is how wrong, unsuitable artwork reached collections before (ADR-040). */}
+            {m.autoCollections.length ? (
+              <Notice state="err" label="Risk" title={`Jellyfin makes its own collections in ${m.autoCollections.join(', ')}`}
+                line="Those can get another collection’s poster and backdrop, including ones unsuitable for children."
+                fix="In Jellyfin: Dashboard → Libraries, open the library’s menu → Manage library, and untick “Automatically add to collection”." />
+            ) : null}
             {!problems ? (
               <Notice state="ok" label="OK" title={m.healthyCount ? 'Every source answered' : 'Nothing read yet'} line={m.healthyCount ? undefined : 'Sources are read on the first run.'} />
             ) : null}
@@ -138,11 +144,6 @@ export const Dashboard: FC<{ m: M; csrf: string }> = ({ m, csrf }) => {
                 <h3>Recommendations</h3>
                 <p class="faint">Jellyfin settings worth changing. Nothing is broken.</p>
                 {m.server && m.server.level !== 'verified' && !serverBad ? <Notice state="warn" label={m.server.level} title={`Jellyfin ${m.server.version}`} line={m.server.note} /> : null}
-                {m.autoCollections.length ? (
-                  <Notice state="warn" label="Recommendation" title={`Jellyfin makes its own collections in ${m.autoCollections.join(', ')}`}
-                    line="They can get another collection’s poster."
-                    fix="In Jellyfin: Dashboard → Libraries, open the library’s menu → Manage library, and untick “Automatically add to collection”." />
-                ) : null}
                 {m.imageFetcherRisks.length ? (
                   <Notice state="warn" label="Recommendation" title={`Jellyfin can take posters from the video itself in ${m.imageFetcherRisks.map((r) => r.library).join(', ')}`}
                     line="A random frame can end up as a poster."

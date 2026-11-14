@@ -81,7 +81,8 @@ export type MediaStatus = {
 export function mediaStatus(app: AppContext): MediaStatus {
   const m = app.settings().media;
   let mounted = false;
-  try { mounted = statSync(m.dir).isDirectory() && (readdirSync(m.dir), true); } catch { mounted = false; }
+  // An empty folder isn't a mount: the image's own /media exists, with nothing in it, whether or not anything is mounted.
+  try { mounted = statSync(m.dir).isDirectory() && readdirSync(m.dir).length > 0; } catch { mounted = false; }
   const counts = app.db.$client.prepare('select sum(container_read = 1) r, sum(container_read = 2) u from media_check').get() as { r: number | null; u: number | null };
   const note = (() => { const h = getCached<string | null>(app.db, 'media-note'); return h.hit ? h.value : null; })();
   return { enabled: m.enabled, dir: m.dir, mounted, map: m.map, ffmpeg: ffmpegPath(), read: counts.r ?? 0, unreadable: counts.u ?? 0, note };
@@ -103,8 +104,12 @@ export function frameAvailable(app: AppContext, row: { trickplay: boolean | null
   return Boolean(m.enabled && row.path && mapPath(row.path, m.dir, m.map) && ffmpegPath());
 }
 
-/** One frame from Jellyfin's trickplay previews, at the middle of the file. */
-async function trickplayFrame(app: AppContext, jfId: string): Promise<Uint8Array | null> {
+/** Where in a file to look: its middle, or 45 seconds before its end (credits, if it has them). */
+export type FrameAt = 'middle' | 'end';
+const END_SECONDS = 45;
+
+/** One frame from Jellyfin's trickplay previews, at the middle of the file or just before its end. */
+async function trickplayFrame(app: AppContext, jfId: string, at: FrameAt = 'middle'): Promise<Uint8Array | null> {
   const jf = app.jellyfin();
   if (!jf) return null;
   const tp = await jf.trickplay(jfId);
@@ -112,14 +117,15 @@ async function trickplayFrame(app: AppContext, jfId: string): Promise<Uint8Array
   const { info, width, mediaSourceId, durationTicks } = tp;
   if (!info.Interval || !info.Width || !info.Height || !info.TileWidth || !info.TileHeight) return null;
   const count = info.ThumbnailCount ?? Infinity;
-  const index = Math.max(0, Math.min(Math.floor(durationTicks / 10_000 / 2 / info.Interval), count - 1));
+  const ms = durationTicks / 10_000;
+  const index = Math.max(0, Math.min(Math.floor((at === 'end' ? Math.max(0, ms - END_SECONDS * 1000) : ms / 2) / info.Interval), count - 1));
   const perTile = info.TileWidth * info.TileHeight;
   const tile = await jf.trickplayTile(jfId, width, Math.floor(index / perTile), mediaSourceId);
   if (!tile) return null;
-  const at = index % perTile;
+  const cell = index % perTile;
   const sharp = await loadSharp();
   const meta = await sharp(tile).metadata();
-  const left = (at % info.TileWidth) * info.Width, top = Math.floor(at / info.TileWidth) * info.Height;
+  const left = (cell % info.TileWidth) * info.Width, top = Math.floor(cell / info.TileWidth) * info.Height;
   if (!meta.width || !meta.height || left + info.Width > meta.width || top + info.Height > meta.height) return null;
   return new Uint8Array(await sharp(tile).extract({ left, top, width: info.Width, height: info.Height }).jpeg({ quality: 85 }).toBuffer());
 }
@@ -136,19 +142,19 @@ function ffmpegFrame(ffmpeg: string, file: string, atSeconds: number): Promise<U
  * A frame from the middle of a film or episode, for the Library health page: from Jellyfin's trickplay previews if it
  * has them, else ffmpeg on the mounted file. Kept in /config/frames until the file changes. Null if neither is possible.
  */
-export async function middleFrame(app: AppContext, jfId: string): Promise<{ bytes: Uint8Array; type: string } | null> {
+export async function middleFrame(app: AppContext, jfId: string, at: FrameAt = 'middle'): Promise<{ bytes: Uint8Array; type: string } | null> {
   const c = app.db.select().from(mediaCheck).where(eq(mediaCheck.jfId, jfId)).get();
   if (!c) return null;
   const dir = framesDir(app);
-  const file = join(dir, `${jfId.replace(/[^A-Za-z0-9_-]/g, '')}-${sigHash(c.sig)}.jpg`);
+  const file = join(dir, `${jfId.replace(/[^A-Za-z0-9_-]/g, '')}-${sigHash(c.sig)}${at === 'end' ? '-end' : ''}.jpg`);
   if (existsSync(file)) return { bytes: new Uint8Array(readFileSync(file)), type: 'image/jpeg' };
   let bytes: Uint8Array | null = null;
   try {
-    if (c.trickplay) bytes = await trickplayFrame(app, jfId);
+    if (c.trickplay) bytes = await trickplayFrame(app, jfId, at);
     const m = app.settings().media;
     const ffmpeg = bytes ? null : ffmpegPath();
     const mapped = c.path && m.enabled ? mapPath(c.path, m.dir, m.map) : null;
-    if (!bytes && ffmpeg && mapped && isFile(mapped)) bytes = await ffmpegFrame(ffmpeg, mapped, ((c.durationMin ?? 0) * 60) / 2);
+    if (!bytes && ffmpeg && mapped && isFile(mapped)) bytes = await ffmpegFrame(ffmpeg, mapped, at === 'end' ? Math.max(0, (c.durationMin ?? 0) * 60 - END_SECONDS) : ((c.durationMin ?? 0) * 60) / 2);
   } catch (e) {
     log.warn(`Couldn’t get a frame of ${jfId}: ${(e as Error).message}`);
   }

@@ -259,7 +259,11 @@ const FindingsTable: FC<{ rows: HealthRow[]; tz: string; csrf: string }> = ({ ro
             <span class="chip">{KIND[r.kind]}</span>{r.kind === 'no_poster' ? null : <> {r.detail}</>}
             {r.frame ? (
               // Hidden until asked for: a mislabelled file can hold anything. The picture only loads when opened.
-              <details class="frame"><summary>Show a frame from the middle</summary><img src={`/health/img/frame/${encodeURIComponent(r.jfId)}`} alt={`A frame from the middle of ${r.title}`} width={240} height={135} loading="lazy" /></details>
+              <>
+                <details class="frame"><summary>Show a frame from the middle</summary><img src={`/health/img/frame/${encodeURIComponent(r.jfId)}`} alt={`A frame from the middle of ${r.title}`} width={240} height={135} loading="lazy" /></details>
+                {/* For a file that runs short: credits here mean it's complete and TMDb's runtime is off; a scene means it's cut off. */}
+                {r.kind === 'runtime' ? <details class="frame"><summary>Show the last minute (credits mean it’s complete)</summary><img src={`/health/img/frame/${encodeURIComponent(r.jfId)}?at=end`} alt={`A frame from 45 seconds before the end of ${r.title}`} width={240} height={135} loading="lazy" /></details> : null}
+              </>
             ) : null}
           </td>
           <td class="hide-sm">{ARTWORK.has(r.kind) ? <Artwork r={r} /> : null}</td>

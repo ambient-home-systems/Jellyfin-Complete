@@ -50,16 +50,17 @@ export function rememberFirstAdded(db: DB, indexedAt: number, radarrArrivals?: M
       const radarr = r.kind === 'movie' && radarrArrivals
         ? Math.min(...[r.tmdb && radarrArrivals.get(`tmdb:${r.tmdb}`), r.imdb && radarrArrivals.get(`imdb:${r.imdb}`)].filter((x): x is number => typeof x === 'number'))
         : Infinity;
+      const cameBack = Boolean(prev) && prev!.lastSeen < indexedAt - WEEK && previousIndex !== null && prev!.lastSeen < previousIndex;
+      // The date remembered for it, unless it was gone for over a week and has come back.
+      const remembered_ = prev && !cameBack ? prev.firstAdded : Infinity;
       let first: number;
       if (Number.isFinite(radarr)) {
-        // Radarr's first import; Jellyfin's date only if it's earlier (the file was there before Radarr imported it).
-        first = Math.min(radarr, r.dateAdded);
+        // Radarr's first import; Jellyfin's date or the remembered one if earlier (the file was here before Radarr's
+        // history begins). An earlier date is never forgotten because Radarr only knows a later one.
+        first = Math.min(radarr, r.dateAdded, remembered_);
         fromRadarr++;
-      } else if (!prev) {
-        first = r.dateAdded;
       } else {
-        const cameBack = prev.lastSeen < indexedAt - WEEK && previousIndex !== null && prev.lastSeen < previousIndex;
-        first = cameBack ? r.dateAdded : Math.min(prev.firstAdded, r.dateAdded);
+        first = Math.min(remembered_, r.dateAdded);
       }
       const values = { firstAdded: first, lastSeen: indexedAt };
       tx.insert(titleAdded).values({ key, ...values }).onConflictDoUpdate({ target: titleAdded.key, set: values }).run();

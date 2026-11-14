@@ -2,6 +2,23 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.21.2 — 14 Nov 2026
+
+Fixes from a check of 0.21.0 on a real server.
+
+- **Recently Added Movies no longer counts upgraded files** in two cases it missed.
+  - **Radarr's history doesn't reach back to the first import** (a film brought in by a library import, or before Radarr's history was cleared or Radarr reinstalled). The first import Radarr knows is then an upgrade, and the film looked new. Such a film now counts from when it was added to Radarr. It's recognised by a file deleted "for upgrade" at the same moment as that import.
+  - **A date already remembered is never replaced by a later one from Radarr.**
+  - A film asked for long ago and downloaded today still counts as new: nothing was replaced.
+  - Takes effect on the next run. No setting to change.
+- **Poster language: the same picture is no longer flagged.**
+  - The 64-bit fingerprint used to compare posters couldn't decide this: on real artwork it puts the same upload up to 12 bits apart and a different poster as close as 15.
+  - Before flagging, the current poster is now looked at properly against the best-rated and closest posters in your language. The same upload, or the same picture cropped or re-graded a little, is not flagged. The same picture with other lettering still is.
+  - Open poster-language findings are checked again on every run, so wrong ones go by themselves. When one is flagged, the run's log says which TMDb posters were compared.
+- **Library health: "Show the last minute"** on a file that runs long or short, beside the frame from the middle. End credits mean the file is complete and TMDb's runtime is off; a scene means it's cut off. It uses Jellyfin's trickplay previews, or ffmpeg on the media mount.
+- **Media mount:** `mounted` is true only when the folder has something in it. The image's own empty `/media` no longer counts. Settings and Claude's `get_settings` say how to mount it.
+- **Home:** Jellyfin's "Automatically add to collection" is listed under Problems, in red, again. 0.20.0 had moved it to Recommendations; it's the setting that put wrong artwork on collections.
+
 ## 0.21.1 — 14 Nov 2026
 
 Text the app writes itself, reviewed everywhere it's shown.

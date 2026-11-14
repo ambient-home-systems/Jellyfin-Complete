@@ -3,7 +3,7 @@
 // can be undone. The ambiguous titles from the artwork incident (Inside Out, 9-1-1, Twister, Night at the Museum,
 // Home Alone, Narnia, TMNT) must always get their own artwork, never a lookalike's.
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
@@ -14,7 +14,7 @@ import { readConfig } from '../src/config.js';
 import { runPipeline } from '../src/pipeline/run.js';
 import { artworkCheck, artworkFix, definition, healthFinding, overlay } from '../src/db/schema.js';
 import { originalsDir } from '../src/overlays/sync.js';
-import { artworkSummary, distance, fingerprint, pathNames, resetArtwork, undoArtworkFix } from '../src/library/artwork.js';
+import { artworkSummary, compareArtwork, distance, fingerprint, pathNames, resetArtwork, undoArtworkFix } from '../src/library/artwork.js';
 import { audioVerdict, healthRows, openFindingCount } from '../src/library/health.js';
 import { lang2, sameLanguage } from '../src/library/languages.js';
 import { dashboardModel } from '../src/web/model.js';
@@ -193,6 +193,32 @@ describe('the pieces', () => {
     expect(audioVerdict([{ lang: 'spa', isDefault: false }, { lang: 'eng', isDefault: false }], 'en')).toMatch(/^It plays in Spanish/); // no default flag: the first plays
     expect(audioVerdict([{ lang: 'eng', isDefault: true }, { lang: 'fre', isDefault: false }], 'en')).toBeNull();
     expect(audioVerdict([{ lang: 'fre', isDefault: true }, { lang: 'ger', isDefault: false }], 'en')).toBeNull(); // no English to play instead
+  });
+});
+
+describe('telling the same poster from another', () => {
+  // Real artwork (the app's own posters) with lettering set on it, as film posters have. The current poster is what
+  // Jellyfin serves (300px); TMDb's are its 92px copies. The 64-bit fingerprint puts the same upload up to 12 bits away
+  // and another poster as close as 15, which is how identical posters used to be flagged as "another language".
+  const ART = 'assets/posters/art';
+  // Lettering drawn as blocks (no font needed): each "word" is a row of white bars with a black edge.
+  const lettering = (text: string, y: number) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1500">${[...text].map((ch, i) => `<rect x="${500 - text.length * 60 + i * 120}" y="${y + (ch.charCodeAt(0) % 3) * 25}" width="${50 + (ch.charCodeAt(0) % 5) * 12}" height="${110 + (ch.charCodeAt(0) % 4) * 20}" fill="#fff" stroke="#000" stroke-width="8"/>`).join('')}</svg>`);
+  const u8 = async (p: Promise<Buffer>) => new Uint8Array(await p);
+
+  it('sees the same upload, a re-framed copy, other lettering and another picture for what they are', async () => {
+    const files = readdirSync(ART).filter((x) => x.endsWith('.webp')).slice(0, 8);
+    for (let i = 0; i < files.length; i++) {
+      const base = await sharp(readFileSync(join(ART, files[i]!))).resize(1000, 1500, { fit: 'cover' }).jpeg().toBuffer();
+      const english = await sharp(base).composite([{ input: lettering('BRAVE', 1150) }]).jpeg({ quality: 90 }).toBuffer();
+      const french = await sharp(base).composite([{ input: lettering('REBELLE', 1150) }]).jpeg({ quality: 90 }).toBuffer();
+      const current = await u8(sharp(english).resize(300).jpeg({ quality: 80 }).toBuffer());
+      const label = files[i]!;
+      expect(await compareArtwork(current, await u8(sharp(english).resize(92).jpeg({ quality: 70 }).toBuffer())), label).toBe('identical');
+      expect(await compareArtwork(current, await u8(sharp(english).extract({ left: 30, top: 45, width: 940, height: 1410 }).modulate({ brightness: 1.08 }).resize(92).jpeg({ quality: 75 }).toBuffer())), label).toBe('reframed');
+      expect(await compareArtwork(current, await u8(sharp(french).resize(92).jpeg({ quality: 75 }).toBuffer())), label).toBe('retitled');
+      const other = await sharp(readFileSync(join(ART, files[(i + 5) % files.length]!))).resize(92, 138, { fit: 'cover' }).jpeg().toBuffer();
+      expect(await compareArtwork(current, new Uint8Array(other)), label).toBe('different');
+    }
   });
 });
 
