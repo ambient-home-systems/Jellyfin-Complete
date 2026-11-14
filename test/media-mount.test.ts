@@ -81,6 +81,17 @@ const run = (app: ReturnType<typeof world>['app'], now = NOW) => runPipeline(app
 const titleFindings = (app: ReturnType<typeof world>['app']) => Object.fromEntries(app.db.select().from(healthFinding).all().filter((f) => f.kind === 'title').map((f) => [f.jfId, f.detail]));
 
 describe('a file’s own title, from the mount', () => {
+  it('says "mounted" only when the folder has something in it (the image’s own empty /media isn’t a mount)', () => {
+    const { app } = world();
+    const empty = mkdtempSync(join(tmpdir(), 'mc-empty-'));
+    app.updateSettings({ media: { ...app.settings().media, dir: empty } });
+    expect(mediaStatus(app).mounted).toBe(false);
+    writeFileSync(join(empty, 'film.mkv'), 'x');
+    expect(mediaStatus(app).mounted).toBe(true);
+    app.updateSettings({ media: { ...app.settings().media, dir: join(empty, 'nowhere') } });
+    expect(mediaStatus(app).mounted).toBe(false);
+  });
+
   it('reads each new file’s own title once, and flags one naming another film', async () => {
     const { app, m } = world();
     await run(app);

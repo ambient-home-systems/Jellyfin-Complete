@@ -871,6 +871,22 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - A decision's Undo lives only in the address of the page that follows it. Reloading keeps it; navigating away loses it, and History's Undo remains.
   - Undoing an approval that created a collection leaves its other approved changes marked as applied in History, as undoing a create there always has.
 
+### ADR-048 First-added dates and same-poster checks, after a check on a real server: Decided (14 Nov)
+- **Context.** A check of 0.21.0 on your server found Recently Added Movies still holding films that were only upgraded (ADR-038), and nine poster-language findings whose poster was the same picture as the English one (ADR-043).
+- **Decision.**
+  - **First added, with Radarr (amends ADR-038).** The first import in Radarr's history is the film's arrival only if nothing was replaced then. If a file was deleted "for upgrade" (history event 6, reason Upgrade) within ten minutes of that import or before it, the history doesn't reach the true first import, and the film counts from Radarr's `added` date when that's earlier. A remembered date is kept when Radarr's is later.
+    - `added` alone isn't used for every film, because a film wanted for months and downloaded today is new.
+  - **Same poster (amends ADR-043).** A 9 × 8 difference hash can't separate the cases: measured on real artwork, the same upload is 2 to 12 bits from itself at another size, a 3% crop 8 to 16, another poster 15 to 35. `compareArtwork` reduces both pictures to 72 × 108 normalised greys and compares 96 blocks:
+    - median under 0.12 and no block over 0.35: the same upload
+    - median under 0.12 with a block over 0.35: the same picture with other lettering, which is what a language variant is
+    - median 0.12 to 0.45: the same picture framed or graded differently
+    - above: another picture
+    - A poster tagged another language is flagged only if no poster in the wanted language is the same upload or a re-framed copy of it. A re-framed copy's lettering can't be compared, so it's given the benefit of the doubt: a missed finding costs less than a false one someone has to check.
+  - **Short files.** Telling a cut-off file from a wrong TMDb runtime automatically would need credits detection. Chapter names are rarely there, and guessing credits from frames would be wrong often enough to mislead. So the page shows the last minute on request, and a person decides in a second.
+- **Consequences.**
+  - Each run asks Radarr for one more kind of history event.
+  - A poster-language check can fetch up to 20 more 92px posters for a title, only when its poster is tagged another language.
+
 ---
 
 

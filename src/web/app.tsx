@@ -615,7 +615,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     return imageReply({ bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get('content-type') ?? 'image/jpeg' });
   });
   web.get('/health/img/backup/:id', (c) => imageReply(backupPoster(app, Number(c.req.param('id')))));
-  web.get('/health/img/frame/:id', async (c) => imageReply(await middleFrame(app, c.req.param('id')).catch(() => null)));
+  web.get('/health/img/frame/:id', async (c) => imageReply(await middleFrame(app, c.req.param('id'), c.req.query('at') === 'end' ? 'end' : 'middle').catch(() => null)));
   web.post('/health/reopen', async (c) => {
     const b = await c.req.parseBody();
     const ok = reopenFinding(app, String(b.jfId ?? ''), HEALTH_KINDS.includes(String(b.kind) as HealthKind) ? (String(b.kind) as HealthKind) : 'runtime');
