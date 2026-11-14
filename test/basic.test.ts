@@ -49,7 +49,8 @@ describe('basic presets vs Kometa v2.5.3 defaults/chart/basic.yml', () => {
 
 const RADARR = 'http://radarr.test:7878';
 
-function world(opts: { radarr?: Record<number, { added: number; imports?: number[] }> } = {}) {
+/** `imports`: days ago Radarr fetched and imported a file (a grab, then the import). `manual`: days ago an existing file was imported by hand (no grab). */
+function world(opts: { radarr?: Record<number, { added: number; imports?: number[]; manual?: number[] }> } = {}) {
   const fake = new FakeJellyfin();
   const film = (Id: string, Name: string, released: number | null, added: number, tmdb?: number) => fake.add({ Id, Name, Type: 'Movie', ParentId: 'lib-movies', ProductionYear: 2026, ...(released === null ? {} : { PremiereDate: daysAgo(released) }), DateCreated: daysAgo(added), ...(tmdb ? { ProviderIds: { Tmdb: String(tmdb) } } : {}) });
   film('m-new', 'Fresh Film', 10, 5); // released 10 days ago, added 5 days ago
@@ -65,7 +66,10 @@ function world(opts: { radarr?: Record<number, { added: number; imports?: number
   ep('e-older', 1, 7);
   const radarr = new FakeArr('radarr', RADARR, 'rk', []);
   radarr.library = Object.entries(opts.radarr ?? {}).map(([tmdb, r], i) => ({ id: i + 1, title: `Film ${tmdb}`, year: 2026, tmdbId: Number(tmdb), status: 'released', monitored: true, hasFile: true, added: daysAgo(r.added) }));
-  radarr.history = Object.values(opts.radarr ?? {}).flatMap((r, i) => (r.imports ?? []).map((ago) => ({ movieId: i + 1, date: daysAgo(ago), eventType: 'downloadFolderImported' as const })));
+  radarr.history = Object.values(opts.radarr ?? {}).flatMap((r, i) => [
+    ...(r.imports ?? []).flatMap((ago) => [{ movieId: i + 1, date: daysAgo(ago), eventType: 'grabbed' as const }, { movieId: i + 1, date: daysAgo(ago), eventType: 'downloadFolderImported' as const }]),
+    ...(r.manual ?? []).map((ago) => ({ movieId: i + 1, date: daysAgo(ago), eventType: 'downloadFolderImported' as const })),
+  ]);
   const radarrFetch = radarr.fetch();
   const net: FetchLike = async (url, init) => {
     if (url.startsWith(RADARR)) return radarrFetch(url, init);
@@ -155,8 +159,8 @@ describe('Recently Added counts when a title first arrived (ADR-038)', () => {
 
   it('with Radarr connected, a film arrived when Radarr first imported it: upgrades never make it new', async () => {
     // 560: imported 300 days ago, upgraded today (a second import). 561: wanted for 100 days, downloaded today.
-    // 562: added with its file 50 days ago, no import in Radarr's history.
-    const { app, fake, sourceTitles, radarr } = world({ radarr: { 560: { added: 310, imports: [300, 0] }, 561: { added: 100, imports: [0] }, 562: { added: 50 } } });
+    // 562: added with its file 5 days ago, no import in Radarr's history: a file that was already there, not an arrival.
+    const { app, fake, sourceTitles, radarr } = world({ radarr: { 560: { added: 310, imports: [300, 0] }, 561: { added: 100, imports: [0] }, 562: { added: 5 } } });
     fake.add({ Id: 'm-560', Name: 'Upgraded Today', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(0), ProviderIds: { Tmdb: '560' } });
     fake.add({ Id: 'm-561', Name: 'Long Wanted', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(0), ProviderIds: { Tmdb: '561' } });
     fake.add({ Id: 'm-562', Name: 'Added With File', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(1), ProviderIds: { Tmdb: '562' } });
@@ -169,6 +173,7 @@ describe('Recently Added counts when a title first arrived (ADR-038)', () => {
     expect(radarr.calls.filter((c) => c.path.startsWith('/history')).map((c) => c.path)).toEqual([
       '/history?page=1&pageSize=1000&sortKey=date&sortDirection=ascending&eventType=3',
       '/history?page=1&pageSize=1000&sortKey=date&sortDirection=ascending&eventType=7',
+      '/history?page=1&pageSize=1000&sortKey=date&sortDirection=ascending&eventType=1',
       '/history?page=1&pageSize=1000&sortKey=date&sortDirection=ascending&eventType=6',
     ]);
   });
@@ -182,8 +187,10 @@ describe('Recently Added counts when a title first arrived (ADR-038)', () => {
       { id: 2, title: 'Long Wanted', year: 2024, tmdbId: 561, status: 'released', monitored: true, hasFile: true, added: daysAgo(100) },
     ];
     radarr.history = [
+      { movieId: 1, date: daysAgo(2), eventType: 'grabbed' },
       { movieId: 1, date: daysAgo(2), eventType: 'downloadFolderImported' },
       { movieId: 1, date: daysAgo(2), eventType: 'movieFileDeleted', data: { reason: 'Upgrade' } },
+      { movieId: 2, date: daysAgo(0), eventType: 'grabbed' },
       { movieId: 2, date: daysAgo(0), eventType: 'downloadFolderImported' },
     ];
     connectRadarr();
@@ -209,11 +216,48 @@ describe('Recently Added counts when a title first arrived (ADR-038)', () => {
     await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW });
     expect(sourceTitles('Added in the last 30 days', 'movie')).toContain('Replaced Early');
     radarr.library = [{ id: 1, title: 'Replaced Early', year: 2020, tmdbId: 570, status: 'released', monitored: true, hasFile: true, added: daysAgo(400) }];
-    radarr.history = [{ movieId: 1, date: daysAgo(390), eventType: 'downloadFolderImported' }, { movieId: 1, date: daysAgo(2), eventType: 'downloadFolderImported' }];
+    radarr.history = [{ movieId: 1, date: daysAgo(390), eventType: 'grabbed' }, { movieId: 1, date: daysAgo(390), eventType: 'downloadFolderImported' }, { movieId: 1, date: daysAgo(2), eventType: 'grabbed' }, { movieId: 1, date: daysAgo(2), eventType: 'downloadFolderImported' }];
     connectRadarr();
     await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + DAY });
     expect(sourceTitles('Added in the last 30 days', 'movie')).not.toContain('Replaced Early');
     expect(app.db.select().from(libraryItem).where(eq(libraryItem.jfId, 'm-up')).get()!.firstAdded).toBe(Date.parse(daysAgo(390)));
+  });
+
+  it('a file brought into Radarr by hand (no grab before its first import) is not an arrival, however it is upgraded after', async () => {
+    // From a real server, after a library reorganisation:
+    // Iron Man: added to Radarr 14 days ago; an existing SD file imported by hand 4 days ago; upgraded yesterday.
+    // Captain Phillips: added and imported by hand 4 days ago; replaced yesterday.
+    // Long Wanted: added 100 days ago; Radarr fetched it today. That one is new.
+    const { app, fake, sourceTitles, radarr, connectRadarr } = world();
+    radarr.library = [
+      { id: 1, title: 'Iron Man', year: 2008, tmdbId: 1726, status: 'released', monitored: true, hasFile: true, added: daysAgo(14) },
+      { id: 2, title: 'Captain Phillips', year: 2013, tmdbId: 109424, status: 'released', monitored: true, hasFile: true, added: daysAgo(4) },
+      { id: 3, title: 'Long Wanted', year: 2024, tmdbId: 561, status: 'released', monitored: true, hasFile: true, added: daysAgo(100) },
+    ];
+    radarr.history = [
+      { movieId: 1, date: daysAgo(4), eventType: 'downloadFolderImported' },
+      { movieId: 1, date: daysAgo(1), eventType: 'grabbed' },
+      { movieId: 1, date: daysAgo(1), eventType: 'downloadFolderImported' },
+      { movieId: 1, date: daysAgo(1), eventType: 'movieFileDeleted', data: { reason: 'Upgrade' } },
+      { movieId: 2, date: daysAgo(4), eventType: 'downloadFolderImported' },
+      { movieId: 2, date: daysAgo(1), eventType: 'grabbed' },
+      { movieId: 2, date: daysAgo(1), eventType: 'downloadFolderImported' },
+      { movieId: 2, date: daysAgo(1), eventType: 'movieFileDeleted', data: { reason: 'Upgrade' } },
+      { movieId: 3, date: daysAgo(0), eventType: 'grabbed' },
+      { movieId: 3, date: daysAgo(0), eventType: 'downloadFolderImported' },
+    ];
+    // The app had already remembered them as arriving this week (what 0.21.2 did): that's corrected too.
+    fake.add({ Id: 'm-iron', Name: 'Iron Man', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(1), ProviderIds: { Tmdb: '1726' } });
+    fake.add({ Id: 'm-phil', Name: 'Captain Phillips', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(1), ProviderIds: { Tmdb: '109424' } });
+    fake.add({ Id: 'm-561', Name: 'Long Wanted', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(0), ProviderIds: { Tmdb: '561' } });
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW });
+    expect(sourceTitles('Added in the last 30 days', 'movie')).toEqual(expect.arrayContaining(['Iron Man', 'Captain Phillips']));
+    connectRadarr();
+    await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + DAY });
+    const added = sourceTitles('Added in the last 30 days', 'movie');
+    expect(added).not.toContain('Iron Man');
+    expect(added).not.toContain('Captain Phillips');
+    expect(added).toContain('Long Wanted');
   });
 
   it('a title gone for over a week that comes back counts as newly added', async () => {

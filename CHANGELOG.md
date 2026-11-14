@@ -2,6 +2,16 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.21.3 — 14 Nov 2026
+
+- **Recently Added Movies: a file Radarr didn't fetch is not an arrival.** 0.21.2's fix missed films that were brought into Radarr by hand during a library reorganisation and upgraded a few days later.
+  - A film now counts as arriving only when Radarr **fetched** it: its first import has a "grabbed" before it.
+  - A first import with no grab before it is a file that already existed (imported by hand, or by a library import). It never counts as recently added, however it's upgraded afterwards. Nor does a file Radarr has with no import in its history.
+  - When such a file really arrived can't be known from Radarr, so no date is guessed.
+  - Dates the app had already remembered for those films are corrected on the next run.
+  - A film you add by hand and want shown as recently added: leave it out of Radarr, and it goes by Jellyfin's date.
+- **Frames with ffmpeg:** Settings, the user guide, `docker-compose.yml` and Claude's `get_settings` now say exactly what's needed: a static ffmpeg mounted at `/usr/local/bin/ffmpeg`. The image still doesn't include one.
+
 ## 0.21.2 — 14 Nov 2026
 
 Fixes from a check of 0.21.0 on a real server.

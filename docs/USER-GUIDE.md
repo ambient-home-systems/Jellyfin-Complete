@@ -83,7 +83,9 @@ Five collections that follow your library's own dates:
 
 - Days are whole days, today included. A release date still to come doesn't count.
 - **Added means first arrived.** A replaced file, such as a Radarr or Sonarr upgrade, keeps its first date, so upgrades don't show as new.
-  - **With Radarr connected,** a movie arrived when Radarr first imported it (from Radarr's history). Upgrades don't move that date, and a movie you asked Radarr for long before it downloaded counts from the download. This is checked on every run, so it doesn't matter when you connected Radarr. A movie with no import in Radarr's history counts from when it was added to Radarr.
+  - **With Radarr connected,** a movie arrived when Radarr first fetched and imported it (from Radarr's history). Upgrades don't move that date, and a movie you asked Radarr for long before it downloaded counts from the download. This is checked on every run, so it doesn't matter when you connected Radarr.
+    - **A file Radarr didn't fetch is not an arrival.** A file imported into Radarr by hand, or by a library import (after a reorganisation, say), was already yours: its first import has no "grabbed" before it. It never counts as recently added, even when Radarr upgrades it afterwards.
+    - To have a movie you added by hand show as recently added, leave it out of Radarr; it then goes by Jellyfin's date.
   - **Otherwise,** the app remembers the first date it saw each movie (by its TMDb ID) and each episode, and a title that was gone for over a week and comes back counts as new.
   - **A show** was added when its newest episode was, so it comes back when a new episode arrives.
 - They change every night: titles that have aged out are taken out without asking (unless you're approving everything first). You can change that, or the number of days, per collection.
@@ -221,7 +223,14 @@ On the next run, the app works out where Jellyfin's files are under the mount by
 
 **A frame from the middle.** A flagged file can show one frame from its middle, hidden behind **Show a frame from the middle** until you open it (a mislabelled file can hold anything). It comes from:
 - **Jellyfin's trickplay previews,** when Jellyfin has made them for that file. Turn trickplay on per library in Jellyfin (Dashboard → Libraries → the library → Trickplay). No mount or ffmpeg is needed.
-- **ffmpeg on the mounted file,** otherwise. The image doesn't include ffmpeg (it would add a few hundred MB for everyone). To use one, mount an ffmpeg binary into the container and set `FFMPEG_PATH` to it.
+- **ffmpeg on the mounted file,** otherwise. The image doesn't include ffmpeg, so this needs three things:
+  1. the media mount, working (Settings → Advanced → Media files says "Mounted")
+  2. a **static** Linux build of ffmpeg for your server's CPU (amd64 or arm64) on the host, executable, and readable by uid 1000. Jellyfin's own ffmpeg won't do: it needs libraries that aren't in this container.
+  3. that file mounted into the container: add `- /path/to/static/ffmpeg:/usr/local/bin/ffmpeg:ro` under `volumes` and recreate the container. Mounted anywhere else, also set `FFMPEG_PATH` to its path in the container.
+
+  Settings → Advanced → Media files then says "ffmpeg: found", and `get_settings` shows `ffmpegForFrames`.
+
+**Show the last minute** is the same thing, 45 seconds before the end, on a file whose length doesn't match: end credits mean the file is complete and TMDb's runtime is off; a scene means it's cut off.
 
 Frames are kept in `/config/frames` until the file changes.
 

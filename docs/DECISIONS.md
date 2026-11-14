@@ -883,8 +883,12 @@ Each entry is a short ADR: context, options, recommendation, consequences.
     - above: another picture
     - A poster tagged another language is flagged only if no poster in the wanted language is the same upload or a re-framed copy of it. A re-framed copy's lettering can't be compared, so it's given the benefit of the doubt: a missed finding costs less than a false one someone has to check.
   - **Short files.** Telling a cut-off file from a wrong TMDb runtime automatically would need credits detection. Chapter names are rarely there, and guessing credits from frames would be wrong often enough to mislead. So the page shows the last minute on request, and a person decides in a second.
+  - **First added: only what Radarr fetched (0.21.3).** The first fix missed your case: films added to Radarr around 31 Oct, their existing files imported by hand on 6–10 Nov (a first import with no grab before it), then upgraded on 13 Nov. Radarr's `added` was itself inside the 30 days, so falling back to it changed nothing.
+    - A film is an arrival only if a "grabbed" event (type 1) comes at or before its first import. Otherwise the file already existed, and it is dated 1 Jan 2000: never recently added. The same goes for a file Radarr has with no import in its history.
+    - No date is guessed for those. Jellyfin's date for the file that was replaced is gone, and Radarr never had one.
+    - What this costs: a film you obtain yourself and import into Radarr by hand never shows as recently added. Left out of Radarr, it goes by Jellyfin's date.
 - **Consequences.**
-  - Each run asks Radarr for one more kind of history event.
+  - Each run asks Radarr for two more kinds of history event (grabs and deletes).
   - A poster-language check can fetch up to 20 more 92px posters for a title, only when its poster is tagged another language.
 
 ---

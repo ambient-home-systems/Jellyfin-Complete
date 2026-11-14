@@ -29,7 +29,7 @@ export class FakeArr {
       if (path === '/rootfolder') return json([{ path: this.app === 'radarr' ? '/movies' : '/tv', freeSpace: 1_099e9, accessible: true }]);
       if (path === '/tag') return json([{ id: 3, label: 'maverick' }]);
       if (path === '/history' && method === 'GET') {
-        const want = { 3: 'downloadFolderImported', 6: 'movieFileDeleted', 7: 'movieFolderImported' }[Number(url.searchParams.get('eventType'))];
+        const want = { 1: 'grabbed', 3: 'downloadFolderImported', 6: 'movieFileDeleted', 7: 'movieFolderImported' }[Number(url.searchParams.get('eventType'))];
         const all = this.history.filter((h) => !want || h.eventType === want).sort((a, b) => a.date.localeCompare(b.date));
         const page = Number(url.searchParams.get('page') ?? 1), size = Number(url.searchParams.get('pageSize') ?? 10);
         return json({ page, pageSize: size, totalRecords: all.length, records: all.slice((page - 1) * size, page * size) });
