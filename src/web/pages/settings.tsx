@@ -6,6 +6,7 @@ import type { SecretName } from '../../secrets.js';
 import { JOBS } from '../../jobs/schedules.js';
 import { ClaudeAccess, type Reveal } from './claude-access.js';
 import type { ApiToken } from '../api-tokens.js';
+import type { MediaStatus } from '../../library/media.js';
 
 export type ConnRow = { key: string; name: string; urlField?: keyof Settings['connections']; secret?: SecretName; secretLabel: string; note?: string; optional?: boolean };
 export const CONNECTIONS: ConnRow[] = [
@@ -28,7 +29,9 @@ export const SettingsPage: FC<{
   libError?: string | null;
   schedules: { job: string; cron: string; enabled: boolean; next: Date | null }[];
   claude: { tokens: ApiToken[]; reveal: Reveal | null; endpoint: string };
-}> = ({ s, csrf, masked, libraries, libError, schedules, claude }) => (
+  /** The optional read-only media mount, as it is now (ADR-044). */
+  media: MediaStatus;
+}> = ({ s, csrf, masked, libraries, libError, schedules, claude, media }) => (
   <>
     <header class="top"><h1>Settings</h1></header>
     <div class="content">
@@ -79,6 +82,7 @@ export const SettingsPage: FC<{
                   <span class="hint">Only “No poster” and “Poster from the video or file”, from TMDb, by the title’s confirmed TMDb ID, while dry run is off. The old one is kept, to undo. Everything else waits for you.</span></div>
                 <div class="field"><label for="region">Streaming country</label><input id="region" name="streamingRegion" type="text" value={s.streaming.region} maxlength={2} pattern="[A-Za-z]{2}" class="num" autocomplete="off" /><span class="hint">Streaming collections count the services offered here. Two letters, such as US, GB or CA. Streaming data from JustWatch, through TMDb.</span></div>
               </div>
+              <MediaFields s={s} media={media} />
               <div><button class="btn primary" type="submit">Save</button></div>
             </form>
           </section>
@@ -188,3 +192,27 @@ export const SettingsPage: FC<{
     </div>
   </>
 );
+
+/** The optional read-only media mount (ADR-044): on or off, where it is, and how it's going. */
+const MediaFields: FC<{ s: Settings; media: MediaStatus }> = ({ s, media }) => {
+  const status = !media.enabled ? null
+    : !media.mounted ? `Nothing is mounted at ${media.dir} in this container yet.`
+    : !media.map ? 'Mounted. Jellyfin’s files will be found there on the next run.'
+    : `Mounted: Jellyfin’s ${media.map.from || '/'} is ${media.map.to} here. ${media.read.toLocaleString('en-US')} ${media.read === 1 ? 'file’s' : 'files’'} own title read${media.unreadable ? `; ${media.unreadable.toLocaleString('en-US')} couldn’t be read` : ''}.`;
+  return (
+    <div class="grid3">
+      <div class="field"><span class="label">Media files (optional)</span>
+        <input type="hidden" name="mediaSent" value="1" />
+        <label class="check"><input type="checkbox" name="mediaEnabled" value="1" checked={s.media.enabled} /> Read each new file’s own title from a read-only mount</label>
+        <span class="hint">Jellyfin doesn’t show a file’s own title, the tag that gives away a film hiding inside another’s file. Mount your media folder read-only, for example <code>- /srv/media:/media:ro</code> under <code>volumes</code>, readable by uid 1000. Only a few kilobytes of each new file are read; nothing is ever changed.</span>
+      </div>
+      <div class="field"><label for="mediaDir">Mounted at (in this container)</label><input id="mediaDir" name="mediaDir" type="text" value={s.media.dir} autocomplete="off" />
+        {status ? <span class="hint">{status}</span> : null}
+        {media.enabled && media.note ? <span class="hint warn-text">{media.note}</span> : null}
+      </div>
+      <div class="field"><span class="label">Frames from the middle</span>
+        <span class="hint">Library health can show one frame from the middle of a flagged file, hidden until you open it. It comes from Jellyfin’s trickplay previews when Jellyfin has made them (Dashboard → Libraries → library → Trickplay). Otherwise, with the media mount on, it comes from ffmpeg on the file: {media.ffmpeg ? <b>found ({media.ffmpeg})</b> : 'not in this image; mount an ffmpeg binary and set FFMPEG_PATH to use it'}.</span>
+      </div>
+    </div>
+  );
+};

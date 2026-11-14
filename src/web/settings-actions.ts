@@ -40,6 +40,9 @@ export type SettingsPatch = {
   healthEnabled?: boolean;
   /** Libraries where "No poster" and "Poster from the video or file" are fixed from TMDb by themselves (ADR-043). */
   healthAutoFixLibraryIds?: string[];
+  /** The read-only media mount (ADR-044): on or off, and where it's mounted in the container. */
+  mediaEnabled?: boolean;
+  mediaDir?: string;
 };
 
 /** Check the whole patch, then save it. Throws SettingsError with a message for people. */
@@ -117,6 +120,13 @@ export function applySettings(app: AppContext, patch: SettingsPatch): { changed:
     const bad = patch.healthAutoFixLibraryIds.filter((id) => !known.has(id));
     if (bad.length) throw new SettingsError(`Unknown library: ${bad.join(', ')}.`);
     next.health = { ...s.health, ...next.health, autoFixLibraryIds: [...new Set(patch.healthAutoFixLibraryIds)] };
+  }
+  if (patch.mediaEnabled !== undefined || patch.mediaDir !== undefined) {
+    const dir = patch.mediaDir === undefined ? s.media.dir : patch.mediaDir.trim();
+    if (!/^\/[^\0]*$/.test(dir) || dir.split('/').includes('..')) throw new SettingsError('The media folder must be an absolute path inside the container, such as /media.');
+    if (['/', '/config', '/app', '/proc', '/sys', '/dev', '/etc'].includes(dir.replace(/\/+$/, '') || '/')) throw new SettingsError(`The media folder can’t be ${dir}: mount your media at its own folder, such as /media.`);
+    // A new folder means finding Jellyfin's files in it again.
+    next.media = { ...s.media, enabled: patch.mediaEnabled ?? s.media.enabled, dir, map: dir === s.media.dir ? s.media.map : null };
   }
   if (patch.overlays) next.overlays = { ...s.overlays, ...Object.fromEntries(Object.entries(patch.overlays).filter(([, v]) => v !== undefined)) };
   app.updateSettings(next);

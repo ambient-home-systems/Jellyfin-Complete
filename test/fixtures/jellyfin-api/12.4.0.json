@@ -218,6 +218,11 @@
    "get": [],
    "post": []
   },
+  "/videos/{}/trickplay/{}/{}.jpg": {
+   "get": [
+    "mediaSourceId"
+   ]
+  },
   "/collections": {
    "post": [
     "ids",
@@ -726,6 +731,15 @@
    "SortReplaceCharacters",
    "TrickplayOptions",
    "UICulture"
+  ],
+  "TrickplayInfo|TrickplayInfoDto": [
+   "Bandwidth",
+   "Height",
+   "Interval",
+   "ThumbnailCount",
+   "TileHeight",
+   "TileWidth",
+   "Width"
   ]
  },
  "enums": {

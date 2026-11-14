@@ -213,7 +213,7 @@ export class JellyfinClient {
   async mediaDetails(ids: string[]): Promise<Map<string, MediaDetails>> {
     const out = new Map<string, MediaDetails>();
     for (const batch of chunk(ids, 50)) {
-      for (const it of await this.allItems({ Ids: batch.join(','), Fields: 'MediaSources,Path' })) {
+      for (const it of await this.allItems({ Ids: batch.join(','), Fields: 'MediaSources,Path,Trickplay' })) {
         if (!it.Id) continue;
         const src = it.MediaSources?.[0];
         const streams = src?.MediaStreams ?? [];
@@ -223,7 +223,8 @@ export class JellyfinClient {
         const pic = streams.find((m) => m.Type === 'EmbeddedImage');
         const attached = (src?.MediaAttachments ?? []).some((a) => (a.MimeType ?? '').startsWith('image/'));
         const embeddedImage = pic ? { w: pic.Width ?? null, h: pic.Height ?? null, via: 'stream' as const } : attached ? { w: null, h: null, via: 'attachment' as const } : null;
-        out.set(it.Id, { durationTicks: src?.RunTimeTicks ?? null, path: src?.Path ?? it.Path ?? null, titles, audio, embeddedImage });
+        const trickplay = Object.values(it.Trickplay ?? {}).some((byWidth) => Object.keys(byWidth ?? {}).length > 0);
+        out.set(it.Id, { durationTicks: src?.RunTimeTicks ?? null, path: src?.Path ?? it.Path ?? null, titles, audio, embeddedImage, trickplay });
       }
     }
     return out;
@@ -252,6 +253,26 @@ export class JellyfinClient {
     if (res.status === 404) return null;
     if (!res.ok) throw new HttpError(res.status, url, (await res.text()).slice(0, 300));
     return { bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get('content-type')?.split(';')[0] || 'image/jpeg' };
+  }
+
+  /** An item's trickplay previews (ADR-044): the size nearest 320 wide, its media source and the file's length. */
+  async trickplay(id: string): Promise<{ info: TrickplayInfo; width: number; mediaSourceId: string; durationTicks: number } | null> {
+    const [it] = await this.allItems({ Ids: id, Fields: 'Trickplay,MediaSources' });
+    const bySource = Object.entries(it?.Trickplay ?? {}).find(([, w]) => w && Object.keys(w).length);
+    if (!it || !bySource) return null;
+    const [mediaSourceId, widths] = bySource as [string, Record<string, TrickplayInfo>];
+    const width = Object.keys(widths).map(Number).sort((a, b) => Math.abs(a - 320) - Math.abs(b - 320))[0]!;
+    const durationTicks = it.MediaSources?.find((m) => m.Id === mediaSourceId)?.RunTimeTicks ?? it.MediaSources?.[0]?.RunTimeTicks ?? it.RunTimeTicks ?? 0;
+    return durationTicks ? { info: widths[String(width)]!, width, mediaSourceId, durationTicks } : null;
+  }
+
+  /** One tile of trickplay previews (a grid of thumbnails), or null. */
+  async trickplayTile(id: string, width: number, index: number, mediaSourceId: string): Promise<Uint8Array | null> {
+    const url = this.url(`/Videos/${id}/Trickplay/${width}/${index}.jpg`, { mediaSourceId });
+    const res = await request(this.f, url, { headers: { authorization: authHeader(this.opts.apiKey), accept: 'image/*' }, retries: 1 });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new HttpError(res.status, url, (await res.text()).slice(0, 300));
+    return new Uint8Array(await res.arrayBuffer());
   }
 
   /** An item's poster scaled down to a width (Jellyfin keeps its shape), for checking it and for thumbnails. */
@@ -294,7 +315,12 @@ export type MediaDetails = {
   durationTicks: number | null; path: string | null; titles: string[];
   audio: { lang: string | null; isDefault: boolean; title: string | null }[];
   embeddedImage: { w: number | null; h: number | null; via: 'stream' | 'attachment' } | null;
+  /** Jellyfin has trickplay previews of it (ADR-044). */
+  trickplay: boolean;
 };
+
+/** One size of an item's trickplay previews: tiles of thumbnails, one every `Interval` milliseconds. */
+export type TrickplayInfo = { Width?: number; Height?: number; TileWidth?: number; TileHeight?: number; ThumbnailCount?: number; Interval?: number };
 
 export function chunk<T>(xs: T[], size: number): T[][] {
   const out: T[][] = [];

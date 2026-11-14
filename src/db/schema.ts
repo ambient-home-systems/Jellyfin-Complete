@@ -379,6 +379,12 @@ export const mediaCheck = sqliteTable('media_check', {
   audio: json<{ lang: string | null; isDefault: boolean; title: string | null }[]>('audio'),
   /** A picture embedded in the file (an embedded image stream's size, or an image attachment), if any. */
   embeddedImage: json<{ w: number | null; h: number | null; via: 'stream' | 'attachment' }>('embedded_image'),
+  /** Whether Jellyfin has trickplay previews of it (for a frame from the middle, ADR-044). Probe 3. */
+  trickplay: integer('trickplay', { mode: 'boolean' }),
+  /** The file's own (container) title, read from the media mount (ADR-044). */
+  containerTitle: text('container_title'),
+  /** 0: not read yet; 1: read (the title may be none); 2: couldn't be read from the mount. */
+  containerRead: integer('container_read').notNull().default(0),
 });
 
 /** What a Library health finding is about (ADR-041, ADR-043). */

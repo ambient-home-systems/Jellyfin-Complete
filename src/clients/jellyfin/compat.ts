@@ -17,6 +17,7 @@ export const JELLYFIN_CALLS: { method: 'get' | 'post' | 'delete'; path: string; 
   { method: 'get', path: '/Items/{itemId}/Images/{imageType}', query: ['maxWidth'] },
   { method: 'get', path: '/Items/{itemId}/Images/{imageType}/{imageIndex}' },
   { method: 'get', path: '/System/Configuration' },
+  { method: 'get', path: '/Videos/{itemId}/Trickplay/{width}/{index}.jpg', query: ['mediaSourceId'] },
   { method: 'delete', path: '/Items/{itemId}/Images/{imageType}', query: ['imageIndex'] },
   { method: 'post', path: '/Items/{itemId}/Images/{imageType}' },
   { method: 'post', path: '/Collections', query: ['name', 'ids', 'isLocked'] },
@@ -29,7 +30,7 @@ export const JELLYFIN_CALLS: { method: 'get' | 'post' | 'delete'; path: string; 
 
 /** BaseItemDto properties the app reads or writes back (POST /Items/{id} sends the whole DTO; ADR-019). */
 export const ITEM_PROPERTIES = [
-  'Id', 'Name', 'ForcedSortName', 'SortName', 'Overview', 'Tags', 'LockData', 'LockedFields', 'ProviderIds', 'ImageTags',
+  'Id', 'Name', 'ForcedSortName', 'SortName', 'Overview', 'Tags', 'LockData', 'LockedFields', 'ProviderIds', 'ImageTags', 'Trickplay',
   'ChildCount', 'DisplayOrder', 'SeriesId', 'ParentIndexNumber', 'IndexNumber', 'ProductionYear', 'OfficialRating', 'Genres', 'Studios', 'DateCreated', 'PremiereDate', 'Status', 'Type', 'BackdropImageTags', 'MediaSources', 'Path', 'RunTimeTicks',
 ];
 export const POLICY_PROPERTIES = ['IsAdministrator', 'BlockedTags', 'IsDisabled'];
@@ -43,15 +44,17 @@ export const SCHEMA_PROPERTIES: Record<string, string[]> = {
   VirtualFolderInfo: ['ItemId', 'Name', 'CollectionType', 'LibraryOptions'],
   LibraryOptions: ['AutomaticallyAddToCollection', 'PreferredMetadataLanguage', 'TypeOptions'],
   TypeOptions: ['Type', 'ImageFetchers'],
-  MediaSourceInfo: ['RunTimeTicks', 'Path', 'MediaStreams', 'MediaAttachments'],
+  MediaSourceInfo: ['Id', 'RunTimeTicks', 'Path', 'MediaStreams', 'MediaAttachments'],
   MediaStream: ['Type', 'Title', 'Language', 'IsDefault', 'Width', 'Height'],
   MediaAttachment: ['MimeType'],
   UserDto: ['Id', 'Name', 'Policy', 'Configuration'],
   UserConfiguration: ['AudioLanguagePreference', 'PlayDefaultAudioTrack'],
   ServerConfiguration: ['PreferredMetadataLanguage'],
+  // Trickplay previews, for a frame from the middle of a file (ADR-044). Renamed TrickplayInfoDto in 10.11.
+  'TrickplayInfo|TrickplayInfoDto': ['Width', 'Height', 'TileWidth', 'TileHeight', 'ThumbnailCount', 'Interval'],
 };
 export const ENUM_VALUES: Record<string, string[]> = {
-  ItemFields: ['ProviderIds', 'Genres', 'Tags', 'Studios', 'SortName', 'DateCreated', 'ParentId', 'MediaSources', 'Path'],
+  ItemFields: ['ProviderIds', 'Genres', 'Tags', 'Studios', 'SortName', 'DateCreated', 'ParentId', 'MediaSources', 'Path', 'Trickplay'],
   MetadataField: ['Name', 'Overview', 'Tags'],
   BaseItemKind: ['Movie', 'Series', 'Episode', 'BoxSet'],
   ImageType: ['Primary', 'Art', 'Backdrop', 'Banner', 'Logo', 'Thumb', 'Disc', 'Box', 'BoxRear', 'Menu'],

@@ -765,6 +765,35 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - **Posters from elsewhere aren't flagged:** a poster from another provider (fanart.tv) or one you uploaded matches none of TMDb's. It isn't flagged unless the file's embedded picture or an attachment points to the file.
   - **The first pass on a big library** takes a few nights, and fetches each title's TMDb thumbnails once.
 
+### ADR-044 Read-only media mount and frames: Decided (14 Nov)
+- **Context.** Item 4c of your pending updates: Jellyfin doesn't expose a file's container-level title, only its streams' title tags (ADR-041). The container title is what gave *Bewitched* away inside the *Wakanda Forever* file. You suggested an optional read-only media mount, reading new files with ffprobe, and optionally saving one mid-film frame per new file for the Library health page. Off by default.
+- **Decision.**
+  - **The mount:**
+    - Off by default. Turned on in Settings → Run and review → Media files, with the folder it's mounted at (default `/media`).
+    - The folder must be absolute, can't be `/`, `/config`, `/app` or a system folder, and can't contain `..`.
+    - **Path mapping is worked out, not configured.** For a few known files, the shortest tail of Jellyfin's path that exists under the mount gives the mapping ("/data/movies/Heat (1995)/Heat.mkv" found as "/media/movies/…" maps `/data` to `/media`). The answer most agree on wins. It's found again when the folder changes, or when files stop being found.
+    - A mapped path is never outside the mount.
+  - **Container titles without ffprobe.** The image doesn't include ffmpeg: Debian's package adds a few hundred MB for every user of an optional feature. Instead the app reads the title directly, touching only the few kilobytes that hold it:
+    - Matroska/WebM: Segment → Info → Title, through the SeekHead when Info is far in.
+    - MP4/M4V/MOV: `moov → udta → ©nam`, QuickTime or iTunes-style `meta → ilst → ©nam → data`, with `moov` anywhere in the file.
+    - AVI: `LIST INFO → INAM`.
+    - A truncated or odd file gives no title, never half of one.
+  - **How it's read:**
+    - 3,000 files a run; each file once, and again when it changes.
+    - A file's own title is checked before its streams' tags, and the finding says "The file's own title names …".
+    - Files that can't be read (not under the mount, or not readable by uid 1000) are counted and shown on the Settings page. Nothing is written to the mount.
+  - **Frames from the middle,** for flagged files only rather than every new file: one frame per finding is enough to check what a file holds, and costs nothing for the rest.
+    - **First choice: Jellyfin's trickplay previews.** `Trickplay` on the item gives tile sizes and the interval. The thumbnail at the middle is cropped from its tile (`/Videos/{id}/Trickplay/{width}/{index}.jpg`). This needs no mount and no ffmpeg; Jellyfin has had trickplay since 10.9. The schema was renamed `TrickplayInfoDto` in 10.11, and the compatibility check accepts either.
+    - **Otherwise ffmpeg** (`FFMPEG_PATH`, or `ffmpeg` on the PATH) on the mounted file: one frame, 480 wide, given up after 30 seconds.
+    - **Hidden until opened:** the frame sits behind "Show a frame from the middle". A mislabelled file can hold anything, and the image only loads when opened.
+    - Kept in `/config/frames` until the file changes.
+  - **Probe 3** records whether Jellyfin has trickplay previews of each file. Files are probed again once, a few thousand a night. Migration 0012 adds the trickplay flag, the file's own title and whether it was read.
+  - **Claude:** `get_settings` shows `mediaFiles` (mounted, mapping, files read, ffmpeg). `update_settings` takes `mediaFiles` (`readOwnTitles`, `mountedAt`).
+- **Consequences.**
+  - Container titles in other formats (MPEG-TS, WMV) aren't read.
+  - Frames need trickplay previews in Jellyfin, or an ffmpeg you provide.
+  - Back up `/config/frames` with the rest of `/config`, or don't: frames are made again when needed.
+
 ---
 
 

@@ -35,6 +35,8 @@ export type Settings = {
   /** Streaming-service collections (ADR-036): the country whose services count, as a two-letter code. */
   streaming: { region: string };
   /** Poster overlays (ADR-039): Kometa's status badges on shows, and its IMDb Top 250 ribbon. Off until turned on. */
+  /** The optional read-only media mount (ADR-044): off by default. `map` is found by the app (Jellyfin's path → the mount). */
+  media: { enabled: boolean; dir: string; map: { from: string; to: string } | null };
   overlays: {
     status: boolean; imdbTop250: boolean;
     /** Libraries whose titles get no overlays. Null: the default, every kids' library (overlays/badges.ts kidsLibraries). */
@@ -89,6 +91,7 @@ export function defaultSettings(timezone: string): Settings {
     onboarding: { done: [], finished: false },
     filmSeries: { enabled: false, minimum: 2 },
     streaming: { region: 'US' },
+    media: { enabled: false, dir: '/media', map: null },
     overlays: { status: false, imdbTop250: false, skipLibraryIds: null },
     health: { enabled: true, autoFixLibraryIds: [] },
     server: { version: null, seenAt: null },

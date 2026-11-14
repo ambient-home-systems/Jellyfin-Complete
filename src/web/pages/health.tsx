@@ -241,7 +241,13 @@ const FindingsTable: FC<{ rows: HealthRow[]; tz: string; csrf: string }> = ({ ro
         <tr>
           <td class="cb"><input type="checkbox" form="bulk" name="sel" value={`${r.jfId}|${r.kind}`} aria-label={`Select ${r.title}: ${KIND[r.kind]}`} /></td>
           <td><b>{r.title}</b><br /><span class="faint">{[r.library, r.rating].filter(Boolean).join(' · ')}</span></td>
-          <td><span class="chip">{KIND[r.kind]}</span> {r.detail}</td>
+          <td>
+            <span class="chip">{KIND[r.kind]}</span> {r.detail}
+            {r.frame ? (
+              // Hidden until asked for: a mislabelled file can hold anything. The picture only loads when opened.
+              <details class="frame"><summary>Show a frame from the middle</summary><img src={`/health/img/frame/${encodeURIComponent(r.jfId)}`} alt={`A frame from the middle of ${r.title}`} width={240} height={135} loading="lazy" /></details>
+            ) : null}
+          </td>
           <td>{ARTWORK.has(r.kind) ? <Artwork r={r} /> : null}</td>
           <td class="hide-sm"><code class="path">{r.path ?? '—'}</code></td>
           <td class="num">{fmtDate(r.firstSeen, tz, { day: 'numeric', month: 'short' })}</td>

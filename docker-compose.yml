@@ -23,8 +23,12 @@ services:
       LOG_LEVEL: info
       # TRUST_PROXY: "1"     # only behind a reverse proxy that adds HTTPS; see docs/REVERSE-PROXY.md
       # SETUP_CODE: ""       # choose the first-run setup code instead of reading it from the log
+      # FFMPEG_PATH: /usr/local/bin/ffmpeg   # optional: an ffmpeg you mount in, for frames when Jellyfin has no trickplay previews
     volumes:
       - maverick-config:/config   # database, encrypted keys (secret.key), logs
+      # Optional, read-only: your media folder, so Library health can read each new file's own title (then turn it
+      # on in Settings → Run and review → Media files). The app's user (uid 1000) must be able to read the files.
+      # - /path/to/your/media:/media:ro
     security_opt:
       - no-new-privileges:true
 

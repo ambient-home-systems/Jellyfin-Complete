@@ -39,6 +39,7 @@ import { overlayCount } from '../overlays/sync.js';
 import { overlayLibraries } from './overlay-actions.js';
 import { dismissFindings, healthDashboard, healthRows } from '../library/health.js';
 import { recentFixes, resetArtwork, undoArtworkFix, type ResetResult } from '../library/artwork.js';
+import { mediaStatus } from '../library/media.js';
 import { CONNECTIONS } from './pages/settings.js';
 import { JOBS, type JobName } from '../jobs/schedules.js';
 import { nextRuns } from '../jobs/scheduler.js';
@@ -276,6 +277,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       homeRows: { enabled: s.homeRows.enabled, position: s.homeRows.orderIndex, view: s.homeRows.viewMode },
       filmSeries: s.filmSeries,
       streamingCountry: s.streaming.region,
+      mediaFiles: (() => { const m = mediaStatus(app); return { readingOwnTitles: m.enabled, mountedAt: m.dir, mounted: m.mounted, jellyfinPathsMapped: m.map, ownTitlesRead: m.read, unreadable: m.unreadable, ffmpegForFrames: m.ffmpeg, note: m.note }; })(),
       libraryHealth: { checking: s.health.enabled, fixPostersByThemselvesIn: (s.health.autoFixLibraryIds ?? []).map((id) => librariesModel(app).find((l) => l.id === id)?.name ?? id) },
       posterOverlays: { status: s.overlays.status, imdbTop250Ribbon: s.overlays.imdbTop250, postersWithOverlays: overlayCount(app), libraries: overlayLibraries(app).libraries.map((l) => ({ id: l.id, name: l.name, kidsLibrary: l.kids, overlays: l.on })) },
       schedules: app.db.select().from(jobSchedule).all().map((j) => ({ job: j.job, what: JOBS[j.job as JobName]?.detail ?? null, cron: j.cron, on: j.enabled, next: at(runs.find((r) => r.job === j.job)?.next?.getTime()) })),
@@ -463,6 +465,10 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
       otherToolsSchedules: z.array(z.object({ name: z.string(), time: z.string() })).optional().describe('Replaces the list of other tools\' run times shown beside this app\'s jobs, e.g. [{"name":"Kometa (Plex)","time":"05:00"}].'),
       filmSeries: z.object({ enabled: z.boolean(), minimum: z.number().int().min(2).max(20).optional() }).optional().describe('Film series: one collection for each TMDb film series with at least `minimum` (default 2) owned films. Turning it on or off also turns every film series collection on or off; the next run adds new series.'),
       streamingCountry: z.string().optional().describe('Two-letter country code (US, GB, CA…) whose streaming services the streaming collections (Netflix Movies and so on) count.'),
+      mediaFiles: z.object({
+        readOwnTitles: z.boolean().optional().describe('Read each new file\'s own (container) title from the read-only media mount. Needs the media folder mounted read-only into the container.'),
+        mountedAt: z.string().optional().describe('Where the media folder is mounted in the container, such as /media.'),
+      }).optional(),
       libraryHealth: z.object({
         checking: z.boolean().optional().describe('Check files (length, title tags, default audio) and artwork each run.'),
         fixPostersByThemselvesIn: z.array(z.string()).optional().describe('Library names or ids where "No poster" and "Poster from the video or file" are fixed from TMDb without asking, while dry run is off. [] for none.'),
@@ -485,6 +491,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
         neighbours: a.otherToolsSchedules, streamingRegion: a.streamingCountry,
         overlays: a.posterOverlays ? { status: a.posterOverlays.status, imdbTop250: a.posterOverlays.imdbTop250Ribbon, skipLibraryIds: a.posterOverlays.librariesWithout } : undefined,
         healthEnabled: a.libraryHealth?.checking,
+        mediaEnabled: a.mediaFiles?.readOwnTitles, mediaDir: a.mediaFiles?.mountedAt,
         healthAutoFixLibraryIds: a.libraryHealth?.fixPostersByThemselvesIn?.map((w) => librariesModel(app).find((l) => l.id === w || l.name.toLowerCase() === w.trim().toLowerCase())?.id ?? w),
       });
       if (a.filmSeries) setFilmSeries(app, a.filmSeries.enabled, a.filmSeries.minimum);

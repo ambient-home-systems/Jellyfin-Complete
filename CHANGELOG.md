@@ -2,6 +2,20 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.18.0 — 14 Nov 2026
+
+- **Optional read-only media mount.** Mount your media folder read-only, and turn on Settings → Run and review → Media files.
+  - Library health then also reads each new file's own title, which Jellyfin doesn't show. It's the tag that gave away *Bewitched* inside the *Wakanda Forever* file.
+  - Only the few kilobytes holding the title are read; nothing is written.
+  - Works for Matroska/WebM, MP4/M4V/MOV and AVI.
+  - The app finds where Jellyfin's files are under the mount by itself.
+  - Off by default. See the Library health section of the user guide, and `docker-compose.yml`.
+- **A frame from the middle** of a flagged file, on Library health, hidden until you open it.
+  - It comes from Jellyfin's trickplay previews when Jellyfin has made them (no mount needed).
+  - Otherwise it comes from ffmpeg on the mounted file, if you provide an ffmpeg (`FFMPEG_PATH`).
+- **Claude:** `get_settings` and `update_settings` cover the media mount (`mediaFiles`).
+- After updating, files are probed once more (a few thousand a night) to note which have trickplay previews.
+
 ## 0.17.0 — 14 Nov 2026
 
 - **Artwork checks on Library health.** Each film and show is checked for:

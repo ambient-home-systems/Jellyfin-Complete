@@ -13,11 +13,52 @@ import type { AppContext } from '../app-context.js';
 import { healthFinding, library, libraryItem, mediaCheck, type ArtworkProposal, type HealthKind } from '../db/schema.js';
 import { getCached, putCached } from '../cache.js';
 import { lang2, languageName, sameLanguage } from './languages.js';
+import { containerTitle } from './container.js';
+import { detectMapping, frameAvailable, mapPath, setMediaNote } from './media.js';
+import { existsSync } from 'node:fs';
 import { log } from '../log.js';
 
 export const HEALTH_LIMITS = { probesPerRun: 3000, movieLookupsPerRun: 400, seasonLookupsPerRun: 150 };
-/** What a probe reads: 2 adds audio tracks and embedded pictures (ADR-043). */
-export const PROBE_V = 2;
+/** What a probe reads: 2 adds audio tracks and embedded pictures (ADR-043); 3, whether Jellyfin has trickplay previews (ADR-044). */
+export const PROBE_V = 3;
+/** Files whose own title is read from the media mount in a run (a few kilobytes each). */
+export const CONTAINER_READS_PER_RUN = 3000;
+
+/**
+ * Read files' own (container) titles from the read-only media mount (ADR-044): files not read yet, new ones first.
+ * Works out where Jellyfin's paths are under the mount when it doesn't know yet, or when files stop being found there.
+ */
+async function readContainerTitles(app: AppContext, rows: { jfId: string }[], checks: Map<string, typeof mediaCheck.$inferSelect>, opts: { now: number; step?: (s: string) => void }) {
+  const m = app.settings().media;
+  const todo = rows.map((r) => checks.get(r.jfId)).filter((c): c is typeof mediaCheck.$inferSelect => Boolean(c?.path && c.containerRead === 0)).sort((a, b) => b.checkedAt - a.checkedAt);
+  if (!todo.length) return;
+  let map = m.map;
+  const findable = (mp: typeof map) => todo.slice(0, 5).some((c) => { const f = mapPath(c.path!, m.dir, mp); return Boolean(f && existsSync(f)); });
+  if (!map || !findable(map)) {
+    const samples = [...checks.values()].filter((c) => c.path).sort((a, b) => b.checkedAt - a.checkedAt).map((c) => c.path!);
+    map = detectMapping(m.dir, samples);
+    if (!map) {
+      setMediaNote(app, `None of Jellyfin’s files were found under ${m.dir}. Check that the media folder is mounted there, read-only, and readable by the app’s user (uid 1000).`);
+      log.warn(`Media mount: none of Jellyfin's files were found under ${m.dir}`);
+      return;
+    }
+    app.updateSettings({ media: { ...m, map } });
+    log.info(`Media mount: Jellyfin's ${map.from || '/'} is ${map.to} here`);
+  }
+  opts.step?.(`Reading ${Math.min(todo.length, CONTAINER_READS_PER_RUN)} files’ own titles`);
+  let read = 0, unreadable = 0;
+  for (const c of todo.slice(0, CONTAINER_READS_PER_RUN)) {
+    const file = mapPath(c.path!, m.dir, map);
+    let title: string | null = null, state = 2;
+    if (file) {
+      try { title = await containerTitle(file); state = 1; read++; } catch { unreadable++; }
+    } else unreadable++;
+    app.db.update(mediaCheck).set({ containerTitle: title, containerRead: state }).where(eq(mediaCheck.jfId, c.jfId)).run();
+    checks.set(c.jfId, { ...c, containerTitle: title, containerRead: state });
+  }
+  setMediaNote(app, unreadable ? `${unreadable} ${unreadable === 1 ? 'file' : 'files'} couldn’t be read from ${m.dir} (not there, or not readable by the app’s user).` : null);
+  if (read || unreadable) log.info(`Media mount: read ${read} files' own titles${unreadable ? `; ${unreadable} couldn't be read` : ''}`);
+}
 export const RUNTIME_TOLERANCE = { minutes: 12, fraction: 0.15 };
 
 const fmtMin = (m: number) => {
@@ -68,12 +109,12 @@ export function sameTitle(claimed: string, names: string[]): boolean {
  * A title-tag problem in words, or null. A tag that names another title is flagged unless its year is within a year of
  * the title's (a translated or alternative title of the same film).
  */
-export function titleVerdict(tags: string[], item: { names: string[]; year: number | null }): string | null {
+export function titleVerdict(tags: string[], item: { names: string[]; year: number | null }, what = 'A title tag in the file'): string | null {
   for (const tag of tags) {
     const c = claimedTitle(tag);
     if (!c || sameTitle(c.title, item.names)) continue;
     if (item.year !== null && Math.abs(c.year - item.year) <= 1) continue;
-    return `A title tag in the file names “${c.title} (${c.year})”: “${tag}”.`;
+    return `${what} names “${c.title} (${c.year})”: “${tag}”.`;
   }
   return null;
 }
@@ -210,12 +251,22 @@ export async function checkLibraryHealth(app: AppContext, opts: { now: number; s
     for (const r of todo) {
       const d = details.get(r.jfId);
       if (!d) continue;
-      const values = { sig: sigOf(r), durationMin: d.durationTicks ? d.durationTicks / 600_000_000 : null, titles: d.titles, path: d.path, checkedAt: opts.now, probeV: PROBE_V, audio: d.audio, embeddedImage: d.embeddedImage };
+      // The file's own title is read again only when the file changed (a probe of the same file keeps it).
+      const prev = checks.get(r.jfId);
+      const same = prev && prev.sig === sigOf(r);
+      const values = {
+        sig: sigOf(r), durationMin: d.durationTicks ? d.durationTicks / 600_000_000 : null, titles: d.titles, path: d.path, checkedAt: opts.now, probeV: PROBE_V,
+        audio: d.audio, embeddedImage: d.embeddedImage, trickplay: d.trickplay,
+        containerTitle: same ? prev.containerTitle : null, containerRead: same ? prev.containerRead : 0,
+      };
       app.db.insert(mediaCheck).values({ jfId: r.jfId, ...values }).onConflictDoUpdate({ target: mediaCheck.jfId, set: values }).run();
       checks.set(r.jfId, { jfId: r.jfId, ...values });
       out.probed++;
     }
   }
+
+  // 1b. The files' own titles, from the read-only media mount, when it's on (ADR-044).
+  if (app.settings().media.enabled) await readContainerTitles(app, rows, checks, opts);
 
   // 2. TMDb runtimes: films by their TMDb ID, episodes a season at a time. Cached, capped per run.
   const tmdb = app.tmdb();
@@ -275,7 +326,8 @@ export async function checkLibraryHealth(app: AppContext, opts: { now: number; s
     if (rt) now.set(`${jfId}|runtime`, { kind: 'runtime', detail: rt, sig: c.sig });
     const show = r.kind === 'episode' ? series.get(r.seriesJfId ?? '') : undefined;
     const names = [r.name, ...(show ? [show.name] : [])];
-    const tv = titleVerdict(c.titles, { names, year: r.kind === 'episode' ? null : r.year });
+    const own = c.containerTitle ? titleVerdict([c.containerTitle], { names, year: r.kind === 'episode' ? null : r.year }, 'The file’s own title') : null;
+    const tv = own ?? titleVerdict(c.titles, { names, year: r.kind === 'episode' ? null : r.year });
     if (tv) now.set(`${jfId}|title`, { kind: 'title', detail: tv, sig: c.sig });
     const au = c.audio ? audioVerdict(c.audio, langOf(r)) : null;
     if (au) now.set(`${jfId}|audio`, { kind: 'audio', detail: au, sig: c.sig });
@@ -317,6 +369,8 @@ export type HealthRow = {
   primaryTag: string | null; boxSet: boolean;
   /** Audio findings Jellyfin's users' own settings already take care of: shown for information, not counted. */
   info: boolean;
+  /** A frame from the middle of the file can be shown (Jellyfin's trickplay previews, or ffmpeg on the mount). */
+  frame: boolean;
 };
 
 /** Each library's language (its own, else the server's), for the audio findings. */
@@ -351,6 +405,7 @@ export function healthRows(app: AppContext, opts: { dismissed?: boolean } = {}):
       seriesJfId: r?.kind === 'episode' ? r.seriesJfId ?? null : null, show: show?.name ?? null,
       proposal: f.proposal ?? null, primaryTag: r?.primaryTag ?? null, boxSet: Boolean(f.subject),
       info: f.kind === 'audio' && audioHandled(lang.prefs, lang.of(libId)) === true,
+      frame: (f.kind === 'runtime' || f.kind === 'title' || f.kind === 'audio') && frameAvailable(app, { trickplay: checks.get(f.jfId)?.trickplay ?? null, path: checks.get(f.jfId)?.path ?? null }),
     };
   }).sort((a, b) => (opts.dismissed ? (b.dismissedAt ?? 0) - (a.dismissedAt ?? 0) : b.firstSeen - a.firstSeen) || a.title.localeCompare(b.title));
 }

@@ -34,7 +34,8 @@ const props = (name: string) => Object.keys(spec.components.schemas[name]?.prope
 const out = {
   version: spec.info.version,
   paths,
-  schemas: Object.fromEntries(['BaseItemDto', 'UserPolicy', ...Object.keys(SCHEMA_PROPERTIES)].map((n) => [n, props(n)])),
+  // A key like "TrickplayInfo|TrickplayInfoDto" names a schema that was renamed: the first one this version has.
+  schemas: Object.fromEntries(['BaseItemDto', 'UserPolicy', ...Object.keys(SCHEMA_PROPERTIES)].map((n) => [n, props(n.split('|').find((x) => spec.components.schemas[x]) ?? n)])),
   enums: Object.fromEntries(Object.keys(ENUM_VALUES).map((e) => [e, spec.components.schemas[e]?.enum ?? []])),
 };
 process.stdout.write(`${JSON.stringify(out, null, 1)}\n`);

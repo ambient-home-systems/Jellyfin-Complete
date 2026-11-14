@@ -200,6 +200,21 @@ The app never moves, deletes or hides files.
 
 Each file is checked once, and again when it changes, a few thousand a night, so a big library is covered over a few nights. Artwork is checked a few hundred titles a night: new or changed first, then each title again after a month. Extended editions much longer than TMDb's runtime show up too: mark them fine once. Turn the checks off in Settings → Run and review.
 
+**Reading files' own titles (optional).** Jellyfin shows only the title tags on a file's streams, not the title stored in the file itself. The file's own title is the tag that gave away *Bewitched* inside a file labelled *Black Panther: Wakanda Forever*. To have it checked too:
+1. Mount your media folder into the container **read-only**, for example `- /path/to/your/media:/media:ro` under `volumes` (see `docker-compose.yml`). The app's user (uid 1000) must be able to read the files.
+2. In Settings → Run and review → **Media files**, turn on "Read each new file's own title", with the folder it's mounted at (`/media` by default).
+
+On the next run, the app works out where Jellyfin's files are under the mount by finding a few of them, so the folders don't have to be named the same. The Settings page shows what it found and how many files it has read.
+- **What's read:** only the few kilobytes of each file that hold its title, once per file and again when the file changes. Nothing is ever written.
+- **Formats:** Matroska and WebM, MP4, M4V and MOV, and AVI.
+- **A finding** reads "The file's own title names ...".
+
+**A frame from the middle.** A flagged file can show one frame from its middle, hidden behind **Show a frame from the middle** until you open it (a mislabelled file can hold anything). It comes from:
+- **Jellyfin's trickplay previews,** when Jellyfin has made them for that file. Turn trickplay on per library in Jellyfin (Dashboard → Libraries → the library → Trickplay). No mount or ffmpeg is needed.
+- **ffmpeg on the mounted file,** otherwise. The image doesn't include ffmpeg (it would add a few hundred MB for everyone). To use one, mount an ffmpeg binary into the container and set `FFMPEG_PATH` to it.
+
+Frames are kept in `/config/frames` until the file changes.
+
 **Dashboard warnings.**
 - **Image fetchers:** a film or TV library with **Screen Grabber** or **Embedded Image Extractor** turned on as an image fetcher, for Movie, Series or Season. Jellyfin then uses a random frame, or a mislabelled file's own picture, when TMDb has no poster. Turn them off in Jellyfin under the library's Image fetchers. Episode stills are fine.
 - **Audio settings:** Jellyfin users with no preferred audio language, or with "Play default audio track" on.

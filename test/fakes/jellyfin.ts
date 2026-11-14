@@ -70,6 +70,7 @@ export class FakeJellyfin {
   uploads: { id: string; type: string; bytes: Uint8Array }[] = [];
   /** Backdrops by item, in index order (a box set can have several). */
   backdrops = new Map<string, Uint8Array[]>();
+  trickplayTiles = new Map<string, Uint8Array>();
   /**
    * Jellyfin's box set identification (ADR-040), as measured on a real server: within seconds of creating an unlocked
    * box set (or a full refresh with replaceAllMetadata), it searches TMDb collections by the set's name and attaches the
@@ -333,6 +334,11 @@ export class FakeJellyfin {
       }
       this.uploads.push({ id: item.Id, type: c.req.param('type'), bytes: new Uint8Array(bytes) });
       return c.body(null, 204);
+    });
+    // Trickplay tiles (ADR-044): set with trickplayTiles.set(`${itemId}/${width}/${index}`, jpeg bytes).
+    app.get('/Videos/:id/Trickplay/:width/:file', (c) => {
+      const t = this.trickplayTiles.get(`${c.req.param('id')}/${c.req.param('width')}/${c.req.param('file').replace(/\.jpg$/, '')}`);
+      return t ? c.body(Buffer.from(t), 200, { 'content-type': 'image/jpeg' }) : c.text('Not found', 404);
     });
     app.get('/Items/:id/Images/:type/:index', (c) => {
       if (c.req.param('type') !== 'Backdrop') return c.text('Not found', 404);

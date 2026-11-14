@@ -66,6 +66,7 @@ import { OverlaysPanel } from './pages/overlays.js';
 import { HealthPage } from './pages/health.js';
 import { dismissFinding, dismissFindings, healthDashboard, reopenFinding } from '../library/health.js';
 import { artworkSummary, backupPoster, IMAGE_TYPES, resetArtwork, undoArtworkFix, type ImageType } from '../library/artwork.js';
+import { mediaStatus, middleFrame } from '../library/media.js';
 import type { HealthKind } from '../db/schema.js';
 
 const HEALTH_KINDS: HealthKind[] = ['runtime', 'title', 'audio', 'no_poster', 'video_poster', 'language', 'other_title'];
@@ -547,6 +548,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     return imageReply({ bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get('content-type') ?? 'image/jpeg' });
   });
   web.get('/health/img/backup/:id', (c) => imageReply(backupPoster(app, Number(c.req.param('id')))));
+  web.get('/health/img/frame/:id', async (c) => imageReply(await middleFrame(app, c.req.param('id')).catch(() => null)));
   web.post('/health/reopen', async (c) => {
     const b = await c.req.parseBody();
     const ok = reopenFinding(app, String(b.jfId ?? ''), HEALTH_KINDS.includes(String(b.kind) as HealthKind) ? (String(b.kind) as HealthKind) : 'runtime');
@@ -643,7 +645,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const reveal = reveals.get(sessionId);
     reveals.delete(sessionId); // shown once
     const claude = { tokens: listTokens(app.db), reveal: reveal && reveal.expires > Date.now() ? reveal : null, endpoint: mcpEndpoint(c) };
-    return page(c, 'Settings', 'settings', <SettingsPage s={app.settings()} csrf={userOf(c).csrf} masked={masked} libraries={librariesModel(app)} libError={libError} schedules={schedules} claude={claude} />);
+    return page(c, 'Settings', 'settings', <SettingsPage s={app.settings()} csrf={userOf(c).csrf} masked={masked} libraries={librariesModel(app)} libError={libError} schedules={schedules} claude={claude} media={mediaStatus(app)} />);
   });
 
   // ── Claude access (ADR-032): MCP access tokens. A new token waits here for one page view, then only its hash remains. ──
@@ -750,7 +752,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
       return m ? { name: m[1]!.trim(), time: m[2]! } : { name: l, time: '' };
     });
     const snooze = ['window', '7d', '30d'].includes(String(b.defaultSnooze)) ? (String(b.defaultSnooze) as Settings['defaultSnooze']) : 'window';
-    return save(c, 'run', { timezone: String(b.timezone ?? ''), leadDays: Number(b.leadDays), arrCapPerRun: Number(b.arrCapPerRun), dryRun: b.dryRun === '1', neighbours, defaultSnooze: snooze, releasedOnly: b.releasedOnly === '1', streamingRegion: b.streamingRegion === undefined ? undefined : String(b.streamingRegion), healthEnabled: b.healthEnabled === '1', ...(b.autoFixSent === '1' ? { healthAutoFixLibraryIds: ([] as unknown[]).concat(b.autoFixLib ?? []).map(String) } : {}) }, 'Saved.');
+    return save(c, 'run', { timezone: String(b.timezone ?? ''), leadDays: Number(b.leadDays), arrCapPerRun: Number(b.arrCapPerRun), dryRun: b.dryRun === '1', neighbours, defaultSnooze: snooze, releasedOnly: b.releasedOnly === '1', streamingRegion: b.streamingRegion === undefined ? undefined : String(b.streamingRegion), healthEnabled: b.healthEnabled === '1', ...(b.autoFixSent === '1' ? { healthAutoFixLibraryIds: ([] as unknown[]).concat(b.autoFixLib ?? []).map(String) } : {}), ...(b.mediaSent === '1' ? { mediaEnabled: b.mediaEnabled === '1', mediaDir: String(b.mediaDir ?? '') } : {}) }, 'Saved.');
   });
 
   web.post('/settings/modes', async (c) => {
