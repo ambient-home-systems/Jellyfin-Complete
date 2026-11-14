@@ -70,7 +70,8 @@ export type LayoutProps = {
   running?: boolean;
   /** The first-run guide isn't finished yet, so it has a place in the navigation. */
   setupOpen?: boolean;
-  flash?: { kind: 'ok' | 'err'; text: string } | null;
+  /** `undo`: the changes a decision in the Inbox touched, as ids, when it can be taken back. */
+  flash?: { kind: 'ok' | 'err'; text: string; undo?: string } | null;
   banner?: Child;
   children?: Child;
 };
@@ -127,7 +128,17 @@ export const Layout: FC<LayoutProps> = (p) => {
           </aside>
           <main class="main" id="main">
             {p.banner}
-            {p.flash ? <div class={`flash ${p.flash.kind}`} role="status">{p.flash.text}</div> : null}
+            {p.flash ? (
+              <div class={`flash ${p.flash.kind}`} role="status">
+                <span>{p.flash.text}</span>
+                {p.flash.undo ? (
+                  <form method="post" action="/review/undo" class="inline-form">
+                    <input type="hidden" name="_csrf" value={p.user.csrf} /><input type="hidden" name="ids" value={p.flash.undo} />
+                    <button class="btn sm" type="submit"><Icon name="undo" /> Undo</button>
+                  </form>
+                ) : null}
+              </div>
+            ) : null}
             {p.children}
           </main>
         </div>

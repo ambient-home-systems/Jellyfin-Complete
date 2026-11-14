@@ -42,7 +42,7 @@ import { Login, Setup } from './pages/auth.js';
 import { Adoption } from './pages/adoption.js';
 import { runPipeline, currentRun, isRunning } from '../pipeline/run.js';
 import { forgetDecision } from '../pipeline/store.js';
-import { reviewVerdict, type SnoozeFor } from './review-actions.js';
+import { reviewVerdict, undoDecision, type SnoozeFor } from './review-actions.js';
 import { createToken, listTokens, revokeToken, SCOPE_LABEL, type TokenScope } from './api-tokens.js';
 import type { Reveal } from './pages/claude-access.js';
 import { mcpHandler } from './mcp.js';
@@ -192,15 +192,19 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     const u = userOf(c);
     const ok = c.req.query('ok');
     const err = c.req.query('err');
+    // A decision made in the Inbox comes back with the changes it touched, so its message can offer Undo.
+    const undo = /^\d+(,\d+)*$/.test(c.req.query('undo') ?? '') ? c.req.query('undo') : undefined;
     return c.html(
-      <Layout title={title} nav={nav} user={{ name: u.name, csrf: u.csrf }} {...shellModel(app)} flash={err ? { kind: 'err', text: err } : ok ? { kind: 'ok', text: ok } : null} banner={banner}>
+      <Layout title={title} nav={nav} user={{ name: u.name, csrf: u.csrf }} {...shellModel(app)} flash={err ? { kind: 'err', text: err } : ok ? { kind: 'ok', text: ok, undo } : null} banner={banner}>
         {body}
       </Layout>,
     );
   };
-  const back = (c: Context, path: string, msg: { ok?: string; err?: string }) => {
+  const back = (c: Context, path: string, msg: { ok?: string; err?: string; undo?: number[] }) => {
     const u = new URL(path, 'http://x');
     if (msg.ok) u.searchParams.set('ok', msg.ok);
+    // Up to 200 changes: enough for any one decision, and short enough for an address.
+    if (msg.ok && msg.undo?.length && msg.undo.length <= 200) u.searchParams.set('undo', msg.undo.join(','));
     if (msg.err) u.searchParams.set('err', msg.err);
     return c.redirect(u.pathname + u.search + u.hash);
   };
@@ -694,9 +698,17 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     if (verdict === 'approve' || verdict === 'dismiss' || verdict === 'snooze') {
       const choice = String(b.snooze ?? app.settings().defaultSnooze);
       const r = await reviewVerdict(app, ids, verdict, by, { snooze: (['7d', '30d', 'window'].includes(choice) ? choice : 'window') as SnoozeFor });
-      return back(c, here, r.ok ? { ok: r.message } : { err: r.message });
+      return back(c, here, r.ok ? { ok: r.message, undo: r.decided ? r.ids : undefined } : { err: r.message });
     }
     return back(c, here, { err: 'Unknown action.' });
+  });
+  // Undo beside the message a decision leaves: take back what was just approved, snoozed or dismissed.
+  web.post('/review/undo', async (c) => {
+    const b = await c.req.parseBody();
+    const ids = String(b.ids ?? '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200);
+    if (!ids.length) return back(c, '/review', { err: 'There’s nothing left to undo.' });
+    const r = await undoDecision(app, ids, userOf(c).name);
+    return back(c, '/review', r.ok ? { ok: r.message } : { err: r.message });
   });
 
   // ── activity ──
@@ -886,7 +898,7 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
             <Csrf token={userOf(c).csrf} /><input type="hidden" name="which" value={which} />
             <h3>{name}</h3>
             <ArrOptionsFields which={which} values={s.arr[which]} choices={{ profiles, roots, tags }} idPrefix={`set-${which}`} />
-            <div class="save-row"><button class="btn primary" type="submit">Save {name}</button></div>
+            <div class="save-row"><button class="btn" type="submit">Save {name}</button></div>
           </form>
         );
       } catch (e) {

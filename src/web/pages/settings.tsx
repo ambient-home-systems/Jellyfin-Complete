@@ -13,9 +13,9 @@ import { APPROVAL_ROWS, MODE_OPTIONS, describeCron, timezoneOptions } from '../t
 export type ConnRow = { key: string; name: string; urlField?: keyof Settings['connections']; secret?: SecretName; secretLabel: string; note?: string; what: string; optional?: boolean };
 export const CONNECTIONS: ConnRow[] = [
   { key: 'jellyfin', name: 'Jellyfin', urlField: 'jellyfinUrl', secret: 'jellyfin.apiKey', secretLabel: 'API key', what: 'Your server' },
-  { key: 'tmdb', name: 'TMDb', secret: 'tmdb.apiKey', secretLabel: 'API key', note: 'Free key from themoviedb.org (Settings → API)', what: 'Recommended: movie series, streaming services, better matching' },
+  { key: 'tmdb', name: 'TMDb', secret: 'tmdb.apiKey', secretLabel: 'API key', note: 'Free key from themoviedb.org', what: 'Recommended: movie series, streaming' },
   { key: 'mdblist', name: 'MDBList', secret: 'mdblist.apiKey', secretLabel: 'API key', note: 'Public lists work without a key', what: 'Optional: private lists', optional: true },
-  { key: 'plex', name: 'Plex', urlField: 'plexUrl', secret: 'plex.token', secretLabel: 'Token', what: 'Optional: compare collections with Plex. Read-only', optional: true },
+  { key: 'plex', name: 'Plex', urlField: 'plexUrl', secret: 'plex.token', secretLabel: 'Token', what: 'Optional: compare with Plex', optional: true },
   { key: 'radarr', name: 'Radarr', urlField: 'radarrUrl', secret: 'radarr.apiKey', secretLabel: 'API key', what: 'Optional: send missing movies', optional: true },
   { key: 'sonarr', name: 'Sonarr', urlField: 'sonarrUrl', secret: 'sonarr.apiKey', secretLabel: 'API key', what: 'Optional: send missing shows', optional: true },
 ];
@@ -50,8 +50,8 @@ type Lib = { id: string; name: string; collectionType: string | null };
 export const SettingsConnections: FC<{ s: Settings; csrf: string; masked: Masked }> = ({ s, csrf, masked }) => (
   <Shell at="connections">
     <section class="form-sec" id="conn" aria-labelledby="conn-h">
-      <div class="section-head"><h2 id="conn-h">Connections</h2><span class="aside">Keys are stored encrypted and never shown again</span></div>
-      <p class="muted">Only Jellyfin is needed. Each of the others switches on something extra.</p>
+      <div class="section-head"><h2 id="conn-h">Connections</h2><span class="aside">keys are stored encrypted</span></div>
+      <p class="muted">Only Jellyfin is needed.</p>
       <form method="post" action="/settings/connections">
         <Csrf token={csrf} />
         {CONNECTIONS.map((c) => (
@@ -64,7 +64,7 @@ export const SettingsConnections: FC<{ s: Settings; csrf: string; masked: Masked
           </div>
         ))}
         <div class="save-row"><button class="btn primary" type="submit">Save connections</button></div>
-        <p class="hint">Test tries what you’ve typed without saving it. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+        <p class="hint">Test tries what you’ve typed without saving. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
       </form>
     </section>
   </Shell>
@@ -78,7 +78,7 @@ export const SettingsLibraries: FC<{ s: Settings; csrf: string; libraries: Lib[]
       <form method="post" action="/settings/libraries" class="form">
         <Csrf token={csrf} /><input type="hidden" name="regionForm" value="1" />
         <section class="form-sec" id="libs" aria-labelledby="libs-h">
-          <div class="section-head"><h2 id="libs-h">Libraries</h2><span class="aside">where collections take their titles from</span></div>
+          <div class="section-head"><h2 id="libs-h">Libraries</h2><span class="aside">where titles come from</span></div>
           {movies.length === 0
             ? <p class="muted">{libError ? `Couldn’t read your libraries from Jellyfin (${libError}). Until you choose, every movie library is used.` : 'Jellyfin reports no movie libraries.'}</p>
             : null}
@@ -102,8 +102,8 @@ export const SettingsLibraries: FC<{ s: Settings; csrf: string; libraries: Lib[]
           <div class="grid2">
             <div class="field"><label for="tz">Timezone</label>
               <select id="tz" name="timezone">{timezoneOptions(s.timezone).map((z) => <option value={z} selected={z === s.timezone}>{z.replace(/_/g, ' ')}</option>)}</select>
-              <span class="hint">Seasonal collections appear and go away at midnight here.</span></div>
-            <div class="field"><label for="region">Streaming country</label><input id="region" name="streamingRegion" type="text" value={s.streaming.region} maxlength={2} pattern="[A-Za-z]{2}" class="num" autocomplete="off" /><span class="hint">Two letters, such as US, GB or CA. Streaming-service collections count the services offered there. Streaming data from JustWatch, through TMDb.</span></div>
+              <span class="hint">Seasonal collections change at midnight here.</span></div>
+            <div class="field"><label for="region">Streaming country</label><input id="region" name="streamingRegion" type="text" value={s.streaming.region} maxlength={2} pattern="[A-Za-z]{2}" class="num" autocomplete="off" /><span class="hint">Two letters, such as US or GB. Streaming data from JustWatch, through TMDb.</span></div>
           </div>
         </section>
         <div class="save-row"><button class="btn primary" type="submit">Save</button></div>
@@ -117,15 +117,15 @@ export const SettingsApprovals: FC<{ s: Settings; csrf: string }> = ({ s, csrf }
     <form method="post" action="/settings/approvals" class="form">
       <Csrf token={csrf} />
       <section class="form-sec" id="approve" aria-labelledby="approve-h">
-        <div class="section-head"><h2 id="approve-h">Approvals</h2><span class="aside">what the app may do without asking</span></div>
+        <div class="section-head"><h2 id="approve-h">Approvals</h2><span class="aside">what may happen without asking</span></div>
         <div class="choice" role="radiogroup" aria-labelledby="approve-h">
-          <label><input type="radio" name="dryRun" value="1" checked={s.dryRun} /><b>Approve everything first</b><span>Every change waits in your Inbox, whatever is set below. This is how the app starts, and the safe way to see what it would do.</span></label>
-          <label><input type="radio" name="dryRun" value="0" checked={!s.dryRun} /><b>Follow the settings below</b><span>Changes set to Automatic happen on their own, changes set to Ask me wait in your Inbox, and changes set to Never don’t happen.</span></label>
+          <label><input type="radio" name="dryRun" value="1" checked={s.dryRun} /><b>Approve everything first</b><span>Every change waits in your Inbox, whatever is set below.</span></label>
+          <label><input type="radio" name="dryRun" value="0" checked={!s.dryRun} /><b>Follow the settings below</b><span>Automatic changes happen on their own. Ask me changes wait in your Inbox.</span></label>
         </div>
       </section>
       <section class="form-sec" id="modes" aria-labelledby="modes-h">
-        <div class="section-head"><h2 id="modes-h">For each kind of change</h2><span class="aside">a collection can have its own, under its Advanced tab</span></div>
-        {s.dryRun ? <p class="muted">These take effect once you choose “Follow the settings below”. Until then everything asks first.</p> : null}
+        <div class="section-head"><h2 id="modes-h">For each kind of change</h2><span class="aside">a collection can differ, under its Advanced tab</span></div>
+        {s.dryRun ? <p class="muted">Not in effect while you’re approving everything first.</p> : null}
         <table class="modes">
           <thead><tr><th scope="col">Change</th><th scope="col">Approval</th></tr></thead>
           <tbody>
@@ -134,18 +134,18 @@ export const SettingsApprovals: FC<{ s: Settings; csrf: string }> = ({ s, csrf }
             ))}
           </tbody>
         </table>
-        <p class="hint">Whatever is set here, a list that stops answering never empties a collection, and every change that’s made can be undone from History.</p>
+        <p class="hint">A failing list never empties a collection, and every change can be undone from History.</p>
       </section>
       <section class="form-sec" id="limits" aria-labelledby="limits-h">
         <div class="section-head"><h2 id="limits-h">Timing and limits</h2></div>
         <div class="grid3">
           <div class="field"><label for="lead">Plan ahead</label><input id="lead" name="leadDays" type="number" min={0} max={60} value={String(s.leadDays)} class="num" /><span class="hint">Days before a collection appears that its changes reach your Inbox.</span></div>
-          <div class="field"><label for="snooze">Snooze lasts</label><select id="snooze" name="defaultSnooze">{[['window', 'Until the collection appears'], ['7d', '7 days'], ['30d', '30 days']].map(([v, l]) => <option value={v} selected={s.defaultSnooze === v}>{l}</option>)}</select><span class="hint">When you snooze one change from its row.</span></div>
-          <div class="field"><label for="cap">Radarr and Sonarr sends per run</label><input id="cap" name="arrCapPerRun" type="number" min={0} max={200} value={String(s.guardrails.arrCapPerRun)} class="num" /><span class="hint">The most titles sent automatically in one run. Any more wait in your Inbox.</span></div>
+          <div class="field"><label for="snooze">Snooze lasts</label><select id="snooze" name="defaultSnooze">{[['window', 'Until the collection appears'], ['7d', '7 days'], ['30d', '30 days']].map(([v, l]) => <option value={v} selected={s.defaultSnooze === v}>{l}</option>)}</select><span class="hint">For Snooze on a single change.</span></div>
+          <div class="field"><label for="cap">Radarr and Sonarr sends per run</label><input id="cap" name="arrCapPerRun" type="number" min={0} max={200} value={String(s.guardrails.arrCapPerRun)} class="num" /><span class="hint">More than this wait in your Inbox.</span></div>
         </div>
         <div class="field"><span class="label">Before sending anything to Radarr or Sonarr</span>
           <label class="check"><input type="checkbox" name="releasedOnly" value="1" checked={s.guardrails.releasedOnly} /> Only send titles that are already released</label>
-          <span class="hint">Titles they already have, or that you’ve excluded there, are always skipped.</span>
+          <span class="hint">Titles they have or exclude are always skipped.</span>
         </div>
       </section>
       <div class="save-row"><button class="btn primary" type="submit">Save</button></div>
@@ -172,7 +172,7 @@ export const SettingsSchedule: FC<{ s: Settings; csrf: string; schedules: { job:
                       <b>{describeCron(j.cron) ?? 'Custom schedule'}</b>
                       <details class="how"><summary>Change</summary>
                         <input type="text" name={`cron:${j.job}`} value={j.cron} aria-label={`${job?.label ?? j.job}: schedule, as a cron expression`} class="num cron" />
-                        <span class="hint">Minute, hour, day of month, month, day of week. <code>30 2 * * *</code> is every day at 02:30; <code>10 3 * * 0</code> is Sundays at 03:10.</span>
+                        <span class="hint">Cron: minute, hour, day, month, weekday. <code>30 2 * * *</code> is every day at 02:30.</span>
                       </details>
                     </td>
                     <td><input type="checkbox" name={`on:${j.job}`} value="1" checked={j.enabled} aria-label={`${job?.label ?? j.job} on`} /></td>
@@ -184,7 +184,7 @@ export const SettingsSchedule: FC<{ s: Settings; csrf: string; schedules: { job:
             </tbody>
           </table>
         </div>
-        <div class="field"><label for="nb">Other tools’ times</label><textarea id="nb" name="neighbours" rows={3} placeholder={'Jellyfin-Auto-Collections 04:00\nKometa (Plex) 05:00'}>{s.neighbours.map((n) => `${n.name} ${n.time}`).join('\n')}</textarea><span class="hint">Optional. One per line, a name then a time. They’re only shown in the table above, so you can keep this app’s runs clear of them.</span></div>
+        <div class="field"><label for="nb">Other tools’ times</label><textarea id="nb" name="neighbours" rows={3} placeholder={'Jellyfin-Auto-Collections 04:00\nKometa (Plex) 05:00'}>{s.neighbours.map((n) => `${n.name} ${n.time}`).join('\n')}</textarea><span class="hint">Optional. One per line: a name, then a time. Shown above so runs don’t collide.</span></div>
       </section>
       <div class="save-row"><button class="btn primary" type="submit">Save</button></div>
     </form>
@@ -193,7 +193,7 @@ export const SettingsSchedule: FC<{ s: Settings; csrf: string; schedules: { job:
 
 export const SettingsExtras: FC<{ s: Settings; csrf: string; libraries: Lib[]; arr: { radarr: boolean; sonarr: boolean } }> = ({ s, csrf, libraries, arr }) => (
   <Shell at="extras">
-    <p class="muted lede">Each of these is optional and works on its own. Nothing here is needed for collections.</p>
+    <p class="muted lede">Optional, and independent of each other.</p>
     <nav class="jump" aria-label="On this page"><a href="#health">Library health</a><a href="#overlays">Poster overlays</a><a href="#home">Home-screen rows</a><a href="#arr">Radarr and Sonarr</a></nav>
 
     <section class="form-sec" id="health" aria-labelledby="health-h">
@@ -201,16 +201,16 @@ export const SettingsExtras: FC<{ s: Settings; csrf: string; libraries: Lib[]; a
       <form method="post" action="/settings/health" class="form">
         <Csrf token={csrf} />
         <label class="check"><input type="checkbox" name="healthEnabled" value="1" checked={s.health.enabled} /> Check files and posters against their titles</label>
-        <p class="hint">Flags movies and episodes whose length, title tags or default audio don’t match, and posters that are missing, taken from the video or file, in another language or from another title. Files are never changed. What it finds is in your <a href="/health">Inbox, under Library health</a>.</p>
+        <p class="hint">Flags wrong lengths, title tags, default audio and posters. Files are never changed. Findings go to your <a href="/health">Inbox</a>.</p>
         <div class="field"><span class="label">Fix posters without asking in</span>
           <div class="checks">{libraries.length ? libraries.map((l) => <label class="check"><input type="checkbox" name="autoFixLib" value={l.id} checked={(s.health.autoFixLibraryIds ?? []).includes(l.id)} /> {l.name}</label>) : <span class="faint">No libraries yet.</span>}</div>
-          <span class="hint">Only “No poster” and “Poster from the video or file”, from TMDb, by the title’s confirmed TMDb ID, and only once you’ve stopped approving everything first. The old poster is kept, to undo. Everything else waits for you.</span></div>
-        <div class="save-row"><button class="btn primary" type="submit">Save Library health</button></div>
+          <span class="hint">Only missing posters and posters taken from the video, replaced from TMDb with an Undo. Not while you’re approving everything first.</span></div>
+        <div class="save-row"><button class="btn" type="submit">Save Library health</button></div>
       </form>
     </section>
 
     <section class="form-sec" id="overlays" aria-labelledby="overlays-h">
-      <div class="section-head"><h2 id="overlays-h">Poster overlays</h2><span class="aside">badges on posters; the originals are kept</span></div>
+      <div class="section-head"><h2 id="overlays-h">Poster overlays</h2><span class="aside">originals are kept</span></div>
       <div hx-get="/settings/overlays" hx-trigger="load" hx-swap="innerHTML"><p class="muted">Working out which posters get badges…</p></div>
     </section>
 
@@ -223,27 +223,26 @@ export const SettingsExtras: FC<{ s: Settings; csrf: string; libraries: Lib[]; a
       <div class="section-head"><h2 id="arr-h">Radarr and Sonarr</h2><span class="aside">how missing titles are sent</span></div>
       {arr.radarr || arr.sonarr
         ? <div hx-get="/settings/arr" hx-trigger="load" hx-swap="innerHTML"><p class="muted">Reading options from Radarr and Sonarr…</p></div>
-        : <p class="muted">Not connected. Add Radarr or Sonarr under <a href="/settings">Connections</a> to send the titles your collections list and you don’t have.</p>}
+        : <p class="muted">Not connected. Add Radarr or Sonarr under <a href="/settings">Connections</a>.</p>}
     </section>
   </Shell>
 );
 
 export const SettingsAdvanced: FC<{ s: Settings; csrf: string; masked: Masked; media: MediaStatus; claude: { tokens: ApiToken[]; reveal: Reveal | null; endpoint: string } }> = ({ s, csrf, masked, media, claude }) => (
   <Shell at="advanced">
-    <p class="muted lede">Most installs never change these.</p>
-    <form method="post" action="/settings/advanced" class="form">
+        <form method="post" action="/settings/advanced" class="form">
       <Csrf token={csrf} />
       <section class="form-sec" id="imdb" aria-labelledby="imdb-h">
         <div class="section-head"><h2 id="imdb-h">How IMDb is read</h2></div>
         <div class="choice" role="radiogroup" aria-labelledby="imdb-h">
-          <label><input type="radio" name="imdbRoute" value="direct" checked={s.imdbRoute === 'direct' || s.imdbRoute === 'tmdb'} /><b>Straight from IMDb (recommended)</b><span>This server asks IMDb itself.</span></label>
-          <label><input type="radio" name="imdbRoute" value="snapshot" checked={s.imdbRoute === 'snapshot'} /><b>From a daily snapshot</b><span>For when IMDb refuses this server. A scheduled job somewhere else (GitHub Actions, for example) asks IMDb the same questions and publishes the answers as a file, and the app reads that. See docs/IMDB-SNAPSHOT.md.</span></label>
-          <label><input type="radio" name="imdbRoute" value="kometa_service" checked={s.imdbRoute === 'kometa_service'} /><b>Through Kometa’s hosted service</b><span>The exact results Kometa gets, from servers the Kometa team runs for Kometa users. Use it only to check a difference with Plex.</span></label>
+          <label><input type="radio" name="imdbRoute" value="direct" checked={s.imdbRoute === 'direct' || s.imdbRoute === 'tmdb'} /><b>Straight from IMDb</b><span>Recommended.</span></label>
+          <label><input type="radio" name="imdbRoute" value="snapshot" checked={s.imdbRoute === 'snapshot'} /><b>From a daily snapshot</b><span>For when IMDb refuses this server: a job elsewhere publishes the answers as a file. See docs/IMDB-SNAPSHOT.md.</span></label>
+          <label><input type="radio" name="imdbRoute" value="kometa_service" checked={s.imdbRoute === 'kometa_service'} /><b>Through Kometa’s hosted service</b><span>Kometa’s exact results. Only for checking a difference with Plex.</span></label>
         </div>
         <details class="how" open={s.imdbRoute === 'snapshot'}>
           <summary>Snapshot details</summary>
           <div class="grid2">
-            <div class="field"><label for="snap-url">Snapshot address</label><input id="snap-url" name="snapshotUrl" type="url" value={s.snapshotUrl} placeholder="https://raw.githubusercontent.com/you/repo/imdb-snapshot/imdb-snapshot.json" /><span class="hint">Only used with the snapshot. <a href="/settings/imdb/queries.json">Download the list of questions</a> the snapshot job needs.</span></div>
+            <div class="field"><label for="snap-url">Snapshot address</label><input id="snap-url" name="snapshotUrl" type="url" value={s.snapshotUrl} placeholder="https://raw.githubusercontent.com/you/repo/imdb-snapshot/imdb-snapshot.json" /><span class="hint"><a href="/settings/imdb/queries.json">Download the queries</a> the snapshot job needs.</span></div>
             <div class="field"><label for="snap-token">Access token</label><input id="snap-token" name="snapshotToken" type="password" autocomplete="off" placeholder={masked.imdbSnapshot?.set ? `•••• ${masked.imdbSnapshot.last4} (leave empty to keep)` : 'Only for a private repository'} /><span class="hint">Stored encrypted.</span></div>
           </div>
         </details>
@@ -266,7 +265,7 @@ const MediaFields: FC<{ s: Settings; media: MediaStatus }> = ({ s, media }) => {
       <div class="section-head"><h2 id="media-h">Media files</h2><span class="aside">for Library health; read-only</span></div>
       <input type="hidden" name="mediaSent" value="1" />
       <label class="check"><input type="checkbox" name="mediaEnabled" value="1" checked={s.media.enabled} /> Read each new file’s own title from a read-only mount</label>
-      <p class="hint">A file can carry a title of its own inside it, which Jellyfin doesn’t show. It’s what gives away one movie hiding in another’s file. To let Library health read it, mount your media folder read-only in this container. Only a few kilobytes of each new file are read; nothing is ever changed.</p>
+      <p class="hint">A file’s own title gives away one movie hiding in another’s file, and Jellyfin doesn’t show it. Mount your media folder read-only to let Library health read it.</p>
       <div class="grid2">
         <div class="field"><label for="mediaDir">Where it’s mounted in this container</label><input id="mediaDir" name="mediaDir" type="text" value={s.media.dir} autocomplete="off" />
           {status ? <span class="hint">{status}</span> : null}
@@ -275,8 +274,8 @@ const MediaFields: FC<{ s: Settings; media: MediaStatus }> = ({ s, media }) => {
       </div>
       <details class="how"><summary>How to mount it, and frames from the middle</summary>
         <ul class="plain-list">
-          <li><b>Mounting.</b> Under <code>volumes</code> in your compose file add, for example, <code>- /srv/media:/media:ro</code>. The folder must be readable by uid 1000.</li>
-          <li><b>Frames from the middle.</b> Library health can show one frame from the middle of a flagged file, hidden until you open it. It comes from Jellyfin’s trickplay previews when Jellyfin has made them (Dashboard → Libraries → library → Trickplay). Otherwise, with the mount on, it comes from ffmpeg: {media.ffmpeg ? <b>found ({media.ffmpeg})</b> : 'not in this image; mount an ffmpeg binary and set FFMPEG_PATH to use it'}.</li>
+          <li><b>Mounting.</b> Under <code>volumes</code> add, for example, <code>- /srv/media:/media:ro</code>, readable by uid 1000.</li>
+          <li><b>Frames from the middle.</b> A flagged file can show one frame, from Jellyfin’s trickplay previews or, with the mount on, from ffmpeg: {media.ffmpeg ? <b>found ({media.ffmpeg})</b> : 'not in this image; mount a binary and set FFMPEG_PATH'}.</li>
         </ul>
       </details>
     </section>

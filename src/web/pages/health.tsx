@@ -50,19 +50,19 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
       </header>
       <div class="content">
         <div class="intro">
-          <p class="lead">Flags files and posters that don’t match their title. Nothing is changed without you. <span class="faint">{m.lastChecked ? `Last checked ${fmtDate(m.lastChecked, tz)} at ${fmtTime(m.lastChecked, tz)}.` : 'Not checked yet: the first run does it.'}</span></p>
+          <p class="lead">Files and posters that don’t match their title. <span class="faint">{m.lastChecked ? `Checked ${fmtDate(m.lastChecked, tz)}, ${fmtTime(m.lastChecked, tz)}.` : 'Not checked yet.'}</span></p>
           <details class="how">
             <summary>How checks work</summary>
             <ul class="plain-list">
-              <li><b>Length.</b> A file is flagged when it runs much longer or shorter than it should: more than 12 minutes or 15%, whichever is larger. A movie is measured against TMDb’s runtime. An episode is too, unless TMDb lists the whole season at a different length (often the TV slot, ads included); then it’s measured against the season’s typical file length.</li>
+              <li><b>Length.</b> The file runs over 12 minutes or 15% longer or shorter than TMDb’s runtime, whichever is larger. Where TMDb lists a TV slot with ads, episodes are compared with the season’s typical file instead.</li>
               <li><b>Title tag.</b> A title written inside the file names another title.</li>
               <li><b>Audio.</b> The file plays in another language by default.</li>
               <li><b>Artwork.</b> No poster, a poster taken from the video or the file, a poster in another language, or artwork from another title.</li>
-              <li><b>What can change.</b> Files are never moved or deleted. Artwork is only replaced when you choose it here (or in libraries you’ve set to fix it by themselves), from TMDb, by the title’s confirmed TMDb ID, and it can be undone.</li>
+              <li><b>What changes.</b> Files, never. Artwork, only when you choose it here, from TMDb, with an Undo.</li>
             </ul>
           </details>
         </div>
-        {!m.enabled ? <p class="callout">Library health is switched off, so nothing new is checked or found. Turn it on in <a href="/settings/extras#health">Settings → Extras</a>.</p> : null}
+        {!m.enabled ? <p class="callout">Library health is off. Turn it on in <a href="/settings/extras#health">Settings → Extras</a>.</p> : null}
 
         <div class="answers health-sum">
           <section class="panel" aria-labelledby="hs-need">
@@ -74,7 +74,7 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
           <section class="panel" aria-labelledby="hs-done">
             <div class="section-head"><h2 id="hs-done">Reviewed</h2></div>
             <p class="lead"><b class="num big">{m.reviewed}</b> marked fine</p>
-            <p class="faint">Each stays hidden until its file or artwork changes.{a.fixes.length ? ` ${plural(a.fixes.length, 'artwork fix', 'artwork fixes')} in the last 30 days.` : ''}</p>
+            <p class="faint">Hidden until the file or artwork changes.{a.fixes.length ? ` ${plural(a.fixes.length, 'artwork fix', 'artwork fixes')} in the last 30 days.` : ''}</p>
             {m.reviewed ? <p><a href="#done-h">See them</a></p> : null}
           </section>
           <section class="panel" aria-labelledby="hs-cov">
@@ -93,15 +93,15 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
           <section class="panel" aria-labelledby="lib-h">
             <div class="section-head"><h2 id="lib-h">By library</h2>{a.autoFix.length ? <span class="aside">Fixes posters by itself: {a.autoFix.join(', ')}</span> : null}</div>
             <table class="tt" aria-labelledby="lib-h">
-              <thead><tr><th scope="col">Library</th><th scope="col" class="num">Files</th><th scope="col" class="num">Checked</th><th scope="col" class="num">Needs review</th><th scope="col" class="num">Reviewed</th></tr></thead>
+              <thead><tr><th scope="col">Library</th><th scope="col" class="num hide-sm">Files</th><th scope="col" class="num">Checked</th><th scope="col" class="num">Needs review</th><th scope="col" class="num hide-sm">Reviewed</th></tr></thead>
               <tbody>
                 {m.byLibrary.map((b) => (
                   <tr>
                     <td><b>{b.library}</b></td>
-                    <td class="num">{b.files.toLocaleString('en-US')}</td>
+                    <td class="num hide-sm">{b.files.toLocaleString('en-US')}</td>
                     <td class="num">{b.checked.toLocaleString('en-US')} <span class="faint">({pct(b.checked, b.files)}%)</span></td>
                     <td class="num">{b.needsReview ? <b class="bad">{b.needsReview}</b> : '0'}</td>
-                    <td class="num">{b.reviewed}</td>
+                    <td class="num hide-sm">{b.reviewed}</td>
                   </tr>
                 ))}
               </tbody>
@@ -138,7 +138,7 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
               </form>
               <FindingsTable rows={m.open} tz={tz} csrf={csrf} />
             </>
-          ) : <p class="muted">{m.enabled ? 'You’re all caught up. Every file and poster checked so far matches its title.' : 'Nothing to review.'}</p>}
+          ) : <p class="muted">{m.enabled ? 'You’re all caught up.' : 'Nothing to review.'}</p>}
         </section>
 
         {m.info.length || a.sameImage.length ? (
@@ -146,11 +146,11 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
             <div class="section-head"><h2 id="info-h">For information</h2><span class="aside">not counted</span></div>
             {a.sameImage.length ? (
               <>
-                <p class="faint">These posters have another language’s tag on TMDb but are the same image as TMDb’s poster in the library’s language, so there’s nothing to change.</p>
+                <p class="faint">Tagged as another language on TMDb, but the same image as the poster in your language. Nothing to change.</p>
                 <ul class="plain-list">{a.sameImage.map((x) => <li><b>{x.title}</b>: {x.note}</li>)}</ul>
               </>
             ) : null}
-            {m.info.length ? <p class="faint">These play in another language by default, but every Jellyfin user’s settings pick the library’s language instead, so nobody hears the dub. They’d matter for a new user, or if those settings change.</p> : null}
+            {m.info.length ? <p class="faint">These default to another language, but every user’s settings pick the library’s language. They’d matter for a new user.</p> : null}
             {m.info.length ? <table class="tt" aria-labelledby="info-h">
               <thead><tr><th scope="col">Title</th><th scope="col">What doesn’t match</th><th scope="col"><span class="sr-only">Action</span></th></tr></thead>
               <tbody>
@@ -200,7 +200,7 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
         {a.collectionRepairs.length ? (
           <section class="panel" aria-labelledby="coll-h">
             <div class="section-head"><h2 id="coll-h">Collection artwork changed</h2><span class="aside">repaired automatically · last 30 days</span></div>
-            <p class="faint">The collections this app made or took over in Jellyfin are checked every run against what it last set: TMDb link, lock, poster and no other images. Anything Jellyfin changed is put back straight away.</p>
+            <p class="faint">Every run checks the app’s collections and puts back anything Jellyfin changed.</p>
             <ul class="plain-list">
               {a.collectionRepairs.map((e) => (
                 <li><b>{e.name}</b> <span class="faint">{fmtDate(e.at, tz, { day: 'numeric', month: 'short' })}</span>{e.ok ? null : <span class="chip bad"> repair failed</span>}<br />{e.what}</li>
@@ -248,7 +248,7 @@ const DismissForm: FC<{ r: HealthRow; csrf: string }> = ({ r, csrf }) => (
 
 const FindingsTable: FC<{ rows: HealthRow[]; tz: string; csrf: string }> = ({ rows, tz, csrf }) => (
   <table class="tt" aria-labelledby="needs-h">
-    <thead><tr><th scope="col" class="cb"><span class="sr-only">Select</span></th><th scope="col">Title</th><th scope="col">What doesn’t match</th><th scope="col">Artwork</th><th scope="col" class="hide-sm">File</th><th scope="col">Found</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+    <thead><tr><th scope="col" class="cb"><span class="sr-only">Select</span></th><th scope="col">Title</th><th scope="col">What doesn’t match</th><th scope="col" class="hide-sm">Artwork</th><th scope="col" class="hide-md">File</th><th scope="col" class="hide-sm">Found</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
     <tbody>
       {rows.map((r) => (
         <tr>
@@ -261,9 +261,9 @@ const FindingsTable: FC<{ rows: HealthRow[]; tz: string; csrf: string }> = ({ ro
               <details class="frame"><summary>Show a frame from the middle</summary><img src={`/health/img/frame/${encodeURIComponent(r.jfId)}`} alt={`A frame from the middle of ${r.title}`} width={240} height={135} loading="lazy" /></details>
             ) : null}
           </td>
-          <td>{ARTWORK.has(r.kind) ? <Artwork r={r} /> : null}</td>
-          <td class="hide-sm"><code class="path">{r.path ?? '—'}</code></td>
-          <td class="num">{fmtDate(r.firstSeen, tz, { day: 'numeric', month: 'short' })}</td>
+          <td class="hide-sm">{ARTWORK.has(r.kind) ? <Artwork r={r} /> : null}</td>
+          <td class="hide-md"><code class="path">{r.path ?? '—'}</code></td>
+          <td class="num hide-sm">{fmtDate(r.firstSeen, tz, { day: 'numeric', month: 'short' })}</td>
           <td>
             <div class="row-actions">
               {r.proposal ? <button class="btn sm primary" type="submit" form="bulk" formaction="/health/artwork/reset" name="one" value={r.jfId} title="Replace the poster with TMDb’s, by this title’s confirmed TMDb ID. The old one is kept, to undo.">Reset from TMDb</button> : null}

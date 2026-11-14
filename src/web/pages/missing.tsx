@@ -117,9 +117,9 @@ export const Missing: FC<{ m: MissingPageModel; csrf: string; inbox: InboxCounts
             <a href={href({ tab: 'movies', def: null })} aria-current={m.tab === 'movies' ? 'page' : undefined}>Movies <span class="n num">{m.tabCounts.movies}</span></a>
             <a href={href({ tab: 'shows', def: null })} aria-current={m.tab === 'shows' ? 'page' : undefined}>Shows <span class="n num">{m.tabCounts.shows}</span></a>
           </nav>
-          <span class="faint">Titles your collections list that aren’t in your library.</span>
+          <span class="faint">Listed by your collections, not in your library.</span>
         </div>
-        {!m.defs.length ? <div class="empty"><h3>Nothing missing</h3><p>No collection that’s turned on lists {m.tab === 'movies' ? 'movies' : 'shows'} you don’t own, or nothing has been read yet. Lists are read on each run; start one from Home.</p></div> : (
+        {!m.defs.length ? <div class="empty"><h3>Nothing missing</h3><p>Your collections list no {m.tab === 'movies' ? 'movies' : 'shows'} you don’t have, or no run has read them yet.</p></div> : (
           <>
             <form method="get" action="/missing" class="inline-form filter-row">
               <input type="hidden" name="tab" value={m.tab} />
@@ -133,7 +133,7 @@ export const Missing: FC<{ m: MissingPageModel; csrf: string; inbox: InboxCounts
             {m.collections.length ? (
               <section class="panel" aria-labelledby="coll-h">
                 <div class="section-head"><h2 id="coll-h">Movie series in this collection</h2></div>
-                <p class="hint">Monitoring a TMDb collection (a movie series) in Radarr lets Radarr add its missing movies itself, including future ones once they’re released. Radarr only lists a collection once one of its movies is in Radarr.</p>
+                <p class="hint">Monitor a series and Radarr adds its missing movies itself, future ones included. Radarr lists a series once it has one of its movies.</p>
                 <ul class="plain-list">
                   {m.collections.map((c) => (
                     <li>
@@ -180,9 +180,9 @@ export const Missing: FC<{ m: MissingPageModel; csrf: string; inbox: InboxCounts
               {m.connected && m.choices ? (
                 <aside class="panel send-panel" aria-labelledby="send-h">
                   <div class="section-head"><h2 id="send-h">Send to {app}</h2></div>
-                  <p class="hint">Options are read live from {app}. Defaults come from Settings → Extras.</p>
+                  <p class="hint">Defaults come from Settings → Extras.</p>
                   <ArrOptionsFields which={m.which} values={m.values} choices={m.choices} idPrefix="send" />
-                  <p class="hint">Checked first, for each title: released{m.which === 'radarr' ? '' : ' (aired)'}, not in {app}, not excluded. Up to {m.cap} titles per send. Pressing Send is your approval, so titles go to {app} straight away.</p>
+                  <p class="hint">Each title is checked first: released, not in {app}, not excluded. Up to {m.cap} per send, straight away.</p>
                   <div class="actions-row">
                     <button class="btn primary" type="submit" name="mode" value="send"><Icon name="plus" /> Send to {app}</button>
                     <button class="btn" type="submit" name="mode" value="review" title="Add them to Collection changes, to approve later">Add to Inbox instead</button>
