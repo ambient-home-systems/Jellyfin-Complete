@@ -37,7 +37,7 @@ export function explainCollection(app: AppContext, def: LoadedDefinition) {
       else if (!lib || !scope.has(lib)) items.push({ ...base, verdict: 'outside the chosen libraries', detail: `It's in ${libName.get(lib ?? '') ?? 'an unknown library'}, which this collection doesn't use (Settings → Libraries).` });
       else if (!passesFilters(row, def)) items.push({ ...base, verdict: 'filtered out', detail: 'Doesn\'t pass the collection\'s filters.' });
       else if (def.excludes.has(row.jfId)) items.push({ ...base, verdict: 'excluded', detail: 'Excluded on this collection.' });
-      else if (src.role === 'suggest') items.push({ ...base, verdict: 'suggested', detail: 'This source only suggests titles; they wait in Review.' });
+      else if (src.role === 'suggest') items.push({ ...base, verdict: 'suggested', detail: 'This source asks before adding; its titles wait in your Inbox.' });
       else items.push({ ...base, verdict: 'member' });
     }
     const counts = Object.fromEntries(VERDICTS.map((v) => [v, items.filter((x) => x.verdict === v).length]).filter(([, n]) => n)) as Partial<Record<Verdict, number>>;

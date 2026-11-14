@@ -19,7 +19,7 @@ export const Setup: FC<{ error?: string | null; url?: string; needsCode?: boolea
   <Bare title="Connect Jellyfin">
     <form method="post" action="/setup">
       <div class="auth-brand"><Logo size={56} /><h1>Connect Jellyfin</h1></div>
-      <p>First run: tell the app where Jellyfin is. Create an API key in Jellyfin under Dashboard → API Keys. After this, sign in with a Jellyfin administrator account. Dry run is on, so nothing changes until you approve it.</p>
+      <p>First run: tell the app where Jellyfin is. Create an API key in Jellyfin under Dashboard → API Keys. After this, sign in with a Jellyfin administrator account. Nothing changes in Jellyfin until you approve it.</p>
       {error ? <p role="alert" style="color:var(--red)">{error}</p> : null}
       <div class="field"><label for="url">Jellyfin address</label><input id="url" name="url" type="url" value={url ?? ''} placeholder="http://your-server:8096" required /></div>
       <div class="field"><label for="key">API key</label><input id="key" name="apiKey" type="password" autocomplete="off" required /></div>

@@ -11,17 +11,33 @@ import { getPlanSummary } from '../pipeline/summary.js';
 import { currentRun } from '../pipeline/run.js';
 import { versionSupport } from '../clients/jellyfin/compat.js';
 import { sourceLabel } from '../sources/index.js';
-import { fmtAgo, fmtTime } from './ui.js';
+import { fmtAgo, fmtTime, type InboxCounts } from './ui.js';
+import { nextRuns } from '../jobs/scheduler.js';
+import { monthDay } from './terms.js';
+
+/** The next time a run starts by itself (the nightly refresh or the midnight date check), or null if both are off. */
+export function nextRunAt(app: AppContext): number | null {
+  const times = nextRuns(app).filter((r) => r.job !== 'cache-cleanup' && r.next).map((r) => r.next!.getTime());
+  return times.length ? Math.min(...times) : null;
+}
+
+/** What the Inbox holds: collection changes to approve, and open Library health findings. */
+export function inboxCounts(app: AppContext): InboxCounts {
+  const changes = app.db.select({ n: sql<number>`count(*)` }).from(action).where(eq(action.status, 'proposed')).get()?.n ?? 0;
+  return { changes, health: openFindingCount(app), healthOn: app.settings().health.enabled, missingOn: Boolean(app.radarr() || app.sonarr()) };
+}
 
 export function shellModel(app: AppContext) {
-  const pending = app.db.select({ n: sql<number>`count(*)` }).from(action).where(eq(action.status, 'proposed')).get()?.n ?? 0;
+  const counts = inboxCounts(app);
   const last = app.db.select().from(run).where(sql`${run.status} != 'running'`).orderBy(desc(run.startedAt)).limit(1).get();
   const s = app.settings();
-  const healthOpen = openFindingCount(app);
   return {
     dryRun: s.dryRun,
-    pending,
-    healthOpen,
+    pending: counts.changes,
+    healthOpen: counts.health,
+    inbox: counts.changes + counts.health,
+    running: currentRun()?.status === 'running',
+    setupOpen: !s.onboarding.finished,
     lastRun: last ? `Last run ${fmtTime(last.startedAt, s.timezone)}${last.status === 'failed' ? ' (failed)' : ''}` : 'No runs yet',
   };
 }
@@ -92,11 +108,11 @@ function yearStrip(defs: LoadedDefinition[], year: number, live: Set<number>, ne
     const short = width < 3;
     const base = live.has(s.d.id) ? 'live' : next.has(s.d.id) ? 'next' : '';
     const label = s.d.name.replace(/ Movies$/, '');
-    const f = (x: number) => { const p = fromDayNumber(x); return `${p.m}/${p.d}`; };
+    const f = (x: number) => { const p = fromDayNumber(x); return monthDay(`${p.m}/${p.d}`); };
     bars.push({
       name: s.d.name, left: ((s.a - start) / days) * 100, width, lane, label: short ? '' : label,
       state: (short ? (base ? `${base} short` : 'short') : base) as YearBar['state'],
-      tip: `${s.d.name} · ${f(s.a)}–${f(s.b)}${base === 'live' ? ' · live now' : base === 'next' ? ' · next to open' : ''}`,
+      tip: `${s.d.name} · ${f(s.a)}–${f(s.b)}${base === 'live' ? ' · in Jellyfin now' : base === 'next' ? ' · appears next' : ''}`,
       href: `/collections/${s.d.id}`,
     });
   }
@@ -125,7 +141,8 @@ export function dashboardModel(app: AppContext, now = Date.now()) {
   const lastRun = app.db.select().from(run).where(sql`${run.status} != 'running'`).orderBy(desc(run.startedAt)).limit(1).get() ?? null;
 
   // A "closes" row only matters for a box set that exists or will exist (planned members ≥ minimum).
-  const willBeLive = (d: LoadedDefinition) => liveIds.has(d.id) || !summary || (summary.defs[String(d.id)]?.members ?? 0) >= d.minItems;
+  // Before the first run nothing is known, so only collections already in Jellyfin can go away.
+  const willBeLive = (d: LoadedDefinition) => liveIds.has(d.id) || (summary ? (summary.defs[String(d.id)]?.members ?? 0) >= d.minItems : false);
   const changes = upcomingChanges(defs, today, tz, 400).filter((c) => c.kind === 'opens' || willBeLive(c.def));
   const firstDay = changes[0]?.day;
   const next = firstDay !== undefined ? changes.filter((c) => c.day === firstDay) : [];
@@ -137,13 +154,13 @@ export function dashboardModel(app: AppContext, now = Date.now()) {
     const remarks: string[] = [];
     if (c.kind === 'opens') {
       const n = sum?.members ?? null;
-      if (n === null) remarks.push('Not planned yet; run once');
+      if (n === null) remarks.push('Not read yet');
       else if (n < c.def.minItems) remarks.push(n === 0 ? 'Nothing in your library matches; not created' : `Below the minimum of ${c.def.minItems}`);
       else remarks.push(`${n} ${n === 1 ? 'title' : 'titles'}`);
       const p = pend.get(c.def.id);
-      if (p?.total) remarks.push(`${p.total} await review`);
+      if (p?.total) remarks.push(`${p.total} to approve`);
     } else {
-      remarks.push(c.def.visibility === 'tag_gate' ? 'Box set hidden; kept for next season' : 'Box set deleted; poster and sort title kept');
+      remarks.push(c.def.visibility === 'tag_gate' ? 'Hidden in Jellyfin until its dates come round again' : 'Removed from Jellyfin; it comes back on its next dates');
     }
     const bad = sum?.sources.filter((x) => x.status !== 'ok') ?? [];
     return { ...c, remarks: remarks.join(' · '), sourceLabels: c.def.sources.map((x) => x.type).length, failing: bad, via: (sum?.sources.map((x) => x.label) ?? []).join(', ') };
@@ -152,7 +169,11 @@ export function dashboardModel(app: AppContext, now = Date.now()) {
   return {
     tz, today, now, needs, pendingTotal, failing, stale, hashError, lastRun, next, plannedMembers, members, liveIds,
     strip, timetable, healthyCount: sources.filter((r) => r.status === 'ok').length, progress: currentRun(),
-    configured: Boolean(app.jellyfin()), dryRun: s.dryRun,
+    configured: Boolean(app.jellyfin()), dryRun: s.dryRun, leadDays: s.leadDays, nextRunAt: nextRunAt(app),
+    // After the first approved change, Home offers once to let routine changes happen by themselves.
+    offerAutomatic: s.dryRun && s.onboarding.finished && !s.onboarding.automaticOffered
+      && Boolean(app.db.select({ id: action.id }).from(action).where(eq(action.status, 'applied')).limit(1).get()),
+    modes: s.modes,
     waitingForAdoption: defs.filter((d) => d.enabled && summary?.defs[String(d.id)]?.waitingForAdoption).length,
     server: s.server.version ? { version: s.server.version, ...versionSupport(s.server.version) } : null,
     // ADR-040: box set repairs this week, and libraries where Jellyfin makes its own (unlocked) box sets.
@@ -183,14 +204,19 @@ export function collectionsModel(app: AppContext, now = Date.now()) {
     if (!d.enabled) status = { label: 'Off', kind: 'off' };
     else if (live) status = { label: 'Live', kind: 'live' };
     else if (hidden) status = { label: 'Hidden', kind: 'below' };
-    else if (sum?.waitingForAdoption) status = { label: 'Adopt existing box set', kind: 'below' };
-    else if (sum && sum.members < d.minItems) status = { label: sum.members === 0 ? 'Nothing matches' : 'Below minimum', kind: 'below' };
-    else status = { label: 'Scheduled', kind: 'scheduled' };
+    else if (sum?.waitingForAdoption) status = { label: 'Already in Jellyfin', kind: 'below' };
+    else if (sum && sum.members < d.minItems) status = { label: sum.members === 0 ? 'No titles in your library' : 'Too few titles', kind: 'below' };
+    else {
+      // Inside its dates (or with none) it only waits for a run, or for you; outside them, for the dates.
+      const inDates = !d.window || nextT?.kind === 'closes';
+      status = { label: !sum ? 'Not read yet' : !inDates ? 'Waiting for its dates' : pend.get(d.id)?.total ? 'Needs your approval' : 'Ready to create', kind: 'scheduled' };
+    }
     return {
       def: d, status, items: live || hidden ? members.get(d.id) ?? 0 : sum?.members ?? null,
       next: nextT ? { kind: nextT.kind, at: localMidnight(nextT.day, tz) } : null,
       sources: sum?.sources ?? d.sources.map((x) => ({ key: String(x.id), label: sourceLabel({ type: x.type, config: x.config }), status: 'unknown', error: null, listed: 0, matched: 0 })),
       pending: pend.get(d.id)?.total ?? 0,
+      waitingForAdoption: Boolean(sum?.waitingForAdoption),
     };
   });
 }

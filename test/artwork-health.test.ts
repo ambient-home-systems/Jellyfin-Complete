@@ -213,7 +213,7 @@ describe('Artwork checks', () => {
     expect(details['m-mad']).toBe('The poster is a wide picture (16:9), like a frame from the video.');
     expect(details['m-donald']).toBe('The poster is TMDb’s French one; TMDb has English posters too.');
     expect(details['m-inside']).toMatch(/^Jellyfin links it to TMDb 999001 \(“Inside Out”, 1991\), but its IMDb ID is TMDb 150540 \(“Inside Out”, 2015\)\. Its folder name says TMDb 150540/);
-    expect(details['b-inside']).toMatch(/Linked to TMDb collection 777777, but its films belong to TMDb collection 1084247/);
+    expect(details['b-inside']).toMatch(/Linked to TMDb collection 777777, but its movies belong to TMDb collection 1084247/);
     expect(app.db.select().from(artworkCheck).where(eq(artworkCheck.jfId, 'm-inside')).get()).toMatchObject({ verifiedTmdb: '150540', verifiedBy: 'path' });
     expect(calls.filter((c) => c.includes('/search/'))).toEqual([]); // never a name search
   });
@@ -318,7 +318,7 @@ describe('Artwork checks', () => {
   it('never changes a box set it doesn’t manage, and won’t reset without a confirmed TMDb ID', async () => {
     const { app } = await world();
     await run(app);
-    expect((await resetArtwork(app, 'b-inside', { by: 'admin' })).message).toMatch(/doesn’t change box sets it doesn’t manage: adopt it/);
+    expect((await resetArtwork(app, 'b-inside', { by: 'admin' })).message).toMatch(/doesn’t change collections it doesn’t look after: take it over/);
     expect((await resetArtwork(app, 'm-minions', { by: 'admin' })).message).toMatch(/TMDb ID isn’t confirmed/);
   });
 
@@ -358,7 +358,7 @@ describe('Default audio and the Dashboard', () => {
     await run(app);
     const m = dashboardModel(app, NOW);
     expect(m.imageFetcherRisks).toEqual([{ library: 'Movies', fetchers: ['Screen Grabber'] }]);
-    expect(String(Dashboard({ m, csrf: 'x' }))).toContain('Jellyfin can take posters from the video or the file in Movies');
+    expect(String(Dashboard({ m, csrf: 'x' }))).toContain('Jellyfin can take posters from the video itself in Movies');
   });
 });
 
@@ -375,7 +375,7 @@ describe('Library health page', () => {
     expect(page).toContain('formaction="/health/artwork/reset" name="one" value="m-mad"');
     expect(page).toContain('Reset artwork for selected');
     expect(page).not.toMatch(/Reset all|whole library/i);
-    expect(page).toContain('href="/adoption">Adopt it'); // the box set
+    expect(page).toContain('href="/adoption">Take it over'); // the collection Jellyfin made itself
     // The thumbnails come through the app.
     const thumb = await web.request('/health/img/tmdb/mad-en.jpg', { headers: { cookie } });
     expect(thumb.headers.get('content-type')).toBe('image/jpeg');

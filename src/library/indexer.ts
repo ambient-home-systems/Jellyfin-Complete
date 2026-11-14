@@ -45,7 +45,7 @@ export async function indexLibrary(db: DB, jf: JellyfinClient, onProgress?: (msg
     stats.libraries++;
     const types = lib.CollectionType === 'movies' ? ['Movie'] : ['Series', 'Episode'];
     for (const type of types) {
-      onProgress?.(`Indexing ${lib.Name} (${type === 'Movie' ? 'films' : type === 'Series' ? 'series' : 'episodes'})`);
+      onProgress?.(`Indexing ${lib.Name} (${type === 'Movie' ? 'movies' : type === 'Series' ? 'series' : 'episodes'})`);
       const items = await jf.allItems({ ParentId: lib.ItemId, IncludeItemTypes: type, Fields: FIELDS });
       const kind = type === 'Movie' ? 'movie' : type === 'Series' ? 'series' : 'episode';
       db.transaction((tx) => {

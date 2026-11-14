@@ -50,6 +50,7 @@ Each run plans changes. Changes set to Review, and every change while dry run is
 Approving applies the change to Jellyfin straight away (or when the collection's dates open), even while dry run is on: dry run only stops changes from applying without approval.
 Before approving, show the user exactly what will change (collection, action, titles) and get their go-ahead, especially for deletions and removals. Never approve on your own initiative.
 With a full-control token you can do everything the app's pages can, except connections, keys and access tokens: change settings and schedules; create, edit, delete and turn collections on or off, with their dates, filters and sources; adopt or delete existing box sets; undo changes; send missing titles to Radarr/Sonarr. Ask the user before turning dry run off, setting a mode to auto, turning a collection off, deleting anything, undoing a change, or applying or removing poster overlays: those change Jellyfin without a further approval.
+The app's pages use plainer words than these tools, so use the pages' words with the user: Review is the Inbox (Collection changes), Activity is History, the dashboard is Home, dry run on is "Approve everything first", the modes off / review / auto read Never / Ask me / Automatic, a box set is a collection in Jellyfin, a window is a collection's dates (it appears and goes away), and adopting an existing box set is taking it over (Collections → Already in Jellyfin).
 Times are local to the app's timezone, given by get_status.`;
 
 type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
@@ -101,7 +102,7 @@ export function buildServer(app: AppContext, token: ApiToken, opts: { restartSch
 
   server.registerTool('list_collections', {
     title: 'Collections',
-    description: 'Every collection with its id, kind, whether it is on, status (Live, Scheduled, Below minimum, Off…), number of titles, dates, next change and proposals waiting in Review.',
+    description: 'Every collection with its id, kind, whether it is on, status (Live, Waiting for its dates, Too few titles, Off…), number of titles, dates, next change and proposals waiting in Review.',
     inputSchema: { only: z.enum(['all', 'on', 'live']).optional().describe('Filter: all (default), only collections that are on, or only live ones.') },
     annotations: read,
   }, async ({ only }) => {

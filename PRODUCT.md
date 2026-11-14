@@ -64,15 +64,17 @@ Every run computes a **plan**: the actions needed to make Jellyfin (and optional
   - overflow goes to Review
 - **A failed source never empties a collection.** The app keeps its last good result and shows the error.
 - **Ownership:** the app touches only box sets it created or that the owner adopted. Managed box sets are tagged `managed:maverick-collections`.
-- **Terminology:**
-  - collection (a Jellyfin box set)
-  - definition
-  - source
-  - preset
-  - window
-  - plan, proposal and action
-  - mode
-  - provenance
+- **Terminology.** The engine's names stay in the code and the MCP tools. The pages use plain words for them (ADR-046, `src/web/terms.ts`):
+  - collection (a Jellyfin box set; the pages say "box set" once, in help text)
+  - definition → a collection's settings
+  - source (a list or search)
+  - preset → ready-made collection
+  - window → dates; it opens and closes → it appears and goes away
+  - plan, proposal and action → a change, to approve
+  - mode (Off, Review, Auto) → approval (Never, Ask me, Automatic)
+  - global dry run → "Approve everything first"
+  - Review queue → Inbox; Dashboard → Home; Activity → History
+  - provenance → why a title is in
   - run
 - **Undecided** (see `docs/DECISIONS.md`):
   - the visibility strategy beyond create-and-delete

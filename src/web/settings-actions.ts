@@ -59,12 +59,12 @@ export function applySettings(app: AppContext, patch: SettingsPatch): { changed:
     next.timezone = tz;
   }
   if (patch.leadDays !== undefined) {
-    if (!Number.isInteger(patch.leadDays) || patch.leadDays < 0 || patch.leadDays > 60) throw new SettingsError('Plan-ahead days must be 0–60.');
+    if (!Number.isInteger(patch.leadDays) || patch.leadDays < 0 || patch.leadDays > 60) throw new SettingsError('Plan ahead must be 0–60 days.');
     next.leadDays = patch.leadDays;
   }
   if (patch.arrCapPerRun !== undefined || patch.releasedOnly !== undefined) {
     const cap = patch.arrCapPerRun ?? s.guardrails.arrCapPerRun;
-    if (!Number.isInteger(cap) || cap < 0 || cap > 200) throw new SettingsError('The add cap must be 0–200.');
+    if (!Number.isInteger(cap) || cap < 0 || cap > 200) throw new SettingsError('Sends per run must be 0–200.');
     next.guardrails = { arrCapPerRun: cap, releasedOnly: patch.releasedOnly ?? s.guardrails.releasedOnly };
   }
   if (patch.dryRun !== undefined) next.dryRun = patch.dryRun;
@@ -101,7 +101,7 @@ export function applySettings(app: AppContext, patch: SettingsPatch): { changed:
     if (!ids.length) throw new SettingsError(`Choose at least one ${what} library.`);
     return ids.length === all.length ? null : ids; // all of them = every library, including ones added later
   };
-  if (patch.movieLibraryIds !== undefined) next.movieLibraryIds = pick(patch.movieLibraryIds, 'movies', 'film');
+  if (patch.movieLibraryIds !== undefined) next.movieLibraryIds = pick(patch.movieLibraryIds, 'movies', 'movie');
   if (patch.showLibraryIds !== undefined) next.showLibraryIds = pick(patch.showLibraryIds, 'tvshows', 'TV');
   if (patch.homeRows) {
     const h = { ...s.homeRows, ...patch.homeRows };
@@ -141,7 +141,7 @@ export function setSchedule(app: AppContext, job: string, change: { cron?: strin
   try {
     new Cron(cron, { paused: true });
   } catch {
-    throw new SettingsError(`“${cron}” isn’t a valid cron expression for ${job}.`);
+    throw new SettingsError(`“${cron}” isn’t a schedule the app can read (${job}).`);
   }
   app.db.update(jobSchedule).set({ cron, enabled: change.enabled ?? row.enabled }).where(eq(jobSchedule.job, job)).run();
 }
@@ -166,8 +166,8 @@ export function setFamilyEnabled(app: AppContext, family: string, on: boolean): 
   const series = fam === 'film_series' && app.settings().filmSeries.enabled !== on;
   if (series) setFilmSeries(app, on);
   const label = FAMILY_LABEL[fam];
-  const message = changed ? `${label}: ${changed} turned ${on ? 'on' : 'off'}. The next run ${on ? 'plans them' : 'removes their box sets'}.`
-    : series ? `${label}: film series turned ${on ? 'on' : 'off'}. The next run ${on ? 'finds them' : 'removes their box sets'}.`
+  const message = changed ? `${label}: ${changed} turned ${on ? 'on' : 'off'}. The next run ${on ? 'reads their lists' : 'removes them from Jellyfin'}.`
+    : series ? `${label} turned ${on ? 'on' : 'off'}. The next run ${on ? 'finds them' : 'removes them from Jellyfin'}.`
     : `${label}: nothing to change.`;
   return { family: fam, changed, message };
 }
@@ -176,5 +176,5 @@ export function setCollectionEnabled(app: AppContext, id: number, on: boolean): 
   const def = loadDefinition(app.db, id);
   if (!def) throw new SettingsError(`No collection with id ${id}.`);
   app.db.update(definition).set({ enabled: on, updatedAt: Date.now() }).where(eq(definition.id, id)).run();
-  return on ? `${def.name} is on. The next run fetches its sources and plans it.` : `${def.name} is off. The next run removes its box set, if it has one.`;
+  return on ? `${def.name} is on. The next run reads its lists.` : `${def.name} is off. The next run removes it from Jellyfin, if it’s there.`;
 }

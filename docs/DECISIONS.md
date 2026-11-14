@@ -825,6 +825,37 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - Changing the art or lettering means raising `BUNDLED_POSTERS_REV`, or box sets keep the old version.
   - Kometa's posters for these presets are no longer fetched. To go back to one, paste its address into the Poster section.
 
+### ADR-046 Pages organised around what you want to do, in plain words: Decided (14 Nov)
+- **Context.** A usability review of 0.19.0 found the engine sound and the pages hard to learn. The pages were organised by the pipeline (definition → source → window → plan → proposal → action → mode → run) and used its words. Three things followed:
+  - **Five places held "things waiting for me":** Review, Library health, Missing, Existing box sets, and the Dashboard's service notices.
+  - **Four controls answered "will this happen without asking me?":** dry run, the global action modes, a collection's own modes, and a source's "add directly / suggest".
+  - **Every page gave all its options equal weight.** Settings was one 5,262-pixel page with 11 sections and 8 Save buttons; a collection's editor was 2,648 pixels with nine sections and three ways of saving.
+  - Before the first run, the Dashboard showed "Plan: create 0 box sets, delete 0", and its button led to an empty Review that said "Nothing waits for review" while the run was still going.
+- **Decision.** Change how things are presented, and nothing about what the app does. No feature is removed, and the database, settings keys, routes' meanings and MCP tools are unchanged.
+  - **Navigation: Home, Inbox, Collections, History, Settings.**
+    - The Inbox is one queue with tabs: Collection changes (`/review`), Library health (`/health`) and Missing titles (`/missing`). Its one badge is changes to approve plus open health findings. The Library health tab shows while the check is on, and Missing titles while Radarr or Sonarr is connected.
+    - "Already in Jellyfin" (`/adoption`) is a tab of Collections.
+    - Getting started has its own menu item until it's finished.
+    - Old addresses still work: the paths didn't change.
+  - **One vocabulary, in one file** (`src/web/terms.ts`). Mode → approval, with Never / Ask me / Automatic. Dry run → "Approve everything first". Window opens / closes → the collection appears / goes away on its dates. Proposal → change to approve. Adopt → take over. Film → movie, as the collections are named. "Box set" is said once, in help text.
+    - The engine keeps its names in code, the database and the MCP tools, so nothing stored changes and Claude's tools keep working. The MCP instructions tell Claude the pages' words.
+    - Reasons the planner stores with a change are reworded too. Changes already waiting keep their old reason until the next run plans them again.
+  - **Settings is six pages,** each saved on its own: Connections, Libraries and region, Approvals, Schedule, Extras, Advanced. Approvals holds "Approve everything first", the approval for each kind of change, and the limits. Extras holds what's optional (Library health, poster overlays, home-screen rows, Radarr and Sonarr), each saved by itself because each is a feature of its own. Advanced holds how IMDb is read, the media mount and Claude access.
+  - **A collection's page** opens with its poster, where it stands in a sentence, and its titles at full width. Sources, Dates, Name and poster, and Advanced are tabs. Every tab's fields are on the page, in one form, so one Save covers them all, the poster included; a small script (`public/app.js`) switches tabs without losing what was typed, and without it the tabs are plain links. Adding or removing a source, and "Always include" or "Leave out" on a title, are saved straight away, as before, and the page says so.
+  - **Getting started** shows one step at a time with one Continue. The first run starts when the collections step is saved, so results are ready by the last step. The "already in Jellyfin" step finishes itself when Jellyfin has nothing under the chosen names. A step that can't read Jellyfin says why.
+  - **Before the first run,** Home shows "Start your first run" in place of the next change, lists no collection as going away unless it's in Jellyfin, and the Inbox says a run is in progress and refreshes itself.
+  - **Approval is met late.** A new install approves everything first. After the first approved change, Home offers once ("Let routine changes happen by themselves?") to follow the per-change settings instead (`onboarding.automaticOffered`). Either answer is kept, and Settings → Approvals changes it at any time.
+  - **Home's notices** put the app's own problems first. Settings worth changing in Jellyfin are listed apart as Recommendations, each one line long with its steps folded under "How to fix".
+- **Alternatives considered.**
+  - **Rename the routes** to match (`/inbox`, `/history`). Not done: bookmarks, the README and the MCP instructions point at the old paths, and a path isn't something people read.
+  - **Merge the three Inbox lists into one table.** Not done: a collection change, a mislabelled file and a missing title are decided with different information and different actions. Tabs under one name and one count give one place to look without one overloaded table.
+  - **A separate save per tab** on a collection's page. Not done: it was the three ways of saving that people tripped on.
+- **Consequences.**
+  - `public/app.js` is the app's first script of its own (htmx aside). The pages must keep working without it, and `script-src 'self'` still holds.
+  - A new word for an old thing goes in `src/web/terms.ts`, not in a page.
+  - Mockups in `docs/mockups` show the earlier layout and words.
+  - A container restart in the middle of Getting started ends the guide, as before, once a run exists.
+
 ---
 
 

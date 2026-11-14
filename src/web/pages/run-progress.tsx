@@ -16,7 +16,7 @@ export const RunProgress: FC<{ p: Progress | null; csrf: string }> = ({ p, csrf 
   return (
     <span id="run-progress" class="progress">
       {p && p.finishedAt && Date.now() - p.finishedAt < 60_000 ? (
-        <span role="status">{p.status === 'ok' ? 'Run finished.' : `Run failed: ${p.error}`} <a href="/">Refresh</a></span>
+        <span role="status">{p.status === 'ok' ? 'Run finished.' : `Run failed: ${p.error}`} <a href="">Show what changed</a></span>
       ) : null}
       <form method="post" action="/runs" hx-post="/runs" hx-target="#run-progress" hx-swap="outerHTML" class="inline-form">
         <input type="hidden" name="_csrf" value={csrf} />

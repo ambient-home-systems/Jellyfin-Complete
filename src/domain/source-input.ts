@@ -62,7 +62,7 @@ export const SOURCE_INPUTS: SourceInput[] = [
       const w = v.trim().toLowerCase();
       const service = STREAMING_SERVICES.find((s) => s.key === w || s.name.toLowerCase() === w);
       if (!service) return `Enter one streaming service: ${STREAMING_SERVICES.map((s) => s.name).join(', ')}.`;
-      if (target !== 'movies' && target !== 'shows') return 'A streaming-service source needs a collection of films or of shows.';
+      if (target !== 'movies' && target !== 'shows') return 'A streaming-service source needs a collection of movies or of shows.';
       return { type: 'tmdb_watch_provider', config: { service: service.key, kind: target === 'shows' ? 'show' : 'movie' } };
     },
   },
@@ -71,7 +71,7 @@ export const SOURCE_INPUTS: SourceInput[] = [
     parse: (v, target) => {
       const days = Number(v.trim());
       if (!Number.isInteger(days) || days < 1 || days > 3650) return 'Enter a number of days from 1 to 3650.';
-      if (target === 'both') return 'This source needs a collection of films, shows or episodes.';
+      if (target === 'both') return 'This source needs a collection of movies, shows or episodes.';
       return { type: 'jellyfin_recent', config: { field, days, kind: target === 'movies' ? 'movie' : target === 'shows' ? 'series' : 'episode' } };
     },
   })),
@@ -104,8 +104,8 @@ export const SOURCE_INPUTS: SourceInput[] = [
     parse: (v) => { const ids = tmdbIds(v, 'list'); return ids?.length === 1 ? { type: 'tmdb_list', config: { listId: ids[0] } } : 'Enter one TMDb list ID or URL.'; },
   },
   {
-    key: 'tmdb_movie', label: 'TMDb films', placeholder: '603, 604 or film URLs',
-    parse: (v) => { const ids = tmdbIds(v, 'movie'); return ids ? { type: 'tmdb_movie', config: { ids } } : 'Enter TMDb film IDs or URLs, separated by commas.'; },
+    key: 'tmdb_movie', label: 'TMDb movies', placeholder: '603, 604 or movie URLs',
+    parse: (v) => { const ids = tmdbIds(v, 'movie'); return ids ? { type: 'tmdb_movie', config: { ids } } : 'Enter TMDb movie IDs or URLs, separated by commas.'; },
   },
   {
     key: 'tmdb_show', label: 'TMDb shows', placeholder: '1399 or show URLs',

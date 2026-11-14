@@ -40,7 +40,7 @@ export async function undoAction(app: AppContext, actionId: number, by: string):
     case 'collection.add_items':
     case 'collection.remove_items': {
       const jfId = a.item?.jfId;
-      if (!jfId || !liveId) throw new Error('The box set isn’t live any more, so there is nothing to undo');
+      if (!jfId || !liveId) throw new Error('The collection isn’t in Jellyfin any more, so there is nothing to undo');
       if (a.type === 'collection.add_items') {
         await jf.removeFromCollection(liveId, [jfId]);
         app.db.delete(membership).where(and(eq(membership.definitionId, defId), eq(membership.jfId, jfId))).run();
@@ -54,18 +54,18 @@ export async function undoAction(app: AppContext, actionId: number, by: string):
 
     case 'collection.create': {
       const created = (a.after as { id?: string } | null)?.id;
-      if (!liveId || liveId !== created) throw new Error('That box set is no longer the live one, so there is nothing to undo');
+      if (!liveId || liveId !== created) throw new Error('That isn’t the collection in Jellyfin any more, so there is nothing to undo');
       const before = await jf.getItem(liveId);
       const saved: SavedMeta = { name: before?.Name ?? def?.name ?? '', sortTitle: before?.ForcedSortName ?? def?.sortTitle ?? null, overview: before?.Overview ?? def?.overview ?? null, posterUrl: def ? posterKey(def.poster) : null };
       await jf.deleteItem(liveId);
       app.db.update(managedCollection).set({ state: 'absent', jfBoxsetId: null, savedMeta: saved, updatedAt: now }).where(eq(managedCollection.definitionId, defId)).run();
       app.db.delete(membership).where(eq(membership.definitionId, defId)).run();
       record('collection.delete', { before: { id: liveId, name: before?.Name }, after: { deleted: true, saved } });
-      return `Deleted the ${before?.Name ?? def?.name ?? ''} box set again. It isn’t recreated until the next season.`;
+      return `Removed ${before?.Name ?? def?.name ?? 'the collection'} from Jellyfin again. It isn’t created again until its next dates.`;
     }
 
     case 'collection.delete': {
-      if (liveId) throw new Error('The collection already has a live box set');
+      if (liveId) throw new Error('The collection is already in Jellyfin');
       const was = (a.before ?? {}) as { name?: string; members?: string[]; lockedFields?: string[]; displayOrder?: string | null };
       const saved = (a.after as { saved?: SavedMeta } | null)?.saved ?? m?.savedMeta ?? null;
       if (!was.members) throw new Error('This delete happened before member lists were recorded, so it can’t be undone');
@@ -100,18 +100,18 @@ export async function undoAction(app: AppContext, actionId: number, by: string):
 
     case 'collection.hide':
     case 'collection.show': {
-      if (!liveId) throw new Error('The box set no longer exists, so there is nothing to undo');
+      if (!liveId) throw new Error('The collection is no longer in Jellyfin, so there is nothing to undo');
       const hide = a.type === 'collection.show'; // undoing a show hides it again, and vice versa
       if (hide) await jf.blockTagForAllUsers(GATE_TAG);
       await jf.updateItem(liveId, (dto) => ({ ...dto, Tags: hide ? [...new Set([...(dto.Tags ?? []), GATE_TAG])] : (dto.Tags ?? []).filter((t) => t !== GATE_TAG) }));
       app.db.update(managedCollection).set({ state: hide ? 'hidden' : 'live', updatedAt: now }).where(eq(managedCollection.definitionId, defId)).run();
       record(hide ? 'collection.hide' : 'collection.show', { before: a.after, after: a.before });
-      return hide ? `Hid ${def?.name ?? 'the box set'} again.` : `${def?.name ?? 'The box set'} is visible again until the next season’s change.`;
+      return hide ? `Hid ${def?.name ?? 'the collection'} again.` : `${def?.name ?? 'The collection'} is visible again until its dates next change it.`;
     }
 
     case 'collection.update_metadata': {
-      if (!liveId) throw new Error('The box set isn’t live any more, so there is nothing to undo');
-      if ((a.after as { adopted?: boolean } | null)?.adopted) throw new Error('Adopting replaced the old box set with a fresh one, so it can’t be undone. Turn the collection off or delete it instead.');
+      if (!liveId) throw new Error('The collection isn’t in Jellyfin any more, so there is nothing to undo');
+      if ((a.after as { adopted?: boolean } | null)?.adopted) throw new Error('Taking it over replaced the old collection with a fresh one, so it can’t be undone. Turn the collection off or delete it instead.');
       const was = (a.before ?? {}) as { Name?: string | null; ForcedSortName?: string | null; Overview?: string | null; Tags?: string[] | null; LockedFields?: string[] | null };
       const { after } = await jf.updateItem(liveId, (dto) => ({
         ...dto,

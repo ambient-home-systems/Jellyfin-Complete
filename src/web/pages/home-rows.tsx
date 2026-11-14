@@ -24,25 +24,25 @@ export const HomeRowsPanel: FC<{ st: HomeStatus; s: Settings; csrf: string }> = 
     ) : null}
     <form method="post" action="/settings/home" class="form">
       <Csrf token={csrf} />
-      <label class="check"><input type="checkbox" name="enabled" value="1" checked={s.homeRows.enabled} /> Show a row on the home screen for each live collection that asks for one</label>
+      <label class="check"><input type="checkbox" name="enabled" value="1" checked={s.homeRows.enabled} /> Show a row on Jellyfin’s home screen for each collection that asks for one, while it’s in Jellyfin</label>
       <div class="grid3">
         <div class="field"><label for="hr-view">Card style</label>
           <select id="hr-view" name="viewMode">{(['Portrait', 'Landscape', 'Square', 'Small'] as const).map((v) => <option value={v} selected={s.homeRows.viewMode === v}>{v}</option>)}</select></div>
         <div class="field"><label for="hr-order">Position</label><input id="hr-order" name="orderIndex" type="number" min={0} max={99} value={String(s.homeRows.orderIndex)} class="num" /><span class="hint">Home Screen Sections’ order index for the first row; 0 is the top.</span></div>
       </div>
-      <p class="hint">Each row shows up to {ROW_ITEM_CAP} titles from its box set, appears when the collection goes live and disappears when it closes. Every user sees the same rows. Turn a row on or off per collection in its editor (Output in Jellyfin).</p>
-      <div class="actions-row"><button class="btn primary" type="submit">Save</button></div>
+      <p class="hint">Each row shows up to {ROW_ITEM_CAP} titles, appears with its collection and goes away with it. Every user sees the same rows. Turn a row on or off for a collection under its Advanced tab.</p>
+      <div class="save-row"><button class="btn primary" type="submit">Save home-screen rows</button></div>
     </form>
     {st.rows.length ? (
       <table class="tt" aria-label="Home-screen rows">
         <thead><tr><th scope="col">Row</th><th scope="col">Now</th></tr></thead>
-        <tbody>{[...st.rows].sort((a, b) => Number(b.live) - Number(a.live)).map((r) => <tr class={r.live ? '' : 'faint'}><td><a href={`/collections/${r.definitionId}`}>{r.name}</a></td><td>{r.live ? <span class="chip solid">Showing</span> : <span class="chip faint">Hidden until live</span>}</td></tr>)}</tbody>
+        <tbody>{[...st.rows].sort((a, b) => Number(b.live) - Number(a.live)).map((r) => <tr class={r.live ? '' : 'faint'}><td><a href={`/collections/${r.definitionId}`}>{r.name}</a></td><td>{r.live ? <span class="chip solid">Showing</span> : <span class="chip faint">Not showing yet</span>}</td></tr>)}</tbody>
       </table>
     ) : <p class="muted">No collection asks for a row yet.</p>}
     <form method="post" action="/settings/home/sync" class="inline-form" style="margin-top:var(--s3)">
       <Csrf token={csrf} />
       <button class="btn" type="submit" disabled={Boolean(st.problem)}>Update rows in Jellyfin now</button>
-      <span class="hint"> Runs also do this. Dry run doesn’t stop this button: pressing it is an explicit approval.</span>
+      <span class="hint"> Runs do this too. Pressing the button is your approval, so it works even while you’re approving everything first.</span>
     </form>
   </>
 );

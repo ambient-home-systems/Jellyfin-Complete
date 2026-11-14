@@ -83,5 +83,5 @@ export function versionSupport(version: string | undefined): VersionSupport {
   if (compareVersions(version, MINIMUM) < 0) return { level: 'unsupported', note: `Jellyfin ${version} is older than ${MINIMUM}, the oldest version this app supports. Please update Jellyfin.` };
   if (SERVER_VERIFIED.some((v) => parts(v)[0] === major && parts(v)[1] === minor)) return { level: 'verified', note: `Jellyfin ${version}: tested on a real server.` };
   if (API_CHECKED.some((v) => parts(v)[0] === major && parts(v)[1] === minor)) return { level: 'checked', note: `Jellyfin ${version}: every API call this app makes exists in this version’s published API, but it hasn’t been run on a real ${major}.${minor} server yet.` };
-  return { level: 'untested', note: `Jellyfin ${version} is newer than the versions this app has been checked against. It will probably work; check the first dry run before approving changes.` };
+  return { level: 'untested', note: `Jellyfin ${version} is newer than the versions this app has been checked against. It will probably work; look over the first run’s changes before approving them.` };
 }

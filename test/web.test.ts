@@ -53,35 +53,50 @@ describe('first-run guide (Phase 4)', () => {
       for (const [k, v] of Object.entries(data)) for (const x of ([] as string[]).concat(v)) body.append(k, x);
       return t.web.request(path, { method: 'POST', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: body.toString() });
     };
-    const page = await (await t.web.request('/start', { headers: { cookie } })).text();
-    expect(page).toContain('Getting started');
-    expect(page).toContain('Animated Classics');
+    const get = async (path: string) => (await t.web.request(path, { headers: { cookie } })).text();
+    // One step is open at a time, starting with the first that isn't done, and the guide has its own place in the menu.
+    const first = await get('/start');
+    expect(first).toContain('Getting started');
+    expect(first).toContain('Animated Classics');
+    expect(first).toMatch(/<a href="\/start" aria-current="page"/);
+    expect(first.match(/class="step-body"/g)).toHaveLength(1);
+    expect(first).not.toContain('27 TV franchises');
     // Each family says what its count means (collections it can make, not titles found) and its minimum.
+    const page = await get('/start?step=4');
     expect(page).toContain('27 TV franchises (Star Trek, NCIS, One Chicago…), one collection each');
     expect(page).toContain('at least 2 of its shows');
     expect(page).not.toContain('Kometa');
-    expect(await (await t.web.request('/', { headers: { cookie } })).text()).toContain('Finish setting up');
-    // Libraries step returns to the guide; timezone is validated.
-    const libRes = await post('/settings/libraries', { movieLibraryIds: ['lib-movies'], showLibraryIds: ['lib-shows'], next: '/start#st-2' });
-    expect(libRes.headers.get('location')).toMatch(/^\/start/);
+    expect(await get('/')).toContain('Finish setting up');
+    // Libraries step goes on to the next step; timezone is chosen from a list and validated.
+    const libRes = await post('/settings/libraries', { movieLibraryIds: ['lib-movies'], showLibraryIds: ['lib-shows'], next: '/start?step=2' });
+    expect(libRes.headers.get('location')).toBe('/start?step=2');
+    expect(await get('/start?step=2')).toMatch(/<select id="st-tz" name="timezone">[\s\S]*<option value="Europe\/London"/);
     expect(t.app.settings().movieLibraryIds).toEqual(['lib-movies']);
     expect(t.app.settings().showLibraryIds).toBeNull(); // every TV library ticked = all, including ones added later
-    await post('/settings/libraries', { movieLibraryIds: ['lib-movies', 'lib-animated'], showLibraryIds: ['lib-shows'], next: '/start#st-2' });
+    await post('/settings/libraries', { movieLibraryIds: ['lib-movies', 'lib-animated'], showLibraryIds: ['lib-shows'], next: '/start?step=2' });
     expect(t.app.settings().movieLibraryIds).toBeNull();
     expect(flash(await post('/start/timezone', { timezone: 'Mars/Olympus' }))).toMatch(/Unknown timezone/);
-    await post('/start/timezone', { timezone: 'Europe/London' });
+    expect((await post('/start/timezone', { timezone: 'Europe/London' })).headers.get('location')).toBe('/start?step=3');
     expect(t.app.settings().timezone).toBe('Europe/London');
+    // The TMDb key can be skipped; the step still counts as done.
+    expect((await post('/start/tmdb', { key: '' })).headers.get('location')).toMatch(/^\/start\?step=4/);
     // Families: universes on, holiday episodes off.
     await post('/start/families', { families: ['seasonal', 'universe'] });
     const enabled = (prefix: string) => (t.app.db.$client.prepare(`select count(*) n from definition where preset_key like '${prefix}:%' and enabled = 1`).get() as { n: number }).n;
     expect([enabled('seasonal'), enabled('holiday_episodes'), enabled('universe'), enabled('show_franchise')]).toEqual([19, 0, 17, 0]);
     expect(t.app.settings().filmSeries.enabled).toBe(false);
-    expect(page).toContain('One collection for each film series');
+    expect(page).toContain('One collection for each movie series');
     await post('/start/families', { families: ['seasonal', 'universe', 'film_series'] });
     expect(t.app.settings().filmSeries.enabled).toBe(true); // one switch; the next run adds the series
-    expect(t.app.settings().onboarding.done.sort()).toEqual(['families', 'libraries', 'timezone']);
-    // Finish: the banner goes, and the next sign-in lands on the Dashboard.
-    expect((await post('/start/finish', {})).headers.get('location')).toBe('/');
+    expect(t.app.settings().onboarding.done.sort()).toEqual(['families', 'libraries', 'timezone', 'tmdb']);
+    // Jellyfin has nothing under these names, so "Collections already in Jellyfin" finishes itself and the last step opens.
+    const last = await get('/start');
+    expect(last).toMatch(/aria-current="step"[^>]*>[\s\S]*Your first changes/);
+    expect(last).toContain('Nothing to do');
+    // Finish: the banner and the menu item go, and the next sign-in lands on Home. "next" only goes to a page of the app.
+    expect((await post('/start/finish', { next: 'https://example.com/' })).headers.get('location')).toBe('/');
+    expect((await post('/start/finish', { next: '/review' })).headers.get('location')).toBe('/review');
+    expect(await get('/')).not.toContain('href="/start"');
     expect(await (await t.web.request('/', { headers: { cookie } })).text()).not.toContain('Finish setting up');
     expect((await signIn(t.web)).res.headers.get('location')).toBe('/');
   });
@@ -115,22 +130,27 @@ describe('web', () => {
   it('rejects state changes without the CSRF token', async () => {
     await t.web.request('/setup', form({ url: FAKE_URL, apiKey: t.fake.apiKey, setupCode: t.app.setupCode ?? '' }));
     const { cookie } = await signIn(t.web);
-    const r = await t.web.request('/settings/general', { ...form({ dryRun: '0', leadDays: '14', timezone: 'America/New_York', arrCapPerRun: '10' }), headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' } });
+    const r = await t.web.request('/settings/approvals', { ...form({ dryRun: '0', leadDays: '14', arrCapPerRun: '10' }), headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' } });
     expect(r.status).toBe(403);
     expect(t.app.settings().dryRun).toBe(true);
   });
 
-  it('renders every page, runs, and approves from Review', async () => {
+  it('renders every page, runs, and approves from the Inbox', async () => {
     await t.web.request('/setup', form({ url: FAKE_URL, apiKey: t.fake.apiKey, setupCode: t.app.setupCode ?? '' }));
     const { cookie } = await signIn(t.web);
     const csrf = await csrfOf(t.web, cookie);
     expect(csrf).toHaveLength(32);
-    for (const p of ['/', '/collections', '/review', '/review?tab=dismissed', '/activity', '/settings', '/adoption']) {
+    for (const p of ['/', '/collections', '/review', '/review?tab=dismissed', '/health', '/missing', '/activity', '/adoption', '/settings', '/settings/libraries', '/settings/approvals', '/settings/schedule', '/settings/extras', '/settings/advanced']) {
       const r = await t.web.request(p, { headers: { cookie } });
       expect(r.status, p).toBe(200);
       expect(r.headers.get('content-security-policy')).toContain("default-src 'self'");
     }
-    // A run in dry run proposes Thanksgiving (window open on 17 Nov) without touching Jellyfin.
+    // Before any run, Home and the Inbox say so and offer the run, rather than an empty plan.
+    const before = await (await t.web.request('/', { headers: { cookie } })).text();
+    expect(before).toContain('Start your first run');
+    expect(before).not.toContain('goes away'); // nothing is in Jellyfin yet, so nothing can go away
+    expect(await (await t.web.request('/review', { headers: { cookie } })).text()).toContain('Nothing to approve yet');
+    // A run while approving everything first proposes Thanksgiving (window open on 17 Nov) without touching Jellyfin.
     await runPipeline(t.app, { job: 'manual', trigger: 'manual', index: true, now: Date.UTC(2026, 10, 17, 15) });
     expect(t.fake.boxSets()).toHaveLength(0);
     // The timetable lists closings only for collections that are or will be live.
@@ -140,7 +160,9 @@ describe('web', () => {
     expect(dash.timetable.some((c) => c.kind === 'opens' && c.def.slug === 'seasonal-christmas')).toBe(true);
     const review = await (await t.web.request('/review', { headers: { cookie } })).text();
     expect(review).toContain('Thanksgiving Movies');
-    expect(review).toContain('Dry run is on');
+    expect(review).toContain('You’re approving everything first');
+    expect(review).toMatch(/name="group" value="approve:\d+"[^>]*>.*Approve all 3/);
+    expect(review).toMatch(/<span class="n num">3<\/span>/); // the Inbox's Collection changes tab
     const ids = [...review.matchAll(/name="ids" value="(\d+)"/g)].map((m) => m[1]!);
     expect(ids.length).toBe(3); // create, metadata, add Planes, Trains and Automobiles
     const body = new URLSearchParams({ _csrf: csrf, tab: 'pending', verdict: 'approve' });
@@ -157,9 +179,23 @@ describe('web', () => {
     const tgId = (t.app.db.$client.prepare("select id from definition where slug = 'seasonal-thanksgiving'").get() as { id: number }).id;
     const preview = await (await t.web.request(`/collections/${tgId}/preview`, { headers: { cookie } })).text();
     expect(preview).toContain('Planes, Trains and Automobiles');
-    expect(preview).toContain('in box set');
+    expect(preview).toContain('in Jellyfin');
     const editor = await t.web.request(`/collections/${tgId}`, { headers: { cookie } });
     expect(editor.status).toBe(200);
+    // The collection opens on what it is and what's in it; the rest is behind tabs, all under one Save.
+    const edHtml = await editor.text();
+    expect(edHtml).toContain('In Jellyfin now, with 1 title.');
+    expect(edHtml).toMatch(/data-tab="titles" aria-current="page"/);
+    expect(edHtml).toMatch(/<div data-panel="advanced" hidden/);
+    expect(edHtml.match(/>Save changes</g)).toHaveLength(1);
+    expect(await (await t.web.request(`/collections/${tgId}?tab=advanced`, { headers: { cookie } })).text()).toMatch(/<div data-panel="titles" hidden/);
+    // Home, once something has been approved, offers once to stop asking about routine changes.
+    t.app.updateSettings({ onboarding: { ...t.app.settings().onboarding, finished: true } });
+    expect(await (await t.web.request('/', { headers: { cookie } })).text()).toContain('Let routine changes happen by themselves?');
+    const keep = await t.web.request('/start/automatic', { method: 'POST', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, choice: 'no' }).toString() });
+    expect(flash(keep)).toContain('Nothing changes');
+    expect(t.app.settings().dryRun).toBe(true);
+    expect(await (await t.web.request('/', { headers: { cookie } })).text()).not.toContain('Let routine changes happen by themselves?');
     // Plex parity: not connected, then connected (Plex has 3 Thanksgiving films; 1 of them is owned here).
     expect(await (await t.web.request(`/collections/${tgId}/parity`, { headers: { cookie } })).text()).toContain('Connect Plex');
     t.app.updateSettings({ connections: { ...t.app.settings().connections, plexUrl: 'http://plex.test:32400' } });
@@ -169,15 +205,23 @@ describe('web', () => {
     expect(par).toContain('In Plex, not in your Jellyfin library (2)');
   });
 
-  it('reads libraries for Settings when none are known yet', async () => {
+  it('reads libraries for Settings and the guide when none are known yet', async () => {
     await t.web.request('/setup', form({ url: FAKE_URL, apiKey: t.fake.apiKey, setupCode: t.app.setupCode ?? '' }));
     const { cookie } = await signIn(t.web);
     t.app.db.$client.prepare('delete from library').run();
-    const html = await (await t.web.request('/settings', { headers: { cookie } })).text();
+    const html = await (await t.web.request('/settings/libraries', { headers: { cookie } })).text();
     const names = t.fake.libraries.filter((l) => l.CollectionType === 'movies').map((l) => l.Name!);
     expect(names.length).toBeGreaterThan(0);
     for (const n of names) expect(html).toContain(`value="${t.fake.libraries.find((l) => l.Name === n)!.ItemId}"`);
     expect(html).not.toContain('Couldn’t read your libraries');
+    // The guide does the same, and says why when Jellyfin can't be read instead of showing an empty step.
+    t.app.db.$client.prepare('delete from library').run();
+    expect(await (await t.web.request('/start?step=1', { headers: { cookie } })).text()).toContain('value="lib-movies"');
+    t.app.db.$client.prepare('delete from library').run();
+    t.app.secrets.set('jellyfin.apiKey', 'wrong-key');
+    const broken = await (await t.web.request('/start?step=1', { headers: { cookie } })).text();
+    expect(broken).toContain('Couldn’t read your libraries from Jellyfin');
+    expect(broken).not.toContain('name="movieLibraryIds"');
   });
 
   it('creates a custom collection, edits its sources, and deletes it', async () => {
@@ -207,8 +251,15 @@ describe('web', () => {
     await post(`/collections/${id}/sources`, { op: `remove:${srcs()[0]!.id}` });
     expect(srcs().map((x) => x.type)).toEqual(['tmdb_keyword']);
     // Always on, then delete.
-    await post(`/collections/${id}`, { name: 'Heist Movies', enabled: '1', minItems: '1', syncMode: 'sync', schedule: 'always' });
+    const saved = await post(`/collections/${id}`, { name: 'Heist Movies', enabled: '1', minItems: '1', syncMode: 'sync', schedule: 'always', tab: 'dates', posterForm: '1', poster: 'none' });
+    expect(saved.headers.get('location')).toMatch(new RegExp(`^/collections/${id}\\?tab=dates&ok=Saved`)); // back on the tab it was saved from
+    expect(flash(saved)).not.toContain('Poster'); // the poster wasn't changed, so it isn't set again
     expect((t.app.db.$client.prepare('select window from definition where id = ?').get(id) as { window: string | null }).window).toBeNull();
+    // The poster is part of the same Save. One that can't be read doesn't lose the rest of what was saved.
+    const withPoster = await post(`/collections/${id}`, { name: 'Heists', enabled: '1', minItems: '1', syncMode: 'sync', schedule: 'always', posterForm: '1', poster: 'url', posterUrl: 'https://example.com/Default-Images/heist.jpg' });
+    expect(flash(withPoster)).toContain('Saved, but the poster wasn’t changed');
+    expect((t.app.db.$client.prepare('select name from definition where id = ?').get(id) as { name: string }).name).toBe('Heists');
+    await post(`/collections/${id}`, { name: 'Heist Movies', enabled: '1', minItems: '1', syncMode: 'sync', schedule: 'always' });
     expect(flash(await post(`/collections/${id}/delete`, {}))).toContain('Deleted Heist Movies');
     expect(t.app.db.$client.prepare('select count(*) n from definition_source where definition_id = ?').get(id)).toEqual({ n: 0 });
     // Presets can't be deleted.
@@ -216,17 +267,50 @@ describe('web', () => {
     expect(flash(await post(`/collections/${tg}/delete`, {}))).toContain('can’t be deleted');
   });
 
-  it('saves settings with validation', async () => {
+  it('saves each Settings page on its own, with validation', async () => {
     await t.web.request('/setup', form({ url: FAKE_URL, apiKey: t.fake.apiKey, setupCode: t.app.setupCode ?? '' }));
     const { cookie } = await signIn(t.web);
     const csrf = await csrfOf(t.web, cookie, '/settings');
-    const post = (data: Record<string, string>) => t.web.request('/settings/general', { method: 'POST', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...data }).toString() });
-    const bad = await post({ leadDays: '14', timezone: 'Mars/Olympus', arrCapPerRun: '10' });
+    const post = (path: string, data: Record<string, string>) => t.web.request(path, { method: 'POST', headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _csrf: csrf, ...data }).toString() });
+    // Each page marks itself in the side menu, and has one Save.
+    for (const [path, label] of [['/settings', 'Connections'], ['/settings/libraries', 'Libraries and region'], ['/settings/approvals', 'Approvals'], ['/settings/schedule', 'Schedule'], ['/settings/extras', 'Extras'], ['/settings/advanced', 'Advanced']] as const) {
+      const html = await (await t.web.request(path, { headers: { cookie } })).text();
+      expect(html, path).toContain(`<a href="${path}" aria-current="page">${label}</a>`);
+    }
+    // Libraries and region: the timezone is checked, and a bad one saves nothing.
+    const bad = await post('/settings/libraries', { regionForm: '1', movieLibraryIds: 'lib-movies', timezone: 'Mars/Olympus', streamingRegion: 'GB' });
     expect(flash(bad)).toContain('Unknown timezone');
-    await post({ leadDays: '10', timezone: 'America/Chicago', arrCapPerRun: '5', neighbours: 'Kometa (Plex) 05:00\nJellyfin-Auto-Collections 04:00' });
+    expect(t.app.settings().streaming.region).toBe('US');
+    await post('/settings/libraries', { regionForm: '1', movieLibraryIds: 'lib-movies', showLibraryIds: 'lib-shows', timezone: 'America/Chicago', streamingRegion: 'gb' });
+    expect(t.app.settings()).toMatchObject({ timezone: 'America/Chicago', movieLibraryIds: ['lib-movies'], streaming: { region: 'GB' } });
+    // Approvals: "Approve everything first" off, one kind of change set to Never, and the limits.
+    const approvals = await (await t.web.request('/settings/approvals', { headers: { cookie } })).text();
+    expect(approvals).toContain('Approve everything first');
+    expect(approvals).toMatch(/>Never<\/label>[\s\S]*>Ask me<\/label>[\s\S]*>Automatic<\/label>/);
+    expect(flash(await post('/settings/approvals', { dryRun: '0', 'mode:collection.remove_items': 'off', leadDays: '10', arrCapPerRun: '5', defaultSnooze: '7d' }))).toContain('Approvals saved');
     const s = t.app.settings();
-    expect(s).toMatchObject({ dryRun: false, leadDays: 10, timezone: 'America/Chicago' });
-    expect(s.neighbours).toEqual([{ name: 'Kometa (Plex)', time: '05:00' }, { name: 'Jellyfin-Auto-Collections', time: '04:00' }]);
+    expect(s).toMatchObject({ dryRun: false, leadDays: 10, defaultSnooze: '7d', guardrails: { arrCapPerRun: 5, releasedOnly: false } });
+    expect(s.modes['collection.remove_items']).toBe('off');
+    expect(s.modes['collection.add_items']).toBe('auto'); // left as it was
+    expect(flash(await post('/settings/approvals', { dryRun: '1', leadDays: '99', arrCapPerRun: '5' }))).toContain('Plan ahead must be 0–60 days');
+    expect(t.app.settings().dryRun).toBe(false);
+    // Schedule: each job says when it runs in words; other tools' times are kept beside them.
+    const schedule = await (await t.web.request('/settings/schedule', { headers: { cookie } })).text();
+    expect(schedule).toContain('Every day at 02:30');
+    expect(schedule).toContain('Every Sunday at 03:10');
+    await post('/settings/schedules', { 'cron:nightly-refresh': '15 4 * * *', 'on:nightly-refresh': '1', 'on:window-check': '1', neighboursForm: '1', neighbours: 'Kometa (Plex) 05:00\nJellyfin-Auto-Collections 04:00' });
+    expect(t.app.settings().neighbours).toEqual([{ name: 'Kometa (Plex)', time: '05:00' }, { name: 'Jellyfin-Auto-Collections', time: '04:00' }]);
+    expect(await (await t.web.request('/settings/schedule', { headers: { cookie } })).text()).toContain('Every day at 04:15');
+    expect(flash(await post('/settings/schedules', { 'cron:nightly-refresh': 'whenever' }))).toContain('isn’t a schedule the app can read');
+    // Extras: Library health off takes its tab out of the Inbox.
+    expect(await (await t.web.request('/review', { headers: { cookie } })).text()).toContain('href="/health"');
+    await post('/settings/health', {});
+    expect(t.app.settings().health.enabled).toBe(false);
+    expect(await (await t.web.request('/review', { headers: { cookie } })).text()).not.toContain('href="/health"');
+    // Advanced: the snapshot needs its address.
+    expect(flash(await post('/settings/advanced', { imdbRoute: 'snapshot', snapshotUrl: '' }))).toContain('needs a snapshot URL');
+    await post('/settings/advanced', { imdbRoute: 'direct', snapshotUrl: '', mediaSent: '1', mediaEnabled: '1', mediaDir: '/media' });
+    expect(t.app.settings().media.enabled).toBe(true);
   });
 });
 

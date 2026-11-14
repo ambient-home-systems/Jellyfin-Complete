@@ -7,18 +7,18 @@
 
 # Maverick Jellyfin Complete
 
-Kometa-style collections for Jellyfin: seasonal box sets that appear and disappear on their dates, built from IMDb, TMDb, MDBList, Letterboxd and more. Nothing changes in your library until you approve it.
+Kometa-style collections for Jellyfin: seasonal collections that appear and disappear on their dates, built from IMDb, TMDb, MDBList, Letterboxd and more. Nothing changes in your library until you approve it.
 
 - **Kometa's seasonal collections.** All 19, including Christmas, Halloween, Valentine's and the awareness months, built from the same lists and searches as Kometa. Each opens at local midnight on its first day and goes away after its last.
 - **Holiday episodes.** Christmas, Halloween and Thanksgiving episodes from the shows you own.
 - **New and recent.** Newly Released Movies and Shows, New Episodes and Recently Added, kept up to date every night, like Kometa's basic collections.
-- **Film series.** One collection for each film series you own (Toy Story, John Wick…), from TMDb, kept up to date as you add films, like Kometa's franchise collections.
+- **Movie series.** One collection for each movie series you own (Toy Story, John Wick…), from TMDb, kept up to date as you add movies, like Kometa's franchise collections.
 - **Streaming services and IMDb charts.** "Netflix Movies", "Disney+ Shows" and 39 more: the titles you own that stream on each service in your country. And the titles you own from IMDb's Top 250, Most Popular and Lowest Rated charts. Like Kometa's streaming and chart collections.
 - **Posters of its own.** Each seasonal, holiday, new-and-recent, chart and streaming collection gets a poster made for this app, in one style, with its name set in the app's typeface. Upload your own or use an address instead whenever you like.
 - **Your own collections**, from IMDb lists or keywords, MDBList, TMDb collections, keywords or lists, Letterboxd, Plex collections, or your own Jellyfin tags and genres.
-- **Plan → review → apply.** Choose which kinds of change happen on their own and which wait for you. A failing source never empties a collection, and any change can be undone.
+- **Nothing changes without you.** Every change waits in one Inbox until you approve it. Later, choose which kinds of change happen on their own and which keep asking. A failing source never empties a collection, and any change can be undone.
 - **Poster overlays.** Kometa's status badges on shows (AIRING, RETURNING, CANCELED, ENDED) and its IMDb Top 250 ribbon, drawn on copies of your posters. The originals are kept and go back when you turn them off.
-- **Library health.** Flags films and episodes whose file runs far longer or shorter than TMDb says, or whose title tags name another film, so a mislabelled file doesn't end up in front of the wrong audience. Read-only.
+- **Library health.** Flags movies and episodes whose file runs far longer or shorter than TMDb says, or whose title tags name another movie, so a mislabelled file doesn't end up in front of the wrong audience. Read-only.
 - **Optional extras:**
   - send missing titles to Radarr or Sonarr
   - compare collections with what Kometa built in Plex
@@ -59,8 +59,8 @@ Then open `http://<host>:8097`:
 
 1. **Connect Jellyfin.** Enter its address and an API key (Jellyfin → Dashboard → API Keys), plus the **setup code** from the log. The code stops anyone else who can reach the page from connecting first.
 2. **Sign in** with a Jellyfin administrator account.
-3. **Follow Getting started.** It covers libraries, timezone, a TMDb key, which collections to turn on, box sets you already have, and a first dry run.
-4. **Check Review,** and turn dry run off in Settings when the plans look right.
+3. **Follow Getting started.** Six short steps, one at a time: libraries, timezone, a TMDb key, which collections to turn on, collections Jellyfin already has, and your first changes. The first run starts while you finish, and nothing changes in Jellyfin.
+4. **Open your Inbox** and approve what looks right. After your first approvals, Home offers to let routine changes happen by themselves; you can switch that any time in Settings → Approvals.
 
 ### Portainer
 
@@ -82,7 +82,7 @@ Then open `http://<host>:8097`:
          external: true
          name: jellyfin-complete_maverick-config
      ```
-   - To start over, run `docker volume rm` with the volume's name. You'll connect Jellyfin and go through Getting started again. Box sets the app made before are listed under **Collections → Existing box sets**, ready to adopt.
+   - To start over, run `docker volume rm` with the volume's name. You'll connect Jellyfin and go through Getting started again. Collections the app made before are listed under **Collections → Already in Jellyfin**, ready to take over.
 4. **Set up the stack** with the Portainer steps above. Then delete the old folder.
 
 ### What the container uses
@@ -113,7 +113,7 @@ Database migrations run at start-up. Read [CHANGELOG.md](CHANGELOG.md) first.
 
 | Using it | |
 |---|---|
-| [docs/USER-GUIDE.md](docs/USER-GUIDE.md) | How it works, each screen, modes, collections, Missing, home-screen rows, Claude access, troubleshooting |
+| [docs/USER-GUIDE.md](docs/USER-GUIDE.md) | How it works, each screen, approvals, collections, missing titles, home-screen rows, Claude access, troubleshooting |
 | [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md) | Where data comes from, which keys you need, and the risks: IMDb's GraphQL API isn't official, and Letterboxd has no API |
 | [docs/REVERSE-PROXY.md](docs/REVERSE-PROXY.md) | Reaching it from outside your network safely |
 | [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) | Jellyfin versions |
@@ -141,7 +141,7 @@ npm run dev
 ```
 
 - `npm run dev` serves the app at http://localhost:8097, with its data in `./config`.
-- `npx tsx scripts/dev-fake-jellyfin.ts` runs a fake Jellyfin with sample films. Start it with `FAKE_PORT=18096`, then point the app at it.
+- `npx tsx scripts/dev-fake-jellyfin.ts` runs a fake Jellyfin with sample movies. Start it with `FAKE_PORT=18096`, then point the app at it.
 - `.env.example` lists optional development settings. Copy it to `.env`, which is gitignored; never commit keys.
 
 - `docker build -t maverick-jellyfin-complete:local .` builds the image yourself. Use that name as the `image:` in your compose file.

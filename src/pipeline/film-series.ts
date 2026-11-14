@@ -22,7 +22,7 @@ export async function syncFilmSeries(app: AppContext, opts: { lookupCap?: number
 
   // Jellyfin's TMDb metadata records each film's series. Only if it recorded none at all, ask TMDb (cached for 30 days).
   if (tmdb && films.length && !films.some((f) => f.series)) {
-    opts.step?.('Finding film series on TMDb');
+    opts.step?.('Finding movie series on TMDb');
     const cap = opts.lookupCap ?? 300;
     for (const f of films) {
       if (!f.tmdb) continue;
@@ -57,10 +57,10 @@ export async function syncFilmSeries(app: AppContext, opts: { lookupCap?: number
   const existing = new Map(app.db.select({ id: definition.id, key: definition.presetKey }).from(definition).where(like(definition.presetKey, `${SERIES_PREFIX}%`)).all().map((d) => [d.key!.slice(SERIES_PREFIX.length), d.id]));
   const fresh = wanted.filter((id) => !existing.has(id));
   if (fresh.length && !tmdb) {
-    out.problem = `${fresh.length} film series need a TMDb key for their names and posters (Settings → Connections).`;
+    out.problem = `${fresh.length} movie series need a TMDb key for their names and posters (Settings → Connections).`;
     return out;
   }
-  if (fresh.length) opts.step?.(`Adding ${fresh.length} film series`);
+  if (fresh.length) opts.step?.(`Adding ${fresh.length} movie series`);
   for (const id of fresh) {
     try {
       const details = await tmdb!.collectionDetails(id);

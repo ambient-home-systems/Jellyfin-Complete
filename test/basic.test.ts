@@ -205,14 +205,14 @@ describe('New and recent in the editor and Getting started', () => {
     expect(parseSourceInput('recent_added', '60', 'movies')).toEqual({ type: 'jellyfin_recent', config: { field: 'added', days: 60, kind: 'movie' } });
     expect(parseSourceInput('recent_added', '7', 'shows')).toEqual({ type: 'jellyfin_recent', config: { field: 'added', days: 7, kind: 'series' } });
     expect(parseSourceInput('recent_added', 'a week', 'movies')).toMatch(/number of days/);
-    expect(parseSourceInput('recent_released', '30', 'both')).toMatch(/films, shows or episodes/);
+    expect(parseSourceInput('recent_released', '30', 'both')).toMatch(/movies, shows or episodes/);
   });
 
   it('offers the family in Getting started', async () => {
     const { app, web, fake } = setup();
     await web.request('/setup', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ url: FAKE_URL, apiKey: fake.apiKey, setupCode: app.setupCode ?? '' }).toString() });
     const { cookie } = await signIn(web);
-    const page = await (await web.request('/start', { headers: { cookie } })).text();
+    const page = await (await web.request('/start?step=4', { headers: { cookie } })).text();
     expect(page).toContain('New and recent');
     expect(page).toContain('5 collections that follow your library: Newly Released Movies and Shows');
   });

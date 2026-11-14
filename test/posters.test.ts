@@ -62,7 +62,7 @@ describe('collection posters', () => {
     const { app, id, poster } = await world();
     expect(poster()).toBeUndefined();
     const upload = await jpeg([20, 120, 220]);
-    expect(await setPoster(app, id, { kind: 'upload', bytes: upload })).toBe('Poster saved and put on its box set in Jellyfin.');
+    expect(await setPoster(app, id, { kind: 'upload', bytes: upload })).toBe('Poster saved and put on the collection in Jellyfin.');
     expect(sha256(poster()!)).toBe(sha256(upload));
     const files = readdirSync(postersDir(app.config.configDir));
     expect(files).toHaveLength(1);
@@ -87,7 +87,7 @@ describe('collection posters', () => {
   it('“No poster” takes it off the box set, and the next run leaves it off', async () => {
     const { app, id, poster } = await world();
     await setPoster(app, id, { kind: 'upload', bytes: await jpeg([9, 9, 9]) });
-    expect(await setPoster(app, id, { kind: 'none' })).toBe('Poster removed, from its box set in Jellyfin too.');
+    expect(await setPoster(app, id, { kind: 'none' })).toBe('Poster removed, in Jellyfin too.');
     expect(poster()).toBeUndefined();
     expect((await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + DAY })).stats.boxSetsRepaired).toBe(0);
     expect(poster()).toBeUndefined();

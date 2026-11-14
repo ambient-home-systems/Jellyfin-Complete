@@ -13,7 +13,7 @@ export type SnoozeFor = '7d' | '30d' | 'window';
 export type VerdictResult = { ok: boolean; message: string; decided: number };
 
 export async function reviewVerdict(app: AppContext, ids: number[], verdict: Verdict, by: string, opts: { snooze?: SnoozeFor } = {}): Promise<VerdictResult> {
-  if (!ids.length) return { ok: false, message: 'Select at least one proposal first.', decided: 0 };
+  if (!ids.length) return { ok: false, message: 'Tick at least one change first.', decided: 0 };
   if (verdict === 'approve') {
     // Approving "Create box set" also approves that collection's pending titles and metadata (not suggestions), so the
     // box set is created and filled in one step instead of waiting for each title.
@@ -24,21 +24,21 @@ export async function reviewVerdict(app: AppContext, ids: number[], verdict: Ver
       : [];
     const all = [...ids, ...companions];
     const decided = decide(app.db, all, 'approve', by);
-    const also = companions.length ? ` (including ${companions.length} title and metadata change${companions.length === 1 ? '' : 's'} for the new box set${creating.length === 1 ? '' : 's'})` : '';
+    const also = companions.length ? ` (including ${companions.length} title and detail change${companions.length === 1 ? '' : 's'} for the new collection${creating.length === 1 ? '' : 's'})` : '';
     const due = app.db.select().from(action).where(inArray(action.id, all)).all().filter((a) => a.status === 'approved' && (a.applyAt === null || a.applyAt <= Date.now())).map((a) => a.id);
     if (due.length) {
       try {
         const r = await applyNow(app, due);
-        return { ok: true, decided, message: `Approved ${decided}${also}. Applied ${r.applied}${r.waiting ? `, ${r.waiting} waiting for other approvals (a box set is created only with members)` : ''}${r.failed ? `, ${r.failed} failed (see Activity)` : ''}.` };
+        return { ok: true, decided, message: `Approved ${decided}${also}. Applied ${r.applied}${r.waiting ? `, ${r.waiting} waiting for other approvals (a collection is only created once it has titles)` : ''}${r.failed ? `, ${r.failed} failed (see History)` : ''}.` };
       } catch (e) {
         return { ok: false, decided, message: `Approved, but applying failed: ${(e as Error).message}` };
       }
     }
-    return { ok: true, decided, message: decided ? `Approved ${decided}${also}. They apply when the window opens.` : 'Nothing to approve: those proposals aren’t pending.' };
+    return { ok: true, decided, message: decided ? `Approved ${decided}${also}. They happen on the day the collection appears.` : 'Nothing to approve: those changes aren’t waiting any more.' };
   }
   if (verdict === 'dismiss') {
     const decided = decide(app.db, ids, 'dismiss', by);
-    return { ok: true, decided, message: `Dismissed ${decided}. They won’t be proposed again unless you undo it.` };
+    return { ok: true, decided, message: `Dismissed ${decided}. They won’t be suggested again unless you bring them back (Inbox → Dismissed).` };
   }
   const choice = opts.snooze ?? app.settings().defaultSnooze;
   const s = app.settings();

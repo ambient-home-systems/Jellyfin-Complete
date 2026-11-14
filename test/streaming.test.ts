@@ -280,7 +280,7 @@ describe('Streaming and chart sources in the editor and Getting started', () => 
     expect(parseSourceInput('imdb_chart', 'lowest_rated', 'movies')).toEqual({ type: 'imdb_chart', config: { chart: 'lowest_rated' } });
     expect(parseSourceInput('imdb_chart', 'lowest', 'shows')).toMatch(/Enter one IMDb chart/);
     expect(parseSourceInput('streaming_service', 'disney+', 'shows')).toEqual({ type: 'tmdb_watch_provider', config: { service: 'disney', kind: 'show' } });
-    expect(parseSourceInput('streaming_service', 'Netflix', 'both')).toMatch(/films or of shows/);
+    expect(parseSourceInput('streaming_service', 'Netflix', 'both')).toMatch(/movies or of shows/);
     expect(parseSourceInput('streaming_service', 'Blockbuster', 'movies')).toMatch(/Enter one streaming service/);
   });
 
@@ -289,7 +289,7 @@ describe('Streaming and chart sources in the editor and Getting started', () => 
     await web.request('/setup', form({ url: FAKE_URL, apiKey: fake.apiKey, setupCode: app.setupCode ?? '' }));
     const { cookie } = await signIn(web);
     const csrf = await csrfOf(web, cookie, '/start');
-    const page = await (await web.request('/start', { headers: { cookie } })).text();
+    const page = await (await web.request('/start?step=4', { headers: { cookie } })).text();
     expect(page).toContain('Streaming services');
     expect(page).toContain('5 collections of the titles you own from IMDb’s charts');
     expect(page).toContain('41 collections of the titles you own that stream on a service in your country (US');
@@ -306,8 +306,8 @@ describe('Streaming and chart sources in the editor and Getting started', () => 
     expect(on).toContain('chart-lowest-rated');
     expect(on.filter((s) => s.startsWith('universe-'))).toEqual([]);
 
-    // The country is set in Settings → Run and review.
-    const settingsPage = await (await web.request('/settings', { headers: { cookie } })).text();
+    // The country is set in Settings → Libraries and region.
+    const settingsPage = await (await web.request('/settings/libraries', { headers: { cookie } })).text();
     expect(settingsPage).toMatch(/name="streamingRegion"[^>]*value="US"/);
     expect(settingsPage).toContain('Streaming data from JustWatch, through TMDb.');
   });
