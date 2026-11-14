@@ -41,6 +41,21 @@ describe('the rules', () => {
     expect(claimedTitle('English (SDH)')).toBeNull();
     expect(claimedTitle('Commentary with the director (2019)')).toBeNull();
     expect(claimedTitle('Surround 5.1')).toBeNull();
+    // Encoding notes aren't titles, and their numbers aren't years.
+    for (const note of ['x265 10bit CRF 20 - 1920x1080 - 2020 kbps', 'HDR10 BT.2020 PQ', 'BT2020 HLG 2019', 'Main video 23.976 fps 2018', 'Video 8.5 Mb/s 2021', 'REMUX 2019', 'COMPRESSED 2021',
+      'Encoded with HandBrake 1.6.1 2023', 'DTS-HD MA 5.1 2018', 'DTS 2016']) expect(claimedTitle(note), note).toBeNull();
+    expect(claimedTitle('Stereo 2000 kbps')).toBeNull();
+    // The eight false alarms from 0.17.0, as they were tagged.
+    for (const note of [
+      '1080p COMPRESSED (from 23.2Mb/s VC-1 BluRay REMUX - 2009 Warner Bros. Home Entertainment)', // the Christmas specials, She's the Man
+      'DTS-HD MA 5.1 / 1968 kbps / original', // Dennis the Menace
+      'x265 / 12098 kbps / 1080p / Main 10 / 4:2:0 / BT.2020', // Wonder
+      'HEVC Main 10 2019', 'TrueHD Atmos 7.1 2017', 'x264 2012', 'REMUX - 2009 release', '8 bits 2015',
+    ]) expect(claimedTitle(note), note).toBeNull();
+    // A release name with the title first is still read, whatever follows the year.
+    expect(claimedTitle('Bewitched.2005.2160p.REMUX.HEVC.DTS-HD.MA.5.1')).toEqual({ title: 'Bewitched', year: 2005 });
+    // Release names are still read, x264 included.
+    expect(claimedTitle('The.Lucky.One.2012.1080p.BluRay.x264')).toEqual({ title: 'The Lucky One', year: 2012 });
   });
 
   it('flags a tag naming another title, unless it’s the same title or the same year (a translated title)', () => {
@@ -180,6 +195,16 @@ describe('Library health', () => {
     tso.MediaSources = [{ RunTimeTicks: 20 * TICKS_PER_MIN, MediaStreams: [] }];
     await run(app, NOW + 3 * DAY);
     expect(healthRows(app).some((r) => r.jfId === 'm-tso' && r.kind === 'runtime')).toBe(true);
+  });
+
+  it('drops a finding as soon as its file is deleted or replaced, without waiting for the nightly index', async () => {
+    const { app, fake } = world();
+    await run(app);
+    expect(findings(app)['e-shredder runtime']).toBeDefined();
+    fake.items.delete('e-shredder'); // deleted (or replaced: Jellyfin gives the new file a new item)
+    await runPipeline(app, { job: 'window-check', trigger: 'schedule', index: false, now: NOW + DAY });
+    expect(findings(app)['e-shredder runtime']).toBeUndefined();
+    expect(findings(app)['m-wakanda title']).toBeDefined(); // the rest stay
   });
 
   it('probes a few thousand files a run, so a big library is checked over a few nights', async () => {

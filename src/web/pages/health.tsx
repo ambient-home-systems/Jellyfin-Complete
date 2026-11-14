@@ -134,11 +134,17 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
           ) : <p class="muted">{m.enabled ? 'Nothing to review. Every file and poster checked so far matches its title.' : 'Nothing to review.'}</p>}
         </section>
 
-        {m.info.length ? (
+        {m.info.length || a.sameImage.length ? (
           <section class="panel" aria-labelledby="info-h">
-            <div class="section-head"><h2 id="info-h">For information</h2><span class="aside">{plural(m.info.length, 'file')}</span></div>
-            <p class="faint">These play in another language by default, but every Jellyfin user’s settings pick the library’s language instead, so nobody hears the dub. They’d matter for a new user, or if those settings change.</p>
-            <table class="tt" aria-labelledby="info-h">
+            <div class="section-head"><h2 id="info-h">For information</h2><span class="aside">not counted</span></div>
+            {a.sameImage.length ? (
+              <>
+                <p class="faint">These posters have another language’s tag on TMDb but are the same image as TMDb’s poster in the library’s language, so there’s nothing to change.</p>
+                <ul class="plain-list">{a.sameImage.map((x) => <li><b>{x.title}</b>: {x.note}</li>)}</ul>
+              </>
+            ) : null}
+            {m.info.length ? <p class="faint">These play in another language by default, but every Jellyfin user’s settings pick the library’s language instead, so nobody hears the dub. They’d matter for a new user, or if those settings change.</p> : null}
+            {m.info.length ? <table class="tt" aria-labelledby="info-h">
               <thead><tr><th scope="col">Title</th><th scope="col">What doesn’t match</th><th scope="col"><span class="sr-only">Action</span></th></tr></thead>
               <tbody>
                 {m.info.map((r) => (
@@ -149,7 +155,7 @@ export const HealthPage: FC<{ m: HealthDashboard; a: ArtworkSummary; tz: string;
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table> : null}
           </section>
         ) : null}
 

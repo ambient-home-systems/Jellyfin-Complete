@@ -14,7 +14,7 @@ import { readConfig } from '../src/config.js';
 import { runPipeline } from '../src/pipeline/run.js';
 import { artworkCheck, artworkFix, definition, healthFinding, overlay } from '../src/db/schema.js';
 import { originalsDir } from '../src/overlays/sync.js';
-import { distance, fingerprint, pathNames, resetArtwork, undoArtworkFix } from '../src/library/artwork.js';
+import { artworkSummary, distance, fingerprint, pathNames, resetArtwork, undoArtworkFix } from '../src/library/artwork.js';
 import { audioVerdict, healthRows, openFindingCount } from '../src/library/health.js';
 import { lang2, sameLanguage } from '../src/library/languages.js';
 import { dashboardModel } from '../src/web/model.js';
@@ -36,6 +36,23 @@ async function picture(seed: number, w = 400, h = 600): Promise<Uint8Array> {
   return new Uint8Array(await sharp(raw, { raw: { width: cols, height: rows, channels: 3 } }).resize(w, h, { kernel: 'nearest' }).jpeg({ quality: 92 }).toBuffer());
 }
 
+/** A copy of a picture with a few patches changed, so its fingerprint is between `lo` and `hi` bits from the original's. */
+async function nearCopy(bytes: Uint8Array, lo: number, hi: number): Promise<Uint8Array> {
+  const base = await fingerprint(bytes);
+  const { data, info } = await sharp(bytes).raw().toBuffer({ resolveWithObject: true });
+  for (let k = 1; k < 40; k++) {
+    const d = Buffer.from(data);
+    for (let i = 0; i < k; i++) {
+      const x0 = ((i * 37) % 8) * 50, y0 = ((i * 53) % 12) * 50; // a 50-pixel patch, in a fixed order
+      for (let y = y0; y < y0 + 50; y++) for (let x = x0; x < x0 + 50; x++) { const p = (y * info.width + x) * info.channels; for (let c = 0; c < 3; c++) d[p + c] = 255 - d[p + c]!; }
+    }
+    const out = new Uint8Array(await sharp(d, { raw: { width: info.width, height: info.height, channels: info.channels } }).jpeg({ quality: 92 }).toBuffer());
+    const n = distance(base.hash, (await fingerprint(out)).hash);
+    if (n >= lo && n <= hi) return out;
+  }
+  throw new Error('no near copy in range');
+}
+
 type Title = { media: 'movie' | 'tv'; id: string; title: string; year: number; lang?: string; imdb?: string; tvdb?: string; posters: [string, string | null, number][]; backdrops?: [string, string | null, number][]; logos?: [string, string | null, number][] };
 // TMDb, with a lookalike for each ambiguous title that a name search would find first.
 const CATALOGUE: Title[] = [
@@ -44,12 +61,17 @@ const CATALOGUE: Title[] = [
   { media: 'movie', id: '9002', title: 'Le Petit Prince', year: 1974, lang: 'fr', imdb: 'tt0071986', posters: [['/prince-fr.jpg', 'fr', 6.0], ['/prince-fr2.jpg', 'fr', 5.0]] },
   { media: 'movie', id: '150540', title: 'Inside Out', year: 2015, imdb: 'tt2096673', posters: [['/inside-en.jpg', 'en', 8.0]] },
   { media: 'movie', id: '999001', title: 'Inside Out', year: 1991, imdb: 'tt0101547', posters: [['/inside-lookalike.jpg', 'en', 4.0]] },
-  { media: 'movie', id: '771', title: 'Home Alone', year: 1990, imdb: 'tt0099785', posters: [['/home-en.jpg', 'en', 7.5]] },
+  { media: 'movie', id: '771', title: 'Home Alone', year: 1990, imdb: 'tt0099785', posters: [['/home-en.jpg', 'fr', 8.0], ['/home-en.jpg', 'en', 7.5]] },
   { media: 'movie', id: '1593', title: 'Night at the Museum', year: 2006, imdb: 'tt0477347', posters: [['/museum-en.jpg', 'en', 7.0]] },
   { media: 'movie', id: '411', title: 'The Chronicles of Narnia: The Lion, the Witch and the Wardrobe', year: 2005, imdb: 'tt0363771', posters: [['/narnia-en.jpg', 'en', 7.0]] },
   { media: 'movie', id: '1498', title: 'Teenage Mutant Ninja Turtles', year: 1990, imdb: 'tt0100758', posters: [['/tmnt-en.jpg', 'en', 7.0]] },
   { media: 'movie', id: '664', title: 'Twister', year: 1996, imdb: 'tt0117998', posters: [['/twister-en.jpg', 'en', 7.0]] },
   { media: 'tv', id: '75219', title: '9-1-1', year: 2018, imdb: 'tt7235466', tvdb: '339848', posters: [['/911-en.jpg', 'en', 7.0]] },
+  // The same picture under two language tags (the false alarms from 0.17): Brave's French tag is a slightly different
+  // upload of the English poster; Gru's English copy sits 12th in English, below a higher-rated French tag; Home Alone's
+  // file is listed under both languages (above).
+  { media: 'movie', id: '62177', title: 'Brave', year: 2012, imdb: 'tt1217209', posters: [['/brave-fr.jpg', 'fr', 8.0], ['/brave-en.jpg', 'en', 7.5]] },
+  { media: 'movie', id: '438148', title: 'Minions: The Rise of Gru', year: 2022, imdb: 'tt5113044', posters: [['/gru-fr.jpg', 'fr', 9.0], ...Array.from({ length: 11 }, (_, i): [string, string, number] => [`/gru-en-${i + 1}.jpg`, 'en', 7.9 - i * 0.1]), ['/gru-en-12.jpg', 'en', 6.0]] },
 ];
 const LOOKALIKES: Record<string, string> = { 'inside out': '999001', 'home alone': '999002', twister: '999003', '9-1-1': '999004' };
 
@@ -57,6 +79,9 @@ async function world(opts: { autoFix?: string[]; dryRun?: boolean } = {}) {
   const images = new Map<string, Uint8Array>();
   let seed = 1;
   for (const t of CATALOGUE) for (const [path] of [...t.posters, ...(t.backdrops ?? []), ...(t.logos ?? [])]) images.set(path, await picture(seed++));
+  // Brave's English upload: the French picture, a little different (a fingerprint 11–16 bits away).
+  images.set('/brave-en.jpg', await nearCopy(images.get('/brave-fr.jpg')!, 11, 16));
+  images.set('/gru-en-12.jpg', images.get('/gru-fr.jpg')!);
   const calls: string[] = [];
   const net: FetchLike = async (url, init) => {
     if (url.startsWith(FAKE_URL)) return jf(url, init);
@@ -106,6 +131,10 @@ async function world(opts: { autoFix?: string[]; dryRun?: boolean } = {}) {
   film('m-inside', 'Inside Out', 2015, { Tmdb: '999001', Imdb: 'tt2096673', TmdbCollection: '1084247' });
   fake.setImage('m-inside', images.get('/inside-lookalike.jpg')!);
   film('m-home', 'Home Alone', 1990, { Tmdb: '771', Imdb: 'tt0099785' }); // no poster
+  film('m-brave', 'Brave', 2012, { Tmdb: '62177', Imdb: 'tt1217209' });
+  fake.setImage('m-brave', images.get('/brave-fr.jpg')!);
+  film('m-gru', 'Minions - The Rise of Gru', 2022, { Tmdb: '438148', Imdb: 'tt5113044' });
+  fake.setImage('m-gru', images.get('/gru-fr.jpg')!);
   for (const [id, name, year, tmdb, imdb, poster] of [
     ['m-museum', 'Night at the Museum', 2006, '1593', 'tt0477347', '/museum-en.jpg'],
     ['m-narnia', 'The Chronicles of Narnia - The Lion, the Witch and the Wardrobe', 2005, '411', 'tt0363771', '/narnia-en.jpg'],
@@ -171,7 +200,7 @@ describe('Artwork checks', () => {
   it('finds a video still, a poster in another language, a missing poster and another title’s artwork, and nothing on the rest', async () => {
     const { app, calls } = await world();
     const r = await run(app);
-    expect(r.stats).toMatchObject({ artworkChecked: 11, artworkBoxSetsChecked: 1 }); // 10 films and a show
+    expect(r.stats).toMatchObject({ artworkChecked: 13, artworkBoxSetsChecked: 1 }); // 12 films and a show
     expect(artwork(app)).toEqual({
       'm-mad video_poster': '/mad-en.jpg', // TMDb's best English poster, though the French one is rated higher
       'm-donald language': '/donald-en.jpg',
@@ -187,6 +216,20 @@ describe('Artwork checks', () => {
     expect(details['b-inside']).toMatch(/Linked to TMDb collection 777777, but its films belong to TMDb collection 1084247/);
     expect(app.db.select().from(artworkCheck).where(eq(artworkCheck.jfId, 'm-inside')).get()).toMatchObject({ verifiedTmdb: '150540', verifiedBy: 'path' });
     expect(calls.filter((c) => c.includes('/search/'))).toEqual([]); // never a name search
+  });
+
+  it('doesn’t flag a poster tagged French on TMDb that is the same image as the English one (Brave, Home Alone, Gru)', async () => {
+    const { app, fake, images } = await world();
+    fake.setImage('m-home', images.get('/home-en.jpg')!); // the file TMDb lists as both French and English
+    await run(app);
+    for (const id of ['m-brave', 'm-gru', 'm-home']) expect(artwork(app)[`${id} language`], id).toBeUndefined();
+    // Brave: noted for information, not counted.
+    expect(app.db.select().from(artworkCheck).where(eq(artworkCheck.jfId, 'm-brave')).get()).toMatchObject({ note: 'The poster has a French tag on TMDb but is the same image as its English one.', poster: { lang: 'fr', sameAs: '/brave-en.jpg' } });
+    expect(artworkSummary(app).sameImage).toEqual([{ jfId: 'm-brave', title: 'Brave (2012)', note: 'The poster has a French tag on TMDb but is the same image as its English one.' }]);
+    // Gru: recognised as TMDb's English copy, further down the list.
+    expect(app.db.select().from(artworkCheck).where(eq(artworkCheck.jfId, 'm-gru')).get()!.poster).toMatchObject({ lang: 'en', path: '/gru-en-12.jpg' });
+    // A different French poster is still flagged (Clown of the Jungle).
+    expect(artwork(app)['m-donald language']).toBe('/donald-en.jpg');
   });
 
   it('keeps a French poster when TMDb has no English one, says so, and doesn’t check again every night', async () => {

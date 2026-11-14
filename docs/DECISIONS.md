@@ -687,6 +687,15 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - **About twice the typical length** (1.7 to 2.4 times): the finding says the file may contain two episodes, and whether the next episode also has its own file, in which case the second half may be something else.
   - **Multi-episode files:** a file Jellyfin knows spans several episodes (`IndexNumberEnd`, stored as `episode_end`, migration 0010) is expected to be that many times as long.
 - **Several at once (0.16.0).** Approving 138 findings took 138 calls. The page has checkboxes with **Mark selected fine**, and **Mark all for this show fine**. `mark_library_health_fine` takes `ids` (optionally one `kind`) or a `seriesId`. `get_status` gives a Library health summary: open findings by kind, files checked and left to check.
+- **Fixes in 0.18.0** (from a real library on 0.17.0):
+  - **Encoding notes:** eight false alarms came from stream titles such as "1080p COMPRESSED (from 23.2Mb/s VC-1 BluRay REMUX - 2009 Warner Bros. …)", "DTS-HD MA 5.1 / 1968 kbps / original" and "x265 / 12098 kbps / … BT.2020". Two tiers of vocabulary now apply:
+    - **Never in a release name** (kbps, kb/s, Mbps, Mb/s, fps, COMPRESSED, Handbrake, BT.709/2020/2100, Main 10, 4:2:x, "N bits"): the whole tag is ruled out. The match works even without a space before the word ("23.2Mb/s").
+    - **Common in release names after the year** (x264, x265, HEVC, AVC, VC-1, REMUX, DTS, TrueHD, Atmos, 10bit, HDR10, Blu-ray, WEB-DL): the tag is ruled out when these come before the year. Skipping every tag with x264 would lose the audit's real find, "The.Lucky.One.2012.1080p.BluRay.x264" inside *The Spy Who Loved Me*.
+    - A number followed by kbps or Mb/s, or following "BT", is never taken as a year.
+  - **Deleted or replaced files:**
+    - **The problem:** findings for them stayed open until the nightly index noticed the item was gone.
+    - **Jellyfin check:** every run now asks Jellyfin which flagged items still exist (100 a request), and drops the findings of those that don't.
+    - **Mount check:** with the media mount on (ADR-044), it also drops file findings whose file is gone from the mount, even while Jellyfin still lists it.
 
 ### ADR-042 Collection posters: Decided (13 Nov)
 - **Context.** Since ADR-040 the app supplies the only image a managed box set carries. Collections of your own had no poster setting, so a poster added in Jellyfin was removed; you asked for a poster field.
@@ -764,6 +773,11 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - **Unverifiable titles aren't fixed:** a poster Jellyfin got from TMDb for a title with no IMDb or TVDB ID, and a folder name that doesn't say, is reported but not offered a fix.
   - **Posters from elsewhere aren't flagged:** a poster from another provider (fanart.tv) or one you uploaded matches none of TMDb's. It isn't flagged unless the file's embedded picture or an attachment points to the file.
   - **The first pass on a big library** takes a few nights, and fetches each title's TMDb thumbnails once.
+- **Poster language, amended in 0.18.0.** Three false alarms (Brave "Spanish", Home Alone "Portuguese", Minions: The Rise of Gru "French"): TMDb files the same picture more than once, under different language tags.
+  - **Matching:** when the first match is in another language, the rest of the library's-language and textless posters are tried too, and one of those wins.
+  - **Same-image check before flagging:** the poster TMDb would put on is compared with this one. It's the same picture when it's the same file, or its fingerprint is within 16 bits of the current poster's, or within 10 bits of the matched image's. A looser threshold is safe here, because it compares two specific pictures rather than searching.
+  - **When it is the same:** it isn't flagged. It's noted under "For information" ("The poster has a Spanish tag on TMDb but is the same image as its English one") and not counted.
+  - **Recheck:** migration 0013 makes titles flagged for language in 0.17.0 be checked again on the next run. Their "It's fine" marks are kept.
 
 ### ADR-044 Read-only media mount and frames: Decided (14 Nov)
 - **Context.** Item 4c of your pending updates: Jellyfin doesn't expose a file's container-level title, only its streams' title tags (ADR-041). The container title is what gave *Bewitched* away inside the *Wakanda Forever* file. You suggested an optional read-only media mount, reading new files with ffprobe, and optionally saving one mid-film frame per new file for the Library health page. Off by default.

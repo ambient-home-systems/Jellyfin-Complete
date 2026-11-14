@@ -16,6 +16,17 @@ Versions follow [semantic versioning](https://semver.org). The release workflow 
 - **Claude:** `get_settings` and `update_settings` cover the media mount (`mediaFiles`).
 - After updating, files are probed once more (a few thousand a night) to note which have trickplay previews.
 
+**Fixes for 0.17.0's Library health**
+- **Title tags: encoding notes are no longer read as other films.** These were 8 false alarms on a real library, for example "1080p COMPRESSED (from 23.2Mb/s VC-1 BluRay REMUX - 2009 Warner Bros. …)", "DTS-HD MA 5.1 / 1968 kbps" and "x265 / 12098 kbps / … BT.2020".
+  - Words that never appear in a release name (kbps, Mb/s, fps, COMPRESSED, Handbrake, BT.709/BT.2020, Main 10, 4:2:0, bits) rule a tag out.
+  - Words that do appear in release names (x264, x265, HEVC, REMUX, DTS, TrueHD, Atmos) rule a tag out when they come before the year. So "The.Lucky.One.2012.1080p.BluRay.x264" is still read.
+  - A number before "kbps" or "Mb/s", or after "BT.", is never a year.
+- **Poster language: the same picture under another language's tag isn't flagged.** These were 3 false alarms: Brave, Home Alone and Minions: The Rise of Gru.
+  - A poster that matches TMDb's poster in your language (the same file, or the same image uploaded again under another tag) isn't flagged.
+  - It's listed under For information instead, and not counted.
+  - Titles flagged for language in 0.17.0 are checked again on the next run.
+- **Findings for deleted or replaced files go on the next run.** Every run asks Jellyfin which flagged titles still exist, rather than waiting for the nightly index. With the media mount on, it also looks for the file itself.
+
 ## 0.17.0 — 14 Nov 2026
 
 - **Artwork checks on Library health.** Each film and show is checked for:

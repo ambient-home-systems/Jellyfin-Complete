@@ -424,7 +424,7 @@ export const artworkCheck = sqliteTable('artwork_check', {
   verifiedTmdb: text('verified_tmdb'),
   verifiedBy: text('verified_by').$type<'imdb' | 'tvdb' | 'path'>(),
   /** What the poster is: one of TMDb's for this title (and its language), none, a video frame, or not known. */
-  poster: json<{ source: 'tmdb' | 'none' | 'frame' | 'unknown'; lang?: string | null; path?: string | null; aspect?: number | null }>('poster'),
+  poster: json<{ source: 'tmdb' | 'none' | 'frame' | 'unknown'; lang?: string | null; path?: string | null; aspect?: number | null; /** TMDb's poster in the library's language that is the same picture. */ sameAs?: string | null }>('poster'),
   /** Anything worth saying that isn't a finding ("TMDb has no English poster for this title"). */
   note: text('note'),
 });

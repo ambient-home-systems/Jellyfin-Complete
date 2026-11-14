@@ -1,6 +1,6 @@
 // The optional read-only media mount and frames from the middle (ADR-044).
 import { describe, it, expect } from 'vitest';
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
@@ -93,6 +93,15 @@ describe('a file’s own title, from the mount', () => {
     m.put('movies/Heat (1995)/Heat.mkv', mkv('Something Else (1999)'));
     await run(app, NOW + DAY);
     expect(titleFindings(app)['m-heat']).toBeUndefined();
+  });
+
+  it('drops a finding when its file is gone from the mount, even while Jellyfin still lists it', async () => {
+    const { app, m } = world();
+    await run(app);
+    expect(titleFindings(app)['m-wakanda']).toBeDefined();
+    rmSync(join(m.dir, 'movies/Black Panther Wakanda Forever (2022)/Wakanda.mkv'));
+    await runPipeline(app, { job: 'window-check', trigger: 'schedule', index: false, now: NOW + DAY });
+    expect(titleFindings(app)['m-wakanda']).toBeUndefined();
   });
 
   it('reads nothing while it’s off (the default)', async () => {

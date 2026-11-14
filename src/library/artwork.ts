@@ -177,23 +177,40 @@ async function currentPoster(app: AppContext, jf: JellyfinClient, r: Row): Promi
   return (await jf.primaryThumb(r.jfId, 300))?.bytes ?? null;
 }
 
-/** Which TMDb poster this is, trying the likeliest first (the library's language, textless, the original language). */
-async function matchPoster(app: AppContext, art: TmdbArtwork, hash: string, want: string | null): Promise<TmdbImage | null> {
+/**
+ * Which TMDb poster this is, trying the likeliest first (the library's language, textless, the original language).
+ * TMDb often holds the same picture more than once under different language tags; when the first match is in another
+ * language, the rest of the library's-language and textless posters are tried too, and one of those wins.
+ */
+async function matchPoster(app: AppContext, art: TmdbArtwork, hash: string, want: string | null): Promise<{ image: TmdbImage; hash: string } | null> {
   const order: TmdbImage[] = [];
   const seen = new Set<string>();
   const push = (xs: TmdbImage[]) => { for (const x of xs) if (!seen.has(x.path)) { seen.add(x.path); order.push(x); } };
   const top = (f: (i: TmdbImage) => boolean) => art.posters.filter(f).slice(0, 10);
+  const preferred = (i: TmdbImage) => !i.lang || sameLanguage(i.lang, want);
   push(top((i) => sameLanguage(i.lang, want)));
   push(top(textless));
   push(top((i) => sameLanguage(i.lang, art.originalLanguage)));
   push(top((i) => sameLanguage(i.lang, 'en')));
   push(art.posters);
+  let first: { image: TmdbImage; hash: string } | null = null;
   for (const p of order.slice(0, ARTWORK_LIMITS.thumbsPerTitle)) {
     const h = await tmdbFingerprint(app, p.path);
-    if (h && distance(h, hash) <= MATCH_DISTANCE) return p;
+    if (!h || distance(h, hash) > MATCH_DISTANCE) continue;
+    if (preferred(p)) return { image: p, hash: h };
+    first ??= { image: p, hash: h };
+    break;
   }
-  return null;
+  if (!first) return null;
+  for (const p of art.posters.filter(preferred).slice(0, ARTWORK_LIMITS.thumbsPerTitle)) {
+    const h = await tmdbFingerprint(app, p.path);
+    if (h && distance(h, hash) <= MATCH_DISTANCE) return { image: p, hash: h };
+  }
+  return first;
 }
+
+/** Two TMDb uploads of the same picture can differ a little (size, compression, a re-export): this close counts as the same. */
+export const SAME_IMAGE_DISTANCE = 16;
 
 type CheckResult = { found: Found[]; check: Omit<typeof artworkCheck.$inferInsert, 'jfId'> };
 
@@ -235,12 +252,20 @@ export async function checkTitle(app: AppContext, jf: JellyfinClient, tmdb: Tmdb
     return { found, check };
   }
   if (!art) { check.poster = { source: 'unknown', aspect }; return { found, check }; }
-  const match = await matchPoster(app, art, fp.hash, want);
-  if (match) {
+  const matched = await matchPoster(app, art, fp.hash, want);
+  if (matched) {
+    const match = matched.image;
     check.poster = { source: 'tmdb', lang: match.lang, path: match.path, aspect };
     if (match.lang && want && !sameLanguage(match.lang, want)) {
       const pref = pickImage(art.posters, want, { only: true });
-      if (pref) found.push({ kind: 'language', detail: `The poster is TMDb’s ${languageName(match.lang)} one; TMDb has ${languageName(want)} posters too.`, proposal: proposalOf(art, pref) });
+      // Before flagging: is the poster TMDb would put on the same picture as this one? (The same file, or the same
+      // image uploaded again under another language tag.) Then there's nothing to change: noted, not counted.
+      const prefHash = pref ? await tmdbFingerprint(app, pref.path) : null;
+      const same = Boolean(pref && (pref.path === match.path || (prefHash && (distance(prefHash, fp.hash) <= SAME_IMAGE_DISTANCE || distance(prefHash, matched.hash) <= MATCH_DISTANCE))));
+      if (pref && same) {
+        check.poster = { ...check.poster, sameAs: pref.path };
+        check.note = `The poster has a${/^[AEIOU]/.test(languageName(match.lang)) ? 'n' : ''} ${languageName(match.lang)} tag on TMDb but is the same image as its ${languageName(want)} one.`;
+      } else if (pref) found.push({ kind: 'language', detail: `The poster is TMDb’s ${languageName(match.lang)} one; TMDb has ${languageName(want)} posters too.`, proposal: proposalOf(art, pref) });
       else check.note = `TMDb has no ${languageName(want)} poster for it, so its ${languageName(match.lang)} one is kept.`;
     }
     return { found, check };
@@ -528,6 +553,8 @@ export type ArtworkSummary = {
   collectionRepairs: { at: number; name: string; what: string; ok: boolean }[];
   /** Libraries where "No poster" and "Poster from the video or file" are fixed without asking. */
   autoFix: string[];
+  /** Posters whose TMDb tag is another language but which are the same image as TMDb's in the library's: noted, not counted. */
+  sameImage: { jfId: string; title: string; note: string }[];
 };
 
 /** The artwork side of the Library health page. */
@@ -542,5 +569,9 @@ export function artworkSummary(app: AppContext): ArtworkSummary {
     fixes: recentFixes(app),
     collectionRepairs: events.map((e) => ({ at: e.at, name: e.name, what: e.what, ok: e.ok })),
     autoFix: (app.settings().health.autoFixLibraryIds ?? []).map((id) => libs.get(id) ?? id),
+    sameImage: app.db.select().from(artworkCheck).all().filter((c) => c.poster?.sameAs && c.note).map((c) => {
+      const r = rows.find((x) => x.jfId === c.jfId);
+      return { jfId: c.jfId, title: r ? `${r.name}${r.year ? ` (${r.year})` : ''}` : c.jfId, note: c.note! };
+    }).sort((a, b) => a.title.localeCompare(b.title)),
   };
 }

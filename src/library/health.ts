@@ -10,6 +10,7 @@
 // Files are probed once (again when the file changes), a few thousand a run; TMDb runtimes are cached for months.
 import { and, eq, inArray } from 'drizzle-orm';
 import type { AppContext } from '../app-context.js';
+import type { JellyfinClient } from '../clients/jellyfin/index.js';
 import { healthFinding, library, libraryItem, mediaCheck, type ArtworkProposal, type HealthKind } from '../db/schema.js';
 import { getCached, putCached } from '../cache.js';
 import { lang2, languageName, sameLanguage } from './languages.js';
@@ -80,11 +81,24 @@ const STOP = new Set(['the', 'a', 'an', 'of', 'and', 'in', 'on', 'to', 'la', 'le
 const words = (s: string) => s.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, ' and ')
   .replace(/[^a-z0-9]+/g, ' ').split(' ').filter((w) => w && !STOP.has(w));
 
+/**
+ * Encoding notes, not titles ("1080p COMPRESSED (from 23.2Mb/s VC-1 BluRay REMUX - 2009 Warner Bros. ...)", "DTS-HD MA
+ * 5.1 / 1968 kbps / original", "x265 / 12098 kbps / 1080p / ... BT.2020"): they name no film, though their numbers look
+ * like years. Words that never appear in a release name rule a tag out whole. Words that do (x264, REMUX, DTS…) rule it
+ * out when they come before the year: a release name puts the title first ("The.Lucky.One.2012.1080p.BluRay.x264",
+ * the audit's real find, is still read).
+ */
+export const ENCODING_NOTE = /(?<![a-z])(?:kbps|kb\/s|mbps|mb\/s|fps|compressed|handbrake|bt\.?\s?(?:709|2020|2100)|main\s?10|4:2:[024]|\d+\s?bits)(?![a-z])/i;
+const ENCODING_WORD = /(?<![a-z])(?:remux|x26[45]|h\.?26[45]|hevc|avc|vc-?1|dts(?:-hd|:x)?|truehd|atmos|10[- ]?bit|hdr10\+?|dolby vision|blu-?ray|bdrip|web-?dl|webrip)(?![a-z])/i;
+
 /** The title and year a tag names, if it looks like a release name ("The.Lucky.One.2012.1080p", "Bewitched (2005)"). */
 export function claimedTitle(tag: string): { title: string; year: number } | null {
+  if (ENCODING_NOTE.test(tag)) return null;
   const t = tag.replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim();
-  const years = [...t.matchAll(/(?<![\d])((?:19|20)\d{2})(?![\d])/g)];
+  // A year isn't a bitrate ("2000 kbps") or a colour standard ("BT 2020").
+  const years = [...t.matchAll(/(?<![\d])(?<!\bBT ?)((?:19|20)\d{2})(?![\d])(?!\s*(?:kbps|kb\/s|mbps|mb\/s))/gi)];
   for (const m of years.reverse()) {
+    if (ENCODING_WORD.test(t.slice(0, m.index))) continue; // encoding words before the year: a note, not a title
     const before = t.slice(0, m.index).replace(/[\s([{\-–:,]+$/, '').replace(NOISE, ' ').replace(/\s+/g, ' ').trim();
     if (!/[a-z]{2,}/i.test(before) || NOT_A_TITLE.test(before)) continue;
     return { title: before, year: Number(m[1]) };
@@ -232,11 +246,45 @@ export function audioHandled(prefs: AudioPref[] | null, want: string | null): bo
 
 export type HealthStats = { probed: number; lookedUp: number; open: number; found: number; compared: number };
 
+/**
+ * Drop findings whose file or title is gone (a deleted or replaced file), on every run, not only after the nightly
+ * index: Jellyfin is asked which of the flagged items still exist, and with the media mount on, the files themselves
+ * are looked for (Jellyfin may still list a deleted file until its next scan). Returns how many findings went.
+ */
+export async function pruneGoneFindings(app: AppContext, jf: JellyfinClient): Promise<number> {
+  const findings = app.db.select().from(healthFinding).all();
+  const ids = [...new Set(findings.map((f) => f.jfId))];
+  if (!ids.length) return 0;
+  const present = new Set<string>();
+  for (let i = 0; i < ids.length; i += 100) for (const it of await jf.allItems({ Ids: ids.slice(i, i + 100).join(',') })) if (it.Id) present.add(it.Id);
+  const gone = new Set(ids.filter((id) => !present.has(id)));
+  const m = app.settings().media;
+  if (m.enabled && m.map) {
+    const fileKinds = new Set<string>(FILE_KINDS);
+    const checks = new Map(app.db.select({ id: mediaCheck.jfId, path: mediaCheck.path }).from(mediaCheck).where(inArray(mediaCheck.jfId, ids)).all().map((c) => [c.id, c.path]));
+    for (const f of findings) {
+      if (gone.has(f.jfId) || !fileKinds.has(f.kind)) continue;
+      const file = checks.get(f.jfId) ? mapPath(checks.get(f.jfId)!, m.dir, m.map) : null;
+      if (file && !existsSync(file)) gone.add(f.jfId);
+    }
+  }
+  if (!gone.size) return 0;
+  const list = [...gone];
+  let n = 0;
+  app.db.transaction((tx) => {
+    n = tx.delete(healthFinding).where(inArray(healthFinding.jfId, list)).run().changes;
+    tx.delete(mediaCheck).where(inArray(mediaCheck.jfId, list)).run();
+  });
+  log.info(`Library health: dropped ${n} ${n === 1 ? 'finding' : 'findings'} for ${list.length} deleted or replaced ${list.length === 1 ? 'file' : 'files'}`);
+  return n;
+}
+
 /** Probe files not yet checked, look up runtimes, and record what disagrees. Never fails the run. */
 export async function checkLibraryHealth(app: AppContext, opts: { now: number; step?: (s: string) => void }): Promise<HealthStats> {
   const out: HealthStats = { probed: 0, lookedUp: 0, open: 0, found: 0, compared: 0 };
   const jf = app.jellyfin();
   if (!jf) return out;
+  await pruneGoneFindings(app, jf).catch((e: Error) => log.warn(`Couldn’t check for deleted files: ${e.message}`));
   const rows = app.db.select().from(libraryItem).where(inArray(libraryItem.kind, ['movie', 'episode'])).all();
   const sigOf = (r: (typeof rows)[number]) => String(r.dateAdded ?? 0);
   const checks = new Map(app.db.select().from(mediaCheck).all().map((c) => [c.jfId, c]));
