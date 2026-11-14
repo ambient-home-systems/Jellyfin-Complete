@@ -442,8 +442,7 @@ export const Preview: FC<{ defId: number; items: PreviewItem[]; excluded: { jfId
             <div class="t">{it.name}{it.year ? <span class="y num">{it.year}</span> : null}</div>
             <div class="why">
               {it.provenance.pinned ? <span class="chip solid"><Icon name="pin" /> Always included</span> : null}
-              {it.provenance.sources.map((s) => <span class="chip">{s.label} #{s.rank}</span>)}
-              {it.provenance.sources.length ? <span class="chip">{it.provenance.match}</span> : null}
+              {it.provenance.sources.map((s) => <span class="chip" title={`Number ${s.rank} on that source. Matched by ${it.provenance.match}.`}>{s.label}</span>)}
               {it.inBoxSet ? <span class="chip">in Jellyfin</span> : null}
             </div>
           </div>

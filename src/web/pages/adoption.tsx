@@ -19,7 +19,7 @@ export const Adoption: FC<{ items: AdoptionCandidate[]; csrf: string; error?: st
           <details class="how">
             <summary>What taking over means</summary>
             <ul class="plain-list">
-              <li><b>Take over.</b> The app keeps it up to date from now on. Changes go through your Inbox. (Jellyfin calls a collection a “box set”.)</li>
+              <li><b>Take over.</b> It’s replaced by a fresh collection with the same titles and this app’s name and poster, kept up to date from now on. (Jellyfin calls a collection a “box set”.)</li>
               <li><b>Delete.</b> It’s removed from Jellyfin and the app makes its own. Your titles stay.</li>
               <li><b>Made by another tool?</b> Stop that tool first, or it keeps rewriting it.</li>
             </ul>

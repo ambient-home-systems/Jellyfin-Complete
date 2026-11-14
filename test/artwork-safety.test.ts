@@ -2,6 +2,7 @@
 // and attached the wrong collection's provider ID, poster, backdrop and overview ("Inside Out" got an adult collection's
 // nude artwork; "9-1-1" got "9½ Weeks"). The fake Jellyfin reproduces that search with the same wrong matches. After
 // creating, adopting and every run, each managed box set's TMDb link and every image must be the intended collection's.
+import { groupRepairs } from '../src/pipeline/boxset-identity.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -167,13 +168,27 @@ describe('Box set artwork safety (ADR-040)', () => {
     expectClean(fake, app);
     expect(fake.items.has(twister)).toBe(false); // unlocked: replaced by a fresh locked one, rather than locking its films
     const events = app.db.select().from(integrityEvent).all();
-    expect(events.find((e) => e.name === 'Inside Out')!.what).toMatch(/linked to TMDb 981142 instead of TMDb 1022790/);
-    expect(events.find((e) => e.name === '9-1-1')!.what).toMatch(/a backdrop the app didn’t add.*removed a backdrop/);
-    expect(events.find((e) => e.name === 'Twister')!.what).toMatch(/not locked.*fresh locked box set/);
+    expect(events.find((e) => e.name === 'Inside Out')!.what).toMatch(/elinked it to TMDb 1022790 \(was TMDb 981142\)/);
+    expect(events.find((e) => e.name === '9-1-1')!.what).toMatch(/^Removed a backdrop/);
+    expect(events.find((e) => e.name === 'Twister')!.what).toBe('Replaced it with a fresh locked copy holding the same titles.');
     expect(dashboardModel(app, NOW + DAY).integrity.filter((e) => e.ok)).toHaveLength(3);
     const page = String(Dashboard({ m: dashboardModel(app, NOW + DAY), csrf: 'x' }));
-    expect(page).toContain('3 collections put right this week');
-    expect(page).toContain('linked to TMDb 981142 instead of TMDb 1022790');
+    expect(page).toContain('3 collections tidied this week');
+    expect(page).toContain('elinked it to TMDb 1022790 (was TMDb 981142)');
+    expect(page.indexOf('tidied this week')).toBeLessThan(page.includes('Recommendations') ? page.indexOf('Recommendations') : Infinity); // a tidy-up isn't advice
+    // Notes stored by earlier versions read the same way, and fifty collections with the same fix are one line.
+    const old = (name: string, what: string) => ({ name, what });
+    const grouped = groupRepairs([
+      old('Has Fallen', 'First check: a backdrop the app didn’t add; Thumb image the app didn’t add. Fixed: removed a backdrop; removed Thumb; replaced a poster the app didn’t upload.'),
+      old('Avatar', 'First check: a backdrop the app didn’t add; Thumb image the app didn’t add. Fixed: removed a backdrop; removed Thumb; replaced a poster the app didn’t upload.'),
+      old('Back to the Future', 'First check: 2 backdrops the app didn’t add; Thumb image the app didn’t add. Fixed: removed 2 backdrops; removed Thumb; replaced a poster the app didn’t upload.'),
+      old('Cars', 'First check: Thumb image the app didn’t add. Fixed: removed Thumb; replaced a poster the app didn’t upload.'),
+    ]);
+    expect(grouped).toEqual([
+      { what: 'Removed a backdrop and a thumbnail, and put its own poster back.', names: ['Has Fallen', 'Avatar'] },
+      { what: 'Removed 2 backdrops and a thumbnail, and put its own poster back.', names: ['Back to the Future'] },
+      { what: 'Removed a thumbnail and put its own poster back.', names: ['Cars'] },
+    ]);
 
     // A quiet run afterwards: nothing to repair, and no metadata change proposed either.
     const quiet = await run(app, NOW + 2 * DAY);

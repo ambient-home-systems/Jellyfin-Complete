@@ -11,6 +11,35 @@ const TRIGGER: Record<string, string> = { manual: 'started by hand', schedule: '
 
 
 type M = ReturnType<typeof activityModel>;
+const took = (ms: number) => { const s = Math.max(1, Math.round(ms / 1000)); return s < 90 ? `${s} s` : `${Math.round(s / 60)} min`; };
+
+/** A run in a few words: only what happened, never a count of zero. */
+function runSummary(st: Record<string, number>): string {
+  const n = (k: string) => Number(st[k] ?? 0);
+  const some = (v: number, one: string, many = `${one}s`) => (v ? `${v} ${v === 1 ? one : many}` : '');
+  const parts = [
+    some(n('newProposals'), 'new change to approve', 'new changes to approve'),
+    some(n('applied'), 'change made', 'changes made'),
+    some(n('failed'), 'change failed', 'changes failed'),
+    some(n('sourcesFailed'), 'source failing', 'sources failing'),
+    some(n('sourcesStale'), 'source on old results', 'sources on old results'),
+    some(n('boxSetsRepaired'), 'collection tidied', 'collections tidied'),
+    some(n('healthFound') + n('artworkFound'), 'new Library health finding', 'new Library health findings'),
+    some(n('artworkAutoFixed'), 'poster fixed', 'posters fixed'),
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'Nothing to change';
+}
+
+/** The run's log with the clock time in the app's timezone, and only warnings and errors marked. */
+function tidyLog(log: string, tz: string): string {
+  return log.split('\n').map((line) => {
+    const m = line.match(/^(\d{4}-\d\d-\d\dT[\d:.]+Z)\s+(INFO|WARN|ERROR|DEBUG)\s+(.*)$/);
+    if (!m) return line;
+    const time = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(m[1]!));
+    return `${time}  ${m[2] === 'WARN' ? 'Warning: ' : m[2] === 'ERROR' ? 'Error: ' : ''}${m[3]}`;
+  }).join('\n');
+}
+
 export const Activity: FC<{ m: M; tz: string; csrf: string }> = ({ m, tz, csrf }) => (
   <>
     <header class="top"><h1>History</h1></header>
@@ -50,9 +79,9 @@ export const Activity: FC<{ m: M; tz: string; csrf: string }> = ({ m, tz, csrf }
                 <tr>
                   <td class="when">{fmtDate(r.startedAt, tz)}<span class="t">{fmtTime(r.startedAt, tz)}</span></td>
                   <td>{JOB[r.job] ?? r.job}<br /><span class="faint">{TRIGGER[r.trigger] ?? r.trigger}</span></td>
-                  <td class="hide-sm num">{r.finishedAt ? `${Math.max(1, Math.round((r.finishedAt - r.startedAt) / 1000))} s` : 'running'}</td>
-                  <td>{r.status === 'failed' ? <span class="chip red">failed</span> : r.status === 'running' ? <span class="chip">running</span> : <span class="chip">ok</span>} <span class="faint num">{Object.entries(r.stats).map(([k, v]) => `${k} ${v}`).join(' · ')}</span></td>
-                  <td class="hide-sm"><details><summary>Show</summary><pre class="logbox">{r.log || '(empty)'}</pre></details></td>
+                  <td class="hide-sm num">{r.finishedAt ? took(r.finishedAt - r.startedAt) : '—'}</td>
+                  <td>{r.status === 'failed' ? <span class="chip red">failed</span> : r.status === 'running' ? <span class="chip">running</span> : null} {r.status === 'running' ? null : runSummary(r.stats as Record<string, number>)}</td>
+                  <td class="hide-sm"><details class="how"><summary>Log</summary><pre class="logbox">{r.log ? tidyLog(r.log, tz) : 'Nothing was logged.'}</pre></details></td>
                 </tr>
               ))}
             </tbody>

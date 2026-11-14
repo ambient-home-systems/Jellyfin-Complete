@@ -104,7 +104,7 @@ describe('Claude access (MCP)', () => {
 
     // Approving applies straight away, even in dry run, exactly as the Review page does.
     const approved = await client.callTool({ name: 'approve_proposals', arguments: { ids: queue.proposals.map((p: { id: number }) => p.id) } });
-    expect(text(approved)).toContain('Applied 3');
+    expect(text(approved)).toContain('3 changes approved and made in Jellyfin');
     expect(t.fake.boxSets().find((b) => b.Name === 'Thanksgiving Movies')?.children).toEqual(['m-ptna']);
     const activity = json(await client.callTool({ name: 'list_activity', arguments: {} }));
     expect(activity.changes[0].decidedBy).toBe('Claude (Laptop)');

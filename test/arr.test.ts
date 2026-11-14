@@ -117,7 +117,7 @@ describe('sending missing films to Radarr (ADR-007)', () => {
     const login = await web.request('/login', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'username=admin&password=pw' });
     const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
     const html = await (await web.request(`/missing?tab=movies&def=${defId}`, { headers: { cookie } })).text();
-    expect(html).toContain('Halloween Films: 5 missing');
+    expect(html).toContain('5 missing from Halloween Films');
     expect(html).toMatch(/Monitored, no file/);
     expect(html).toMatch(/Excluded/);
     expect(html).toContain('HD-1080p');

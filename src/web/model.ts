@@ -155,12 +155,12 @@ export function dashboardModel(app: AppContext, now = Date.now()) {
     if (c.kind === 'opens') {
       const n = sum?.members ?? null;
       if (n === null) remarks.push('Not read yet');
-      else if (n < c.def.minItems) remarks.push(n === 0 ? 'Nothing in your library matches; not created' : `Below the minimum of ${c.def.minItems}`);
+      else if (n < c.def.minItems) remarks.push(n === 0 ? 'No titles yet, so not created' : `${n} of the ${c.def.minItems} titles it needs`);
       else remarks.push(`${n} ${n === 1 ? 'title' : 'titles'}`);
       const p = pend.get(c.def.id);
       if (p?.total) remarks.push(`${p.total} to approve`);
     } else {
-      remarks.push(c.def.visibility === 'tag_gate' ? 'Hidden in Jellyfin until its dates come round again' : 'Removed from Jellyfin; it comes back on its next dates');
+      if (c.def.visibility === 'tag_gate') remarks.push('Hidden, not removed');
     }
     const bad = sum?.sources.filter((x) => x.status !== 'ok') ?? [];
     return { ...c, remarks: remarks.join(' · '), sourceLabels: c.def.sources.map((x) => x.type).length, failing: bad, via: (sum?.sources.map((x) => x.label) ?? []).join(', ') };
