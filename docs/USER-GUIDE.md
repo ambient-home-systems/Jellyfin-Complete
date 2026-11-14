@@ -84,7 +84,7 @@ Five collections that follow your library's own dates:
 - Days are whole days, today included. A release date still to come doesn't count.
 - **Added means first arrived.** A replaced file, such as a Radarr or Sonarr upgrade, keeps its first date, so upgrades don't show as new.
   - **With Radarr connected,** a movie arrived when Radarr first fetched and imported it (from Radarr's history). Upgrades don't move that date, and a movie you asked Radarr for long before it downloaded counts from the download. This is checked on every run, so it doesn't matter when you connected Radarr.
-    - **A file Radarr didn't fetch is not an arrival.** A file imported into Radarr by hand, or by a library import (after a reorganisation, say), was already yours: its first import has no "grabbed" before it. It never counts as recently added, even when Radarr upgrades it afterwards.
+    - **A file Radarr didn't fetch is not an arrival.** A file imported into Radarr by hand, or by a library import (after a reorganisation, say), was already yours: its first import has no "grabbed" before it. It never counts as recently added, even when Radarr upgrades it afterwards. The same goes for a movie whose first import in Radarr's history replaced a file: that file was already there.
     - To have a movie you added by hand show as recently added, leave it out of Radarr; it then goes by Jellyfin's date.
   - **Otherwise,** the app remembers the first date it saw each movie (by its TMDb ID) and each episode, and a title that was gone for over a week and comes back counts as new.
   - **A show** was added when its newest episode was, so it comes back when a new episode arrives.

@@ -82,7 +82,10 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
       const radarr = app.radarr();
       if (radarr) radarrArrivals = await radarr.arrivals().catch((e: Error) => { log.warn(`Radarr's import dates unavailable this run: ${e.message}`); return undefined; });
       const fa = rememberFirstAdded(app.db, now, radarrArrivals);
-      if (radarrArrivals) log.info(`Recently Added: ${fa.fromRadarr} films dated by Radarr’s first import`);
+      if (radarrArrivals) {
+        const st = radarr?.arrivalStats;
+        log.info(`Recently Added: ${fa.fromRadarr} movies dated from Radarr${st ? ` (${st.fetched} fetched by Radarr; ${st.notFetched} never fetched and ${st.upgradeFirst} first seen being upgraded, so already yours)` : ''}`);
+      }
     }
 
     // Film series (ADR-035): one collection per TMDb film series you own enough of; new series appear as films arrive.
