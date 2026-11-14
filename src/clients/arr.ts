@@ -83,15 +83,20 @@ export class ArrClient {
    *
    * Radarr's history doesn't always reach back to the first import: a film brought in by a library import, or before
    * the history was cleared or Radarr reinstalled, has none. Its first import *in the history* is then an upgrade. That
-   * shows as a file deleted "for upgrade" at the same moment, and such a film counts from when it was added to Radarr.
+   * shows as a file deleted "for upgrade" at the same moment. The file it replaced was already there, so the film is no
+   * arrival: it counts as long ago too. (Radarr's own "added" date is no use: it's when Radarr learned of the film,
+   * which after a reorganisation is a few days back for every film.)
    *
    * Only a film Radarr fetched is an arrival. A first import with no "grabbed" event before it is a file that already
    * existed, brought into Radarr by hand or by a library import (a reorganisation, say), and so is a file Radarr has
    * with no import in its history at all. When such a file really arrived can't be known from Radarr, so it counts as
    * long ago (LONG_AGO): never recently added.
    */
+  /** How the last arrivals() dated Radarr's films: fetched by Radarr, never fetched (already there), or first seen being upgraded (already there). */
+  arrivalStats: { fetched: number; notFetched: number; upgradeFirst: number } | null = null;
+
   async arrivals(): Promise<Map<string, number>> {
-    type Movie = { id: number; tmdbId?: number; imdbId?: string; added?: string; hasFile?: boolean };
+    type Movie = { id: number; tmdbId?: number; imdbId?: string; hasFile?: boolean };
     const movies = await this.get<Movie[]>('/movie');
     const firstImport = new Map<number, number>();
     // 3: downloadFolderImported, 7: movieFolderImported. Asked for one type at a time (older Radarr takes one).
@@ -139,9 +144,9 @@ export class ArrClient {
       if (!records.length || page * 1000 >= (r.totalRecords ?? 0)) break;
     }
     const out = new Map<string, number>();
+    const stats = { fetched: 0, notFetched: 0, upgradeFirst: 0 };
+    this.arrivalStats = stats;
     for (const m of movies) {
-      const added = m.added ? Date.parse(m.added) : NaN; // Radarr reports 0001-01-01 for unknown
-      const knownAdded = Number.isFinite(added) && added > 0 ? added : undefined;
       const imported = firstImport.get(m.id);
       const upgraded = firstUpgrade.get(m.id);
       // The first import the history knows replaced a file (within ten minutes of an upgrade's delete, or after one):
@@ -151,8 +156,9 @@ export class ArrClient {
       const grabbed = firstGrab.get(m.id);
       const fetched = imported !== undefined && grabbed !== undefined && grabbed <= imported + 60_000;
       const at = fetched
-        ? (firstKnownIsUpgrade && knownAdded !== undefined ? Math.min(imported!, knownAdded) : imported!)
+        ? (firstKnownIsUpgrade ? LONG_AGO : imported!)
         : imported !== undefined || m.hasFile ? LONG_AGO : undefined;
+      if (at !== undefined) { if (!fetched) stats.notFetched++; else if (firstKnownIsUpgrade) stats.upgradeFirst++; else stats.fetched++; }
       if (at === undefined) continue;
       if (m.tmdbId) out.set(`tmdb:${m.tmdbId}`, at);
       if (m.imdbId) out.set(`imdb:${m.imdbId}`, at);

@@ -887,6 +887,10 @@ Each entry is a short ADR: context, options, recommendation, consequences.
     - A film is an arrival only if a "grabbed" event (type 1) comes at or before its first import. Otherwise the file already existed, and it is dated 1 Jan 2000: never recently added. The same goes for a file Radarr has with no import in its history.
     - No date is guessed for those. Jellyfin's date for the file that was replaced is gone, and Radarr never had one.
     - What this costs: a film you obtain yourself and import into Radarr by hand never shows as recently added. Left out of Radarr, it goes by Jellyfin's date.
+  - **First added: a first import that replaced a file (0.21.4).** Still left in: films added to Radarr with their file attached (no import logged) and later fetched as an upgrade, such as Avengers: Endgame. Their first import has a grab before it, so 0.21.3 took it for an arrival; 0.21.2's rule for it used Radarr's `added`, which was 31 Oct.
+    - Such a film is now dated long ago, like any file that was already there. The evidence is Radarr's own: a "movie file deleted" event with reason Upgrade within ten minutes of that import.
+    - **Not done: the rule you suggested** (already in Jellyfin at the app's first index, and Radarr's first import after it). The app can't apply it to these films: it kept no record of what was in Jellyfin at its first index, and the dates it remembered for them were overwritten by versions before 0.21.2. Since 0.21.2 a remembered date is never replaced by a later one, which gives the same protection from here on.
+    - If Radarr's history doesn't hold the upgrade's delete event for a film, nothing tells it from a film that was wanted and then downloaded, and it stays in. The run's log counts each kind.
 - **Consequences.**
   - Each run asks Radarr for two more kinds of history event (grabs and deletes).
   - A poster-language check can fetch up to 20 more 92px posters for a title, only when its poster is tagged another language.

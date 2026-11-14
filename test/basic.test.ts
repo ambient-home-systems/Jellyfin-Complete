@@ -178,7 +178,7 @@ describe('Recently Added counts when a title first arrived (ADR-038)', () => {
     ]);
   });
 
-  it('when Radarr’s history starts with an upgrade, the film counts from when it was added to Radarr', async () => {
+  it('when Radarr’s history starts with an upgrade, the file it replaced was already there: not an arrival', async () => {
     // Iron Man: in Radarr for 5 years (a library import, so no first import in its history), upgraded 2 days ago.
     // Long Wanted: added 100 days ago, first downloaded today; nothing was replaced, so it is new.
     const { app, fake, sourceTitles, radarr, connectRadarr } = world();
@@ -200,7 +200,7 @@ describe('Recently Added counts when a title first arrived (ADR-038)', () => {
     const added = sourceTitles('Added in the last 30 days', 'movie');
     expect(added).not.toContain('Iron Man');
     expect(added).toContain('Long Wanted');
-    expect(app.db.select().from(libraryItem).where(eq(libraryItem.jfId, 'm-iron')).get()!.firstAdded).toBe(Date.parse(daysAgo(1800)));
+    expect(app.db.select().from(libraryItem).where(eq(libraryItem.jfId, 'm-iron')).get()!.firstAdded).toBe(Date.UTC(2000, 0, 1)); // long ago: when it really arrived isn't known
     // A later upgrade, seen as a new Jellyfin item, doesn't bring it back either: the remembered date is kept.
     radarr.history.push({ movieId: 1, date: new Date(NOW + DAY).toISOString(), eventType: 'downloadFolderImported' }, { movieId: 1, date: new Date(NOW + DAY).toISOString(), eventType: 'movieFileDeleted', data: { reason: 'Upgrade' } });
     fake.items.delete('m-iron');
@@ -227,14 +227,24 @@ describe('Recently Added counts when a title first arrived (ADR-038)', () => {
     // From a real server, after a library reorganisation:
     // Iron Man: added to Radarr 14 days ago; an existing SD file imported by hand 4 days ago; upgraded yesterday.
     // Captain Phillips: added and imported by hand 4 days ago; replaced yesterday.
+    // Avengers: Endgame: added 14 days ago with its file attached (no import logged); its only history is yesterday's
+    // grab and import of a 4K copy, which replaced that file. Radarr added it inside the 30 days, so that date is no help.
+    // Toy Story: added, fetched and imported 14 days ago, nothing replaced. That one did arrive then.
     // Long Wanted: added 100 days ago; Radarr fetched it today. That one is new.
     const { app, fake, sourceTitles, radarr, connectRadarr } = world();
     radarr.library = [
       { id: 1, title: 'Iron Man', year: 2008, tmdbId: 1726, status: 'released', monitored: true, hasFile: true, added: daysAgo(14) },
       { id: 2, title: 'Captain Phillips', year: 2013, tmdbId: 109424, status: 'released', monitored: true, hasFile: true, added: daysAgo(4) },
       { id: 3, title: 'Long Wanted', year: 2024, tmdbId: 561, status: 'released', monitored: true, hasFile: true, added: daysAgo(100) },
+      { id: 4, title: 'Avengers: Endgame', year: 2019, tmdbId: 299534, status: 'released', monitored: true, hasFile: true, added: daysAgo(14) },
+      { id: 5, title: 'Toy Story', year: 1995, tmdbId: 862, status: 'released', monitored: true, hasFile: true, added: daysAgo(14) },
     ];
     radarr.history = [
+      { movieId: 4, date: daysAgo(1), eventType: 'grabbed' },
+      { movieId: 4, date: daysAgo(1), eventType: 'downloadFolderImported' },
+      { movieId: 4, date: daysAgo(1), eventType: 'movieFileDeleted', data: { reason: 'Upgrade' } },
+      { movieId: 5, date: daysAgo(14), eventType: 'grabbed' },
+      { movieId: 5, date: daysAgo(14), eventType: 'downloadFolderImported' },
       { movieId: 1, date: daysAgo(4), eventType: 'downloadFolderImported' },
       { movieId: 1, date: daysAgo(1), eventType: 'grabbed' },
       { movieId: 1, date: daysAgo(1), eventType: 'downloadFolderImported' },
@@ -250,14 +260,19 @@ describe('Recently Added counts when a title first arrived (ADR-038)', () => {
     fake.add({ Id: 'm-iron', Name: 'Iron Man', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(1), ProviderIds: { Tmdb: '1726' } });
     fake.add({ Id: 'm-phil', Name: 'Captain Phillips', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(1), ProviderIds: { Tmdb: '109424' } });
     fake.add({ Id: 'm-561', Name: 'Long Wanted', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(0), ProviderIds: { Tmdb: '561' } });
+    fake.add({ Id: 'm-end', Name: 'Avengers: Endgame', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(1), ProviderIds: { Tmdb: '299534' } });
+    fake.add({ Id: 'm-toy', Name: 'Toy Story', Type: 'Movie', ParentId: 'lib-movies', DateCreated: daysAgo(14), ProviderIds: { Tmdb: '862' } });
     await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW });
-    expect(sourceTitles('Added in the last 30 days', 'movie')).toEqual(expect.arrayContaining(['Iron Man', 'Captain Phillips']));
+    expect(sourceTitles('Added in the last 30 days', 'movie')).toEqual(expect.arrayContaining(['Iron Man', 'Captain Phillips', 'Avengers: Endgame']));
     connectRadarr();
     await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + DAY });
     const added = sourceTitles('Added in the last 30 days', 'movie');
     expect(added).not.toContain('Iron Man');
     expect(added).not.toContain('Captain Phillips');
+    expect(added).not.toContain('Avengers: Endgame');
+    expect(added).toContain('Toy Story');
     expect(added).toContain('Long Wanted');
+    expect(radarr.calls.length).toBeGreaterThan(0);
   });
 
   it('a title gone for over a week that comes back counts as newly added', async () => {

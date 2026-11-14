@@ -2,6 +2,14 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.21.4 — 14 Nov 2026
+
+- **Recently Added Movies: an upgrade of a file Radarr never imported is not an arrival.** 0.21.3 left films like Avengers: Endgame in: added to Radarr with their file already attached (no import logged), then fetched again as a 4K upgrade.
+  - When the first import Radarr knows of **replaced a file** (Radarr logs "movie file deleted: upgrade" at the same moment), that film was already yours. It never counts as recently added.
+  - 0.21.2 dated such a film from when it was added to Radarr. After a reorganisation that's a few days back for every film, so it still looked new.
+  - A film Radarr fetched with nothing to replace (Toy Story, grabbed and imported on 31 Oct) keeps its date.
+  - The run's log now says how films were dated: fetched by Radarr, never fetched, or first seen being upgraded.
+
 ## 0.21.3 — 14 Nov 2026
 
 - **Recently Added Movies: a file Radarr didn't fetch is not an arrival.** 0.21.2's fix missed films that were brought into Radarr by hand during a library reorganisation and upgraded a few days later.
