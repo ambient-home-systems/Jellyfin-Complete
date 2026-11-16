@@ -2,6 +2,13 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.22.1 — 16 Nov 2026
+
+- **Missing titles: shorts from MDBList, TMDb and Letterboxd lists are left out too.** Those lists don't say what kind each title is, so the app now asks TMDb for each missing movie's runtime. A movie under 40 minutes is a short, and is no longer listed or suggested for Radarr.
+  - Needs a TMDb key. A movie with no runtime on TMDb (often one not released yet) stays listed.
+  - Each run looks up to 1,500 runtimes, collections showing now or soon first, and keeps each answer for six months. A large backlog clears over a few runs; the first run after updating takes a few minutes longer.
+  - Opening a page of Missing titles also fills in runtimes for the rows it shows, with their posters.
+
 ## 0.22.0 — 16 Nov 2026
 
 - **Missing titles lists films and series only.** IMDb lists and keyword searches also name shorts, TV specials, video games and music videos. Those no longer appear under Missing titles, and are never suggested for Radarr or Sonarr.

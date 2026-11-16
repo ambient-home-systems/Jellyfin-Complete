@@ -28,6 +28,11 @@ export type MissingStatus = 'not_in_arr' | 'in_arr' | 'monitored_no_file' | 'exc
 /** IMDb title types that are neither a film nor a series: Radarr and Sonarr have no use for them. */
 export const NOT_A_TITLE = new Set(['short', 'tvShort', 'tvSpecial', 'tvPilot', 'videoGame', 'musicVideo', 'podcastSeries', 'podcastEpisode']);
 
+/** Under this many minutes a film is a short (the Academy's line). */
+export const SHORT_UNDER_MINUTES = 40;
+/** A film's runtime on TMDb in minutes, if it has been looked up: null when TMDb has none, undefined when not looked up yet. */
+export type RuntimeOf = (tmdb: string) => number | null | undefined;
+
 function appFor(def: LoadedDefinition, item: SourceItem): ArrApp | null {
   if (item.imdbType && NOT_A_TITLE.has(item.imdbType)) return null;
   if (def.target === 'episodes' || item.kind === 'episode') return null;
@@ -39,8 +44,9 @@ function appFor(def: LoadedDefinition, item: SourceItem): ArrApp | null {
 /**
  * Titles listed by the collection's "add" sources that aren't in the library, best-ranked first.
  * `found` gives cached TMDb /find results, so an IMDb-only title can still be matched or keyed by TMDb ID.
+ * `runtime` gives runtimes already looked up: a film TMDb times under 40 minutes is a short, and is left out.
  */
-export function missingTitles(def: LoadedDefinition, resolved: ResolvedSource[], index: LibraryIndex, found: (imdb: string) => FindResult | undefined): MissingTitle[] {
+export function missingTitles(def: LoadedDefinition, resolved: ResolvedSource[], index: LibraryIndex, found: (imdb: string) => FindResult | undefined, runtime?: RuntimeOf): MissingTitle[] {
   const byKey = new Map<string, MissingTitle>();
   def.sources.forEach((src, i) => {
     const r = resolved[i];
@@ -52,6 +58,10 @@ export function missingTitles(def: LoadedDefinition, resolved: ResolvedSource[],
       const f = item.imdb ? found(item.imdb) : undefined;
       if (index.matchDirect(item, want) || (item.imdb && f && index.matchFound(item, f, want))) continue; // owned
       const tmdb = item.tmdb ?? (f && (f.kind === 'movie' || f.kind === 'tv') ? f.tmdb : undefined);
+      if (app === 'radarr' && tmdb && runtime) {
+        const mins = runtime(tmdb);
+        if (mins && mins < SHORT_UNDER_MINUTES) continue; // a short; an unknown runtime is given the benefit of the doubt
+      }
       const keys = [item.imdb && `imdb:${item.imdb}`, tmdb && `tmdb:${tmdb}`, item.tvdb && `tvdb:${item.tvdb}`].filter(Boolean) as string[];
       if (!keys.length) continue;
       const existing = keys.map((k) => byKey.get(k)).find(Boolean);

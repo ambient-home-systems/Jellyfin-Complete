@@ -46,6 +46,8 @@ export const isRunning = (): boolean => current?.status === 'running';
 export class AlreadyRunning extends Error {}
 
 const FIND_CAP = 300;
+/** Runtime lookups for missing films per run: about seven minutes at TMDb's pace, and only until the backlog is cleared. */
+const RUNTIME_CAP = 1500;
 
 export async function runPipeline(app: AppContext, opts: RunOptions): Promise<RunSummary> {
   if (isRunning()) throw new AlreadyRunning('A run is already in progress');
@@ -161,6 +163,35 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
       stats.tmdbFind = found.size;
     }
 
+    // Shorts (ADR-050): lists that don't say what kind a title is (MDBList, TMDb, Letterboxd) are told apart by runtime.
+    // Only missing films are looked up, collections on screen now or soon first, a bounded number each run.
+    const runtimeOf = (id: string): number | null | undefined => {
+      const hit = getCached<number | null>(app.db, `movie-runtime:${id}`);
+      return hit.hit ? hit.value : undefined;
+    };
+    const findCached = (imdb: string): FindResult | undefined => {
+      if (found.has(imdb)) return found.get(imdb);
+      const hit = getCached<FindResult>(app.db, `find:${imdb}`);
+      return hit.hit ? hit.value : undefined;
+    };
+    if (tmdb) {
+      step('Checking missing movies’ runtimes');
+      const soonFirst = defs.filter((d) => d.enabled && d.target !== 'shows' && d.target !== 'episodes')
+        .sort((a, b) => Number(isOpen(b.window, today) || opensWithin(b.window, today, settings.leadDays) !== null) - Number(isOpen(a.window, today) || opensWithin(a.window, today, settings.leadDays) !== null));
+      const ask = new Set<string>();
+      for (const def of soonFirst) {
+        for (const m of missingTitles(def, resolved.get(def.id) ?? [], index, findCached, runtimeOf)) {
+          if (m.app === 'radarr' && m.tmdb && runtimeOf(m.tmdb) === undefined) ask.add(m.tmdb);
+        }
+      }
+      let asked = 0;
+      for (const id of [...ask].slice(0, RUNTIME_CAP)) {
+        try { await tmdb.movieRuntime(id); asked++; } catch (e) { log.warn(`TMDb runtime for ${id} failed: ${(e as Error).message}`); break; }
+      }
+      if (ask.size) log.info(`Missing movies: looked up ${asked} of ${ask.size} runtimes not yet known${ask.size > asked ? '; the rest follow on later runs' : ''}.`);
+      stats.runtimeLookups = asked;
+    }
+
     // Box set integrity (ADR-040): provider IDs, lock and images are the app's own; differences are repaired now.
     step('Checking your collections in Jellyfin');
     try {
@@ -224,13 +255,8 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
     const arrDefs = new Set(app.db.select().from(definitionArr).all().filter((d) => d.addMissing).map((d) => d.definitionId));
     if (arrDefs.size && (app.radarr() || app.sonarr())) {
       step('Checking missing titles against Radarr and Sonarr');
-      const findOf = (imdb: string): FindResult | undefined => {
-        if (found.has(imdb)) return found.get(imdb);
-        const hit = getCached<FindResult>(app.db, `find:${imdb}`);
-        return hit.hit ? hit.value : undefined;
-      };
       const wanted = defs.filter((d) => d.enabled && arrDefs.has(d.id) && (isOpen(d.window, today) || opensWithin(d.window, today, settings.leadDays) !== null))
-        .map((def) => ({ def, missing: missingTitles(def, resolved.get(def.id) ?? [], index, findOf) }));
+        .map((def) => ({ def, missing: missingTitles(def, resolved.get(def.id) ?? [], index, findCached, runtimeOf) }));
       try {
         actions.push(...(await proposeArrAdds(app, wanted, step)));
       } catch (e) {

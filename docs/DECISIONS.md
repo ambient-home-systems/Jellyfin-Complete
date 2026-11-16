@@ -903,7 +903,16 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - Collection membership is unchanged: a short you own still belongs to the collection that lists it.
   - A kept IMDb result from before the type was recorded is read again once (direct route only).
   - Posters come from TMDb through the app (the page's security policy allows images from the app only). The lookup happens when a row's picture is asked for, not when the page is built, and is cached for 30 days; an IMDb lookup's answer already carries the poster.
-- **Not done.** MDBList, TMDb and Letterboxd give no title type. Telling their shorts apart needs each title's runtime from TMDb, one request per title; left until someone needs it.
+- **Not done at first.** MDBList, TMDb and Letterboxd give no title type; see ADR-050.
+
+### ADR-050 Shorts by runtime, for lists that give no title type: Decided (16 Nov)
+
+- **Context.** The seasonal collections read MDBList, which names shorts as movies. Its JSON has no runtime.
+- **Decision.**
+  - Each run looks up TMDb's runtime for missing movies not yet looked up: up to 1,500 a run (about seven minutes at TMDb's pace), collections open now or soon first. Answers are kept 180 days, under the key Library health already uses.
+  - A missing movie TMDb times under 40 minutes (the Academy's line for a short) is left out of Missing titles and of Radarr suggestions. No runtime, or not looked up yet: it stays.
+  - One `/movie` answer fills both the runtime and the poster, so the Missing page's poster lookups count towards the backlog.
+- **Consequences.** The Missing count can fall over the first few runs as runtimes arrive. Collection membership is unchanged.
 
 ---
 

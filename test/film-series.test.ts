@@ -103,7 +103,7 @@ describe('Film series', () => {
     setFilmSeries(app, true);
     await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW });
     expect(seriesDefs(app).map((d) => d.name).sort()).toEqual(['Alien', 'Toy Story']);
-    expect(tmdbCalls.filter((c) => c.startsWith('movie'))).toHaveLength(7);
+    expect(tmdbCalls.filter((c) => c.startsWith('movie'))).toHaveLength(11); // 7 owned films' series, and the runtimes of the 4 missing ones (ADR-050)
     tmdbCalls.length = 0;
     await runPipeline(app, { job: 'manual', trigger: 'manual', index: true, now: NOW + 3_600_000 });
     expect(tmdbCalls.filter((c) => c.startsWith('movie'))).toEqual([]); // cached
