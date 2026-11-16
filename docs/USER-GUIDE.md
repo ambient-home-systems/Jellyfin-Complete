@@ -242,6 +242,9 @@ Frames are kept in `/config/frames` until the file changes.
 
 **Missing titles**, a tab of the Inbox once Radarr or Sonarr is connected, lists what each collection's sources name that isn't in your library, best-ranked first, with each title's status in Radarr or Sonarr. Tick titles and **Send to Radarr/Sonarr**, or **Add to Inbox instead** to approve them later.
 
+- **Films and series only.** IMDb's shorts, TV specials, video games and music videos are left out, even when a list or keyword names them. (MDBList, TMDb and Letterboxd lists don't say what kind each title is, so theirs are all listed.)
+- **Posters.** With a TMDb key, each row shows the title's poster.
+
 - **Checks.** Before every send, the app checks again that the title is released, not already in Radarr/Sonarr, and not on their exclusion list.
 - **Limits.** Sends are capped, 10 at a time by default (Settings → Approvals). Nothing is ever removed from Radarr or Sonarr.
 - **Movie series.** For a collection with TMDb collection sources, **Monitor in Radarr** lets Radarr add the missing movies itself as they're released.

@@ -1,6 +1,6 @@
 // TMDb v3 client: rate-limited (~35 requests / 10 s) and cached in SQLite (ADR-018, ADR-020).
 import type { DB } from '../db/index.js';
-import { cached } from '../cache.js';
+import { cached, putCached } from '../cache.js';
 import { type FetchLike, RateLimiter, requestJson, HttpError } from './http.js';
 
 const BASE = 'https://api.themoviedb.org/3';
@@ -36,6 +36,8 @@ const images = (xs: RawImage[] | undefined, keep: number): TmdbImage[] => (xs ??
   .map((x) => ({ path: x.file_path, lang: x.iso_639_1 && x.iso_639_1 !== 'xx' ? x.iso_639_1 : null, vote: x.vote_average ?? 0, votes: x.vote_count ?? 0, w: x.width ?? 0, h: x.height ?? 0 }))
   .sort(byRating).slice(0, keep);
 
+const POSTER_TTL_DAYS = 30;
+
 export class TmdbClient {
   private limiter = new RateLimiter(35, 10_000);
   constructor(private db: DB, private apiKey: string, private f: FetchLike = fetch) {}
@@ -54,14 +56,30 @@ export class TmdbClient {
   /** IMDb ID → TMDb movie, show, or (show, season, episode). Cached for 90 days. */
   find(imdbId: string): Promise<FindResult> {
     return cached(this.db, `find:${imdbId}`, 90, async () => {
-      const r = await this.get<{ movie_results: { id: number }[]; tv_results: { id: number }[]; tv_episode_results: { show_id: number; season_number: number; episode_number: number }[] }>(
+      const r = await this.get<{ movie_results: { id: number; poster_path?: string | null }[]; tv_results: { id: number; poster_path?: string | null }[]; tv_episode_results: { show_id: number; season_number: number; episode_number: number }[] }>(
         `/find/${imdbId}?external_source=imdb_id`,
       );
-      if (r.movie_results[0]) return { kind: 'movie', tmdb: String(r.movie_results[0].id) };
-      if (r.tv_results[0]) return { kind: 'tv', tmdb: String(r.tv_results[0].id) };
+      // The same answer carries the poster: keep it, so the Missing page needn't ask again.
+      const m = r.movie_results[0];
+      if (m) { putCached(this.db, `poster:movie:${m.id}`, m.poster_path ?? null, POSTER_TTL_DAYS); return { kind: 'movie', tmdb: String(m.id) }; }
+      const t = r.tv_results[0];
+      if (t) { putCached(this.db, `poster:tv:${t.id}`, t.poster_path ?? null, POSTER_TTL_DAYS); return { kind: 'tv', tmdb: String(t.id) }; }
       const e = r.tv_episode_results[0];
       if (e) return { kind: 'episode', showTmdb: String(e.show_id), season: e.season_number, episode: e.episode_number };
       return null;
+    });
+  }
+
+  /** A title's poster on TMDb, as a file path ("/abc.jpg"), or null if it has none. Cached for 30 days. */
+  poster(media: 'movie' | 'tv', id: string): Promise<string | null> {
+    return cached(this.db, `poster:${media}:${id}`, POSTER_TTL_DAYS, async () => {
+      try {
+        const r = await this.get<{ poster_path?: string | null }>(`/${media}/${encodeURIComponent(id)}`);
+        return r.poster_path ?? null;
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) return null;
+        throw e;
+      }
     });
   }
 

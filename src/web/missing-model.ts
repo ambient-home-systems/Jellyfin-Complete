@@ -70,6 +70,6 @@ export async function missingModel(app: AppContext, tab: 'movies' | 'shows', def
     defId: chosen?.def.id ?? null, defName: chosen?.def.name ?? null,
     rows: withStatus.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE), total: withStatus.length, page: p, pages, counts,
     connected: Boolean(client), arrError, choices, values: arrOptions(app, which, chosen?.def.id ?? null), collections,
-    cap: s.guardrails.arrCapPerRun, dryRun: s.dryRun,
+    cap: s.guardrails.arrCapPerRun, dryRun: s.dryRun, posters: Boolean(app.tmdb()),
   };
 }

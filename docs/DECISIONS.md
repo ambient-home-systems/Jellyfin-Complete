@@ -895,6 +895,16 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - Each run asks Radarr for two more kinds of history event (grabs and deletes).
   - A poster-language check can fetch up to 20 more 92px posters for a title, only when its poster is tagged another language.
 
+### ADR-049 Missing titles: films and series only, with posters: Decided (16 Nov)
+
+- **Context.** IMDb lists and keyword searches name shorts, TV specials, games and music videos. A movie collection sent everything that wasn't a show towards Radarr, so Missing titles filled with shorts.
+- **Decision.**
+  - A source item keeps IMDb's title type (`imdbType`). Missing leaves out `short`, `tvShort`, `tvSpecial`, `tvPilot`, `videoGame`, `musicVideo` and podcasts, for Radarr and Sonarr alike. An item with no type is kept: the Kometa service route returns IDs only.
+  - Collection membership is unchanged: a short you own still belongs to the collection that lists it.
+  - A kept IMDb result from before the type was recorded is read again once (direct route only).
+  - Posters come from TMDb through the app (the page's security policy allows images from the app only). The lookup happens when a row's picture is asked for, not when the page is built, and is cached for 30 days; an IMDb lookup's answer already carries the poster.
+- **Not done.** MDBList, TMDb and Letterboxd give no title type. Telling their shorts apart needs each title's runtime from TMDb, one request per title; left until someone needs it.
+
 ---
 
 

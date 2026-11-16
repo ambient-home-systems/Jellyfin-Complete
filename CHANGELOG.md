@@ -2,6 +2,15 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.22.0 — 16 Nov 2026
+
+- **Missing titles lists films and series only.** IMDb lists and keyword searches also name shorts, TV specials, video games and music videos. Those no longer appear under Missing titles, and are never suggested for Radarr or Sonarr.
+  - The app now keeps IMDb's own title type for each listed title. Lists read before this update are read again on the next run, so the change shows after one run.
+  - A short you already own stays in its collection; only what's *missing* is filtered.
+  - Lists from MDBList, TMDb and Letterboxd don't say what kind of title each is, so those are listed as before.
+- **Posters on Missing titles.** Each row shows the title's poster from TMDb (needs a TMDb key). A poster is looked up the first time its row is shown, then kept for a month. A title TMDb has no poster for shows an empty frame.
+- A one-sentence notice with a link ("Connect Radarr to see…") reads as one sentence again, not two columns.
+
 ## 0.21.4 — 14 Nov 2026
 
 - **Recently Added Movies: an upgrade of a file Radarr never imported is not an arrival.** 0.21.3 left films like Avengers: Endgame in: added to Radarr with their file already attached (no import logged), then fetched again as a 4K upgrade.
