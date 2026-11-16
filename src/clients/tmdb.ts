@@ -37,6 +37,7 @@ const images = (xs: RawImage[] | undefined, keep: number): TmdbImage[] => (xs ??
   .sort(byRating).slice(0, keep);
 
 const POSTER_TTL_DAYS = 30;
+const RUNTIME_TTL_DAYS = 180;
 
 export class TmdbClient {
   private limiter = new RateLimiter(35, 10_000);
@@ -74,7 +75,8 @@ export class TmdbClient {
   poster(media: 'movie' | 'tv', id: string): Promise<string | null> {
     return cached(this.db, `poster:${media}:${id}`, POSTER_TTL_DAYS, async () => {
       try {
-        const r = await this.get<{ poster_path?: string | null }>(`/${media}/${encodeURIComponent(id)}`);
+        const r = await this.get<{ poster_path?: string | null; runtime?: number | null }>(`/${media}/${encodeURIComponent(id)}`);
+        if (media === 'movie') putCached(this.db, `movie-runtime:${id}`, r.runtime ? r.runtime : null, RUNTIME_TTL_DAYS); // the same answer has the runtime
         return r.poster_path ?? null;
       } catch (e) {
         if (e instanceof HttpError && e.status === 404) return null;
@@ -207,9 +209,10 @@ export class TmdbClient {
 
   /** A film's runtime on TMDb, in minutes (null if TMDb has none). Cached for 180 days. */
   movieRuntime(id: string): Promise<number | null> {
-    return cached(this.db, `movie-runtime:${id}`, 180, async () => {
+    return cached(this.db, `movie-runtime:${id}`, RUNTIME_TTL_DAYS, async () => {
       try {
-        const r = await this.get<{ runtime?: number | null }>(`/movie/${encodeURIComponent(id)}`);
+        const r = await this.get<{ runtime?: number | null; poster_path?: string | null }>(`/movie/${encodeURIComponent(id)}`);
+        putCached(this.db, `poster:movie:${id}`, r.poster_path ?? null, POSTER_TTL_DAYS); // the same answer has the poster
         return r.runtime ? r.runtime : null;
       } catch (e) {
         if (e instanceof HttpError && e.status === 404) return null;

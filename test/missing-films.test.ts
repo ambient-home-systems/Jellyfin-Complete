@@ -20,6 +20,12 @@ describe('missing titles', () => {
     const got = missingTitles(def('movies'), source(items), index, () => undefined).map((m) => m.imdb);
     expect(got).toEqual(['tt1', 'tt3', 'tt7', 'tt9']); // tt9: a source that gives no type is still listed
   });
+  it('leaves out a film TMDb times under 40 minutes, whatever list named it', () => {
+    const mdb = (tmdb: string): SourceItem => ({ tmdb, kind: 'movie', rank: Number(tmdb), title: `T${tmdb}` });
+    const runtime = (id: string) => ({ '1': 7, '2': 95, '3': null, '5': 40 } as Record<string, number | null>)[id]; // 4: not looked up yet
+    const got = missingTitles(def('movies'), source([mdb('1'), mdb('2'), mdb('3'), mdb('4'), mdb('5')]), index, () => undefined, runtime).map((m) => m.tmdb);
+    expect(got).toEqual(['2', '3', '4', '5']);
+  });
   it('leaves them out of show collections too', () => {
     const got = missingTitles(def('shows'), source([item(1, 'tvSeries', 'show'), item(2, 'tvSpecial', 'other'), item(3, 'tvMiniSeries', 'show')]), index, () => undefined).map((m) => m.imdb);
     expect(got).toEqual(['tt1', 'tt3']);
@@ -42,5 +48,8 @@ describe('TMDb posters', () => {
     expect(await tmdb.poster('movie', '604')).toBe('/other.jpg');
     expect(await tmdb.poster('movie', '604')).toBe('/other.jpg');
     expect(calls).toEqual(['/find/tt0133093', '/movie/604']);
+    // One /movie answer serves both the poster and the runtime.
+    expect(await tmdb.movieRuntime('604')).toBeNull();
+    expect(calls).toHaveLength(2);
   });
 });

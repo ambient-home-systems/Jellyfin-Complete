@@ -33,6 +33,12 @@ export function cachedPlan(app: AppContext, def: LoadedDefinition, index?: Libra
   return { members, index, resolved };
 }
 
+/** Film runtimes already looked up on TMDb (no network). */
+export const cachedRuntime = (app: AppContext) => (tmdb: string): number | null | undefined => {
+  const hit = getCached<number | null>(app.db, `movie-runtime:${tmdb}`);
+  return hit.hit ? hit.value : undefined;
+};
+
 /** Cached TMDb /find results (no network). */
 export const cachedFind = (app: AppContext) => (imdb: string): FindResult | undefined => {
   const hit = getCached<FindResult>(app.db, `find:${imdb}`);

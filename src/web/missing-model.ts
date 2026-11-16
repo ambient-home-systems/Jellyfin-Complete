@@ -6,7 +6,7 @@ import { loadDefinitions, type LoadedDefinition } from '../domain/definitions.js
 import { LibraryIndex, type LibRow } from '../domain/matching.js';
 import { missingTitles, statusOf, type MissingStatus, type MissingTitle } from '../domain/missing.js';
 import { arrOptions, arrState } from '../pipeline/arr.js';
-import { cachedFind, cachedPlan } from './plan-cache.js';
+import { cachedFind, cachedPlan, cachedRuntime } from './plan-cache.js';
 import type { MissingPageModel, MissingRow } from './pages/missing.js';
 import { isOpen, localDay, transitions } from '../domain/windows.js';
 
@@ -19,7 +19,7 @@ export function missingFor(app: AppContext, def: LoadedDefinition, tab: 'movies'
   const plan = cachedPlan(app, def, index);
   if (!plan) return [];
   const which = tab === 'movies' ? 'radarr' : 'sonarr';
-  return missingTitles(def, plan.resolved, index, cachedFind(app)).filter((m) => m.app === which);
+  return missingTitles(def, plan.resolved, index, cachedFind(app), cachedRuntime(app)).filter((m) => m.app === which);
 }
 
 export async function missingModel(app: AppContext, tab: 'movies' | 'shows', defId: number | null, page: number): Promise<MissingPageModel> {
