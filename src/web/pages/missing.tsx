@@ -91,6 +91,16 @@ export type MissingPageModel = {
   collections: { tmdbId: string; title: string; radarr: { id: number; monitored: boolean; missingMovies: number } | null }[];
   cap: number;
   dryRun: boolean;
+  /** Whether posters can be shown (they come from TMDb, so they need its key). */
+  posters: boolean;
+};
+
+/** Where a row's poster comes from; null when it has no ID TMDb can look up. */
+const posterSrc = (r: MissingTitle, tab: 'movies' | 'shows'): string | null => {
+  const media = tab === 'shows' ? 'tv' : 'movie';
+  if (r.tmdb) return `/missing/img/${media}/tmdb/${r.tmdb}`;
+  if (r.imdb) return `/missing/img/${media}/imdb/${r.imdb}`;
+  return r.tvdb ? `/missing/img/${media}/tvdb/${r.tvdb}` : null;
 };
 
 /** "imdb:tt0099785" → "IMDb tt0099785" */
@@ -163,11 +173,12 @@ export const Missing: FC<{ m: MissingPageModel; csrf: string; inbox: InboxCounts
                   <span class="aside">{!m.connected ? '' : Object.entries(m.counts).filter(([, n]) => n).map(([k, n]) => { const t = STATUS[k as MissingStatus].text(app); return `${n} ${t[0]!.toLowerCase()}${t.slice(1)}`; }).join(' · ')}</span></div>
                 <div class="table-wrap">
                   <table class="tt">
-                    <thead><tr><th scope="col"><span class="sr">Select</span></th><th scope="col">Title</th><th scope="col" class="hide-sm">Listed by</th><th scope="col">{app}</th></tr></thead>
+                    <thead><tr><th scope="col"><span class="sr">Select</span></th>{m.posters ? <th scope="col"><span class="sr">Poster</span></th> : null}<th scope="col">Title</th><th scope="col" class="hide-sm">Listed by</th><th scope="col">{app}</th></tr></thead>
                     <tbody>
                       {m.rows.map((r) => (
                         <tr class={sendable(r) ? '' : 'faint'}>
                           <td><input type="checkbox" name="ids" value={r.id} disabled={!sendable(r) || !m.connected} aria-label={`Select ${r.title ?? r.id}`} /></td>
+                          {m.posters ? <td class="thumb-cell"><span class="miss-thumb">{posterSrc(r, m.tab) ? <img src={posterSrc(r, m.tab)!} alt="" loading="lazy" width="46" height="69" /> : null}</span></td> : null}
                           <td><b>{r.title ?? r.imdb ?? r.tmdb ?? r.tvdb}</b>{r.year ? <span class="y num"> {r.year}</span> : null}<br /><span class="faint">{r.keys.map(idLabel).join(' · ')}</span></td>
                           <td class="hide-sm">{r.sources.map((s) => <span class="chip">{s.label} #{s.rank}</span>)}</td>
                           <td class="nowrap">{m.connected ? <span class={`chip ${STATUS[r.status].cls}`}>{STATUS[r.status].text(app)}</span> : <span class="faint">—</span>}</td>

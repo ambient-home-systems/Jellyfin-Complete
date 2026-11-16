@@ -25,7 +25,11 @@ export type MissingTitle = {
 export type ArrState = { library: Set<string>; monitoredNoFile: Set<string>; exclusions: Set<string> };
 export type MissingStatus = 'not_in_arr' | 'in_arr' | 'monitored_no_file' | 'excluded' | 'needs_id';
 
+/** IMDb title types that are neither a film nor a series: Radarr and Sonarr have no use for them. */
+export const NOT_A_TITLE = new Set(['short', 'tvShort', 'tvSpecial', 'tvPilot', 'videoGame', 'musicVideo', 'podcastSeries', 'podcastEpisode']);
+
 function appFor(def: LoadedDefinition, item: SourceItem): ArrApp | null {
+  if (item.imdbType && NOT_A_TITLE.has(item.imdbType)) return null;
   if (def.target === 'episodes' || item.kind === 'episode') return null;
   if (def.target === 'movies') return item.kind === 'show' ? null : 'radarr';
   if (def.target === 'shows') return item.kind === 'movie' ? null : 'sonarr';

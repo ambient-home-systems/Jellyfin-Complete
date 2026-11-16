@@ -10,6 +10,11 @@
     root.querySelectorAll('.no-js').forEach(function (el) { el.hidden = true; });
   }
 
+  // A missing title with no poster on TMDb keeps its empty frame rather than a broken-picture mark.
+  function dropBroken(img) { if (img.closest && img.closest('.miss-thumb')) img.remove(); }
+  document.addEventListener('error', function (e) { if (e.target && e.target.tagName === 'IMG') dropBroken(e.target); }, true);
+  document.querySelectorAll('.miss-thumb img').forEach(function (img) { if (img.complete && !img.naturalWidth) img.remove(); });
+
   // Tabs: show one panel, keep the others (and their form fields) on the page.
   function showTab(nav, name) {
     var known = false;

@@ -622,6 +622,26 @@ export function createWeb(app: AppContext, opts: { scheduler?: boolean } = {}): 
     return back(c, '/health', ok ? { ok: 'Back in Needs review.' } : { err: 'That finding is gone.' });
   });
 
+  // A missing title's poster, from TMDb through the app. Looked up the first time it's shown, then kept for a month.
+  web.get('/missing/img/:media/:by/:id', async (c) => {
+    const tmdb = app.tmdb();
+    const media = c.req.param('media') === 'tv' ? 'tv' : 'movie';
+    const by = c.req.param('by');
+    const id = c.req.param('id');
+    if (!tmdb || !/^(tt)?\d{1,12}$/.test(id)) return c.notFound();
+    const file = await (async () => {
+      if (by === 'tmdb') return tmdb.poster(media, id);
+      if (by === 'tvdb') { const t = await tmdb.findTvdb(id); return t ? tmdb.poster('tv', t) : null; }
+      if (by !== 'imdb') return null;
+      const f = await tmdb.find(id);
+      return f && (f.kind === 'movie' || f.kind === 'tv') ? tmdb.poster(f.kind, f.tmdb) : null;
+    })().catch(() => null);
+    if (!file || !/^\/[A-Za-z0-9_-]{1,64}\.(jpg|jpeg|png|webp)$/.test(file)) return c.notFound();
+    const res = await app.fetch(`https://image.tmdb.org/t/p/w154${file}`).catch(() => null);
+    if (!res?.ok) return c.notFound();
+    return imageReply({ bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get('content-type') ?? 'image/jpeg' });
+  });
+
   web.get('/missing', async (c) => {
     const tab = c.req.query('tab') === 'shows' ? 'shows' : 'movies';
     const m = await missingModel(app, tab, Number(c.req.query('def')) || null, Number(c.req.query('page')) || 1);

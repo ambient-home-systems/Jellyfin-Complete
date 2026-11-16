@@ -216,6 +216,8 @@ export type SourceItem = {
   title?: string | undefined;
   year?: number | undefined;
   seriesImdb?: string | undefined;
+  /** IMDb's own title type ("movie", "short", "tvSpecial"…), when the source gave one: Missing leaves out what isn't a film or a series. */
+  imdbType?: string | undefined;
   /** A Jellyfin item ID, for sources that read the library itself (Jellyfin queries, episode-title suggestions). */
   jf?: string | undefined;
 };

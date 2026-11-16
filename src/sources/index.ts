@@ -135,7 +135,7 @@ export const ADAPTERS: Record<string, Adapter> = {
       return {
         items: ids.map((imdb, i) => {
           const t = about.get(imdb);
-          return { imdb, kind: (t?.type ? IMDB_KIND[t.type] : undefined) ?? 'other', rank: i + 1, title: t?.title, year: t?.year };
+          return { imdb, kind: (t?.type ? IMDB_KIND[t.type] : undefined) ?? 'other', rank: i + 1, title: t?.title, year: t?.year, imdbType: t?.type };
         }),
         meta: { total },
       };
@@ -157,7 +157,7 @@ export const ADAPTERS: Record<string, Adapter> = {
       else if (ctx.imdbRoute === 'snapshot') r = fromSnapshot(await snapshotFor(ctx), 'searches', searchKey(search));
       else throw new SourceError(`IMDb route "${ctx.imdbRoute}" is not available yet; choose "direct" in Settings`, 'ROUTE_UNAVAILABLE');
       return {
-        items: r.titles.map((t, i) => ({ imdb: t.id, kind: IMDB_KIND[t.type ?? ''] ?? (t.type ? 'other' : 'other'), rank: i + 1, title: t.title, year: t.year, seriesImdb: t.seriesId })),
+        items: r.titles.map((t, i) => ({ imdb: t.id, kind: IMDB_KIND[t.type ?? ''] ?? 'other', rank: i + 1, title: t.title, year: t.year, seriesImdb: t.seriesId, imdbType: t.type })),
         meta: { total: r.total },
       };
     },
@@ -459,7 +459,10 @@ export async function resolveSource(ctx: SourceContext, spec: SourceSpec, opts: 
   const prev = ctx.db.select().from(sourceResult).where(eq(sourceResult.sourceKey, key)).get();
   const maxAge = opts.maxAgeMs ?? 86_400_000;
   const adapter = ADAPTERS[spec.type];
-  if (!opts.force && !adapter?.fresh && prev?.status === 'ok' && prev.fetchedAt && now - prev.fetchedAt < maxAge && prev.items) {
+  // Results kept from before IMDb's title type was recorded can't tell a short from a film: read those again once.
+  const untyped = ctx.imdbRoute === 'direct' && (spec.type === 'imdb_list' || spec.type === 'imdb_search')
+    && Boolean(prev?.items?.some((i) => i.kind === 'other')) && !prev?.items?.some((i) => i.imdbType);
+  if (!opts.force && !untyped && !adapter?.fresh && prev?.status === 'ok' && prev.fetchedAt && now - prev.fetchedAt < maxAge && prev.items) {
     return { key, label, status: 'ok', items: prev.items, error: null, fetchedAt: prev.fetchedAt, meta: prev.meta ?? null };
   }
   try {
