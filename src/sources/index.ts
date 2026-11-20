@@ -68,6 +68,9 @@ export class SourceError extends Error {
   }
 }
 
+/** What an IMDb result records about each title: 2 adds its type, runtime and Short genre. Older kept results are read again once. */
+const IMDB_READ = 2;
+
 const IMDB_KIND: Record<string, SourceItem['kind']> = {
   movie: 'movie', tvMovie: 'movie', video: 'movie', tvSeries: 'show', tvMiniSeries: 'show', tvEpisode: 'episode',
 };
@@ -135,9 +138,9 @@ export const ADAPTERS: Record<string, Adapter> = {
       return {
         items: ids.map((imdb, i) => {
           const t = about.get(imdb);
-          return { imdb, kind: (t?.type ? IMDB_KIND[t.type] : undefined) ?? 'other', rank: i + 1, title: t?.title, year: t?.year, imdbType: t?.type };
+          return { imdb, kind: (t?.type ? IMDB_KIND[t.type] : undefined) ?? 'other', rank: i + 1, title: t?.title, year: t?.year, imdbType: t?.type, minutes: t?.minutes, short: t?.short };
         }),
-        meta: { total },
+        meta: { total, read: IMDB_READ },
       };
     },
   },
@@ -151,14 +154,14 @@ export const ADAPTERS: Record<string, Adapter> = {
     },
     async resolve(c, ctx) {
       const search = (c.search ?? {}) as KometaImdbSearch;
-      let r: { titles: { id: string; type?: string; title?: string; year?: number; seriesId?: string }[]; total: number };
+      let r: { titles: ImdbTitle[]; total: number };
       if (ctx.imdbRoute === 'kometa_service') r = await kometaServiceSearch(ctx.fetch, search);
       else if (ctx.imdbRoute === 'direct') r = await withHashRetry(ctx, (h) => imdbSearch(ctx.fetch, h.search, search));
       else if (ctx.imdbRoute === 'snapshot') r = fromSnapshot(await snapshotFor(ctx), 'searches', searchKey(search));
       else throw new SourceError(`IMDb route "${ctx.imdbRoute}" is not available yet; choose "direct" in Settings`, 'ROUTE_UNAVAILABLE');
       return {
-        items: r.titles.map((t, i) => ({ imdb: t.id, kind: IMDB_KIND[t.type ?? ''] ?? 'other', rank: i + 1, title: t.title, year: t.year, seriesImdb: t.seriesId, imdbType: t.type })),
-        meta: { total: r.total },
+        items: r.titles.map((t, i) => ({ imdb: t.id, kind: IMDB_KIND[t.type ?? ''] ?? 'other', rank: i + 1, title: t.title, year: t.year, seriesImdb: t.seriesId, imdbType: t.type, minutes: t.minutes, short: t.short })),
+        meta: { total: r.total, read: IMDB_READ },
       };
     },
   },
@@ -459,9 +462,8 @@ export async function resolveSource(ctx: SourceContext, spec: SourceSpec, opts: 
   const prev = ctx.db.select().from(sourceResult).where(eq(sourceResult.sourceKey, key)).get();
   const maxAge = opts.maxAgeMs ?? 86_400_000;
   const adapter = ADAPTERS[spec.type];
-  // Results kept from before IMDb's title type was recorded can't tell a short from a film: read those again once.
-  const untyped = ctx.imdbRoute === 'direct' && (spec.type === 'imdb_list' || spec.type === 'imdb_search')
-    && Boolean(prev?.items?.some((i) => i.kind === 'other')) && !prev?.items?.some((i) => i.imdbType);
+  // Results kept from before IMDb's type, runtime and genre were recorded can't tell a short from a film: read those again once.
+  const untyped = ctx.imdbRoute === 'direct' && (spec.type === 'imdb_list' || spec.type === 'imdb_search') && Boolean(prev) && (prev?.meta as { read?: number } | null)?.read !== IMDB_READ;
   if (!opts.force && !untyped && !adapter?.fresh && prev?.status === 'ok' && prev.fetchedAt && now - prev.fetchedAt < maxAge && prev.items) {
     return { key, label, status: 'ok', items: prev.items, error: null, fetchedAt: prev.fetchedAt, meta: prev.meta ?? null };
   }

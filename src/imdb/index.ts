@@ -20,7 +20,13 @@ export class ImdbError extends Error {
   }
 }
 
-export type ImdbTitle = { id: string; type?: string; title?: string; year?: number; seriesId?: string };
+export type ImdbTitle = { id: string; type?: string; title?: string; year?: number; seriesId?: string; /** Runtime in minutes, when IMDb has one. */ minutes?: number; /** IMDb files it under the genre Short. */ short?: boolean };
+/** Runtime and the Short genre, from the title card both queries return. */
+const lengthOf = (t: any): { minutes?: number; short?: boolean } => {
+  const secs = t?.runtime?.seconds;
+  const short = Array.isArray(t?.titleGenres?.genres) && t.titleGenres.genres.some((g: any) => g?.genre?.text === 'Short');
+  return { ...(typeof secs === 'number' && secs > 0 ? { minutes: Math.round(secs / 60) } : {}), ...(short ? { short: true } : {}) };
+};
 
 // ── option tables, from Kometa modules/imdb.py ──
 export const TITLE_TYPES: Record<string, string> = {
@@ -158,7 +164,7 @@ export async function imdbList(f: Fetch, listHash: string, listId: string, opts:
       // Kometa only reads the ID; the title, year and type come in the same response and help the Missing page.
       const t = e.listItem;
       ids.push(t.id as string);
-      titles.push({ id: t.id, type: t.titleType?.id, title: t.titleText?.text, year: t.releaseYear?.year });
+      titles.push({ id: t.id, type: t.titleType?.id, title: t.titleText?.text, year: t.releaseYear?.year, ...lengthOf(t) });
     }
     if (opts.limit && ids.length >= opts.limit) return { ids: ids.slice(0, opts.limit), total, titles: titles.slice(0, opts.limit) };
     if (!s.pageInfo?.hasNextPage || s.edges.length === 0) return { ids, total, titles };
@@ -183,7 +189,7 @@ export async function imdbSearch(f: Fetch, searchHash: string, search: KometaImd
     total = s.total;
     for (const e of s.edges) {
       const t = e.node.title;
-      titles.push({ id: t.id, type: t.titleType?.id, title: t.titleText?.text, year: t.releaseYear?.year, seriesId: t.series?.series?.id });
+      titles.push({ id: t.id, type: t.titleType?.id, title: t.titleText?.text, year: t.releaseYear?.year, seriesId: t.series?.series?.id, ...lengthOf(t) });
     }
     if (!s.pageInfo?.hasNextPage || s.edges.length === 0) break;
     after = s.pageInfo.endCursor;
