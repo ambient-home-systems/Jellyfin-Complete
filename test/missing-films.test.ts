@@ -26,6 +26,11 @@ describe('missing titles', () => {
     const got = missingTitles(def('movies'), source([mdb('1'), mdb('2'), mdb('3'), mdb('4'), mdb('5')]), index, () => undefined, runtime).map((m) => m.tmdb);
     expect(got).toEqual(['2', '3', '4', '5']);
   });
+  it('leaves out a short that IMDb calls a video, by its Short genre or its runtime', () => {
+    const video = (n: number, extra: Partial<SourceItem>): SourceItem => ({ ...item(n, 'video', 'movie'), ...extra });
+    const items = [video(1, { short: true, minutes: 6 }), video(2, { minutes: 20 }), video(3, { minutes: 88 }), video(4, {}), video(5, { short: true })];
+    expect(missingTitles(def('movies'), source(items), index, () => undefined).map((m) => m.imdb)).toEqual(['tt3', 'tt4']);
+  });
   it('leaves them out of show collections too', () => {
     const got = missingTitles(def('shows'), source([item(1, 'tvSeries', 'show'), item(2, 'tvSpecial', 'other'), item(3, 'tvMiniSeries', 'show')]), index, () => undefined).map((m) => m.imdb);
     expect(got).toEqual(['tt1', 'tt3']);

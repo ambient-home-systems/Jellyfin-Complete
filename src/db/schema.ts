@@ -218,6 +218,9 @@ export type SourceItem = {
   seriesImdb?: string | undefined;
   /** IMDb's own title type ("movie", "short", "tvSpecial"…), when the source gave one: Missing leaves out what isn't a film or a series. */
   imdbType?: string | undefined;
+  /** IMDb's runtime in minutes, and whether it files the title under the genre Short. */
+  minutes?: number | undefined;
+  short?: boolean | undefined;
   /** A Jellyfin item ID, for sources that read the library itself (Jellyfin queries, episode-title suggestions). */
   jf?: string | undefined;
 };

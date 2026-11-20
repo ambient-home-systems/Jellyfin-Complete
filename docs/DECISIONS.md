@@ -913,6 +913,7 @@ Each entry is a short ADR: context, options, recommendation, consequences.
   - A missing movie TMDb times under 40 minutes (the Academy's line for a short) is left out of Missing titles and of Radarr suggestions. No runtime, or not looked up yet: it stays.
   - One `/movie` answer fills both the runtime and the poster, so the Missing page's poster lookups count towards the backlog.
 - **Consequences.** The Missing count can fall over the first few runs as runtimes arrive. Collection membership is unchanged.
+- **Added in 0.22.2: IMDb's own runtime and genres.** IMDb types a short released on disc as `video`, like a full-length direct-to-video film, so the type alone kept it. The list and search answers already carry runtime and genres; a source item now keeps `minutes` and `short` (genre Short), and Missing leaves out either. Kept IMDb results are marked with what they record (`meta.read`), and an older one is read again once. A failed TMDb runtime lookup is skipped; five failures end that run's lookups.
 
 ---
 

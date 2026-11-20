@@ -2,6 +2,14 @@
 
 Versions follow [semantic versioning](https://semver.org). The release workflow publishes the section matching a tag as that release's notes. 0.5.0 is the first published release.
 
+## 0.22.2 — 20 Nov 2026
+
+- **Missing titles: shorts that IMDb calls a "video" are left out.** A short released on disc (The Turbo-Charged Prelude for 2 Fast 2 Furious, Los Bandoleros, Fast & Furious 6: Take Control) has IMDb's type "video", the same as a full-length direct-to-video movie, so 0.22.0 kept it.
+  - The app now also keeps IMDb's runtime and genres for each listed title. A title under the genre Short, or under 40 minutes, is left out.
+  - This needs no TMDb key and no extra requests: both come with the list. IMDb lists are read again on the next run, so the change shows after one run.
+  - A movie with no runtime yet (Fast Forever, 2028) stays listed.
+- One movie whose runtime TMDb couldn't give no longer stops that run's remaining runtime lookups.
+
 ## 0.22.1 — 16 Nov 2026
 
 - **Missing titles: shorts from MDBList, TMDb and Letterboxd lists are left out too.** Those lists don't say what kind each title is, so the app now asks TMDb for each missing movie's runtime. A movie under 40 minutes is a short, and is no longer listed or suggested for Radarr.

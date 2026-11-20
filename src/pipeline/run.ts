@@ -185,8 +185,9 @@ export async function runPipeline(app: AppContext, opts: RunOptions): Promise<Ru
         }
       }
       let asked = 0;
+      let failed = 0;
       for (const id of [...ask].slice(0, RUNTIME_CAP)) {
-        try { await tmdb.movieRuntime(id); asked++; } catch (e) { log.warn(`TMDb runtime for ${id} failed: ${(e as Error).message}`); break; }
+        try { await tmdb.movieRuntime(id); asked++; } catch (e) { log.warn(`TMDb runtime for ${id} failed: ${(e as Error).message}`); if (++failed >= 5) break; } // one bad title mustn't hold up the rest
       }
       if (ask.size) log.info(`Missing movies: looked up ${asked} of ${ask.size} runtimes not yet known${ask.size > asked ? '; the rest follow on later runs' : ''}.`);
       stats.runtimeLookups = asked;

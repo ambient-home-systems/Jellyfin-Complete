@@ -35,6 +35,8 @@ export type RuntimeOf = (tmdb: string) => number | null | undefined;
 
 function appFor(def: LoadedDefinition, item: SourceItem): ArrApp | null {
   if (item.imdbType && NOT_A_TITLE.has(item.imdbType)) return null;
+  // IMDb calls a short released on disc a "video": its Short genre and its runtime say what it is.
+  if (item.short || (item.minutes && item.minutes < SHORT_UNDER_MINUTES && item.kind !== 'show')) return null;
   if (def.target === 'episodes' || item.kind === 'episode') return null;
   if (def.target === 'movies') return item.kind === 'show' ? null : 'radarr';
   if (def.target === 'shows') return item.kind === 'movie' ? null : 'sonarr';
